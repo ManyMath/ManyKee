@@ -1,0 +1,12 @@
+[package]
+name = "keepassxc"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.2"
+
+[dependencies]
+keepass = { path = "../keepass-rs", features = ["save_kdbx4"] }
+thiserror = "1"
+
+[dev-dependencies]
+hex = "0.4"

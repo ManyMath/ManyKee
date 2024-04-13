@@ -1,0 +1,3 @@
+[workspace]
+members = ["keepass-rs", "keepassxc"]
+resolver = "2"
