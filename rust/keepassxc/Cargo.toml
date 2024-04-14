@@ -10,3 +10,12 @@ thiserror = "1"
 
 [dev-dependencies]
 hex = "0.4"
+hmac = "0.12"
+sha2 = "0.10"
+aes = "0.8"
+cbc = "0.1"
+chacha20 = "0.9"
+rust-argon2 = "2.1"
+cipher = { version = "0.4", features = ["std"] }
+tempfile = "3"
+zeroize = { version = "1", features = ["zeroize_derive"] }
