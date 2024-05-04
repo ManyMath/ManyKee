@@ -39,7 +39,7 @@ pub struct Meta {
     #[serde(default, with = "cs_opt_string")]
     default_username_changed: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_fromstr")]
+    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     maintenance_history_days: Option<usize>,
 
     #[serde(default, with = "cs_opt_string")]
@@ -48,10 +48,10 @@ pub struct Meta {
     #[serde(default, with = "cs_opt_string")]
     master_key_changed: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_fromstr")]
+    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     master_key_change_rec: Option<isize>,
 
-    #[serde(default, with = "cs_opt_fromstr")]
+    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     master_key_change_force: Option<isize>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -60,7 +60,7 @@ pub struct Meta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_icons: Option<CustomIcons>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     recycle_bin_enabled: Option<bool>,
 
     #[serde(default, rename = "RecycleBinUUID", with = "cs_opt_string")]
@@ -81,10 +81,10 @@ pub struct Meta {
     #[serde(default, with = "cs_opt_string")]
     last_top_visible_group: Option<UUID>,
 
-    #[serde(default, with = "cs_opt_fromstr")]
+    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     history_max_items: Option<isize>,
 
-    #[serde(default, with = "cs_opt_fromstr")]
+    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     history_max_size: Option<isize>,
 
     #[serde(default, with = "cs_opt_string")]
@@ -390,19 +390,19 @@ impl Serialize for CustomDataValue {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct MemoryProtection {
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     protect_title: Option<bool>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     protect_username: Option<bool>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     protect_password: Option<bool>,
 
-    #[serde(default, with = "cs_opt_bool", rename = "ProtectURL")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none", rename = "ProtectURL")]
     protect_url: Option<bool>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     protect_notes: Option<bool>,
 }
 

@@ -26,7 +26,7 @@ pub struct Group {
     #[serde(default, with = "cs_opt_string")]
     pub notes: Option<String>,
 
-    #[serde(default, rename = "IconID", with = "cs_opt_fromstr")]
+    #[serde(default, rename = "IconID", with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     pub icon_id: Option<usize>,
 
     #[serde(default, rename = "CustomIconUUID", skip_serializing_if = "Option::is_none")]
@@ -35,16 +35,16 @@ pub struct Group {
     #[serde(default)]
     pub times: Option<Times>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     pub is_expanded: Option<bool>,
 
     #[serde(default, with = "cs_opt_string")]
     pub default_auto_type_sequence: Option<String>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     pub enable_auto_type: Option<bool>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     pub enable_searching: Option<bool>,
 
     #[serde(default, with = "cs_opt_string")]

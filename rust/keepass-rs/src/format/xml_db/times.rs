@@ -17,9 +17,9 @@ pub struct Times {
     #[serde(default, with = "cs_opt_string")]
     pub expiry_time: Option<Timestamp>,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool", skip_serializing_if = "Option::is_none")]
     pub expires: Option<bool>,
-    #[serde(default, with = "cs_opt_fromstr")]
+    #[serde(default, with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     pub usage_count: Option<usize>,
 
     #[serde(default, with = "cs_opt_string")]

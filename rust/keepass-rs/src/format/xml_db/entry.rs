@@ -10,7 +10,7 @@ use crate::{
     crypt::{ciphers::Cipher, CryptographyError},
     db::Color,
     format::xml_db::{
-        custom_serde::{cs_bool, cs_opt_bool, cs_opt_fromstr, cs_opt_string},
+        custom_serde::{cs_bool, cs_opt_bool_int, cs_opt_fromstr, cs_opt_string},
         meta::CustomData,
         times::Times,
         UUID,
@@ -23,7 +23,7 @@ pub struct Entry {
     #[serde(rename = "UUID")]
     pub uuid: UUID,
 
-    #[serde(default, rename = "IconID", with = "cs_opt_fromstr")]
+    #[serde(default, rename = "IconID", with = "cs_opt_fromstr", skip_serializing_if = "Option::is_none")]
     pub icon_id: Option<usize>,
 
     #[serde(default, rename = "CustomIconUUID", skip_serializing_if = "Option::is_none")]
@@ -296,7 +296,7 @@ pub struct AutoType {
     #[serde(default, with = "cs_bool")]
     pub enabled: bool,
 
-    #[serde(default, with = "cs_opt_bool")]
+    #[serde(default, with = "cs_opt_bool_int", skip_serializing_if = "Option::is_none")]
     pub data_transfer_obfuscation: Option<bool>,
 
     #[serde(default, with = "cs_opt_string")]
@@ -479,7 +479,7 @@ mod tests {
         let serialized = quick_xml::se::to_string(&Test(autotype)).unwrap();
         assert_eq!(
             serialized,
-            r#"<Test><Enabled>True</Enabled><DataTransferObfuscation>False</DataTransferObfuscation><DefaultSequence>{USERNAME}{TAB}{PASSWORD}{ENTER}</DefaultSequence><Association><Window>Example Window</Window><KeystrokeSequence>{USERNAME}{TAB}{PASSWORD}{ENTER}</KeystrokeSequence></Association></Test>"#
+            r#"<Test><Enabled>True</Enabled><DataTransferObfuscation>0</DataTransferObfuscation><DefaultSequence>{USERNAME}{TAB}{PASSWORD}{ENTER}</DefaultSequence><Association><Window>Example Window</Window><KeystrokeSequence>{USERNAME}{TAB}{PASSWORD}{ENTER}</KeystrokeSequence></Association></Test>"#
         );
     }
 
