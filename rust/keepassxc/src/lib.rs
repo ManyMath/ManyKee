@@ -1,6 +1,28 @@
-//! ManyKee extension crate — controlled public API on top of keepass-rs fork.
+//! ManyKee extension crate -- controlled public API on top of keepass-rs fork.
 //!
-//! Phase 1: Re-exports and gap-filling for crypto validation.
-//! Later phases add format, merge, yubikey, and FFI modules.
+//! Re-exports core keepass-rs types (D-01) and adds ManyKee-specific
+//! convenience methods, error types, and CRUD operations.
+//!
+//! Does NOT expose format parsing internals or crypto primitives (D-03).
 
-pub use keepass;
+pub mod error;
+
+// Re-export core database types for consumers (D-01: thin wrapper)
+pub use keepass::db::{
+    Attachment, AutoType, AutoTypeAssociation, Color, CustomDataItem, CustomDataValue, Database,
+    Entry, Group, History, MemoryProtection, Meta, Times, Value,
+};
+
+pub use keepass::db::fields;
+
+// Re-export error types
+pub use keepass::db::{DatabaseFormatError, DatabaseOpenError, DatabaseSaveError};
+
+// Re-export key types
+pub use keepass::DatabaseKey;
+
+// Re-export config for database creation
+pub use keepass::config::DatabaseConfig;
+
+// Crate-level error
+pub use error::KeePassXcError;
