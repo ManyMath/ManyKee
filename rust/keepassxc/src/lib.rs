@@ -5,7 +5,13 @@
 //!
 //! Does NOT expose format parsing internals or crypto primitives (D-03).
 
+pub mod entry;
 pub mod error;
+pub mod group;
+
+// Re-export CRUD extension traits and operations
+pub use entry::{update_entry, EntryExt, EntryFieldExt};
+pub use group::GroupExt;
 
 // Re-export core database types for consumers (D-01: thin wrapper)
 pub use keepass::db::{
