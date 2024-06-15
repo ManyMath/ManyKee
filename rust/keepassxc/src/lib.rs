@@ -8,10 +8,12 @@
 pub mod entry;
 pub mod error;
 pub mod group;
+pub mod recycle_bin;
 
 // Re-export CRUD extension traits and operations
 pub use entry::{update_entry, EntryExt, EntryFieldExt};
 pub use group::GroupExt;
+pub use recycle_bin::{delete_entry, delete_group, get_or_create_recycle_bin};
 
 // Re-export core database types for consumers (D-01: thin wrapper)
 pub use keepass::db::{
