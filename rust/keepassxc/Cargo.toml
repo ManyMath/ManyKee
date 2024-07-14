@@ -5,7 +5,7 @@ edition = "2021"
 rust-version = "1.77.2"
 
 [dependencies]
-keepass = { path = "../keepass-rs", features = ["save_kdbx4"] }
+keepass = { path = "../keepass-rs", features = ["save_kdbx4", "_merge", "challenge_response"] }
 thiserror = "1"
 uuid = "1"
 

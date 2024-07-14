@@ -1,3 +1,5 @@
+use keepass::db::merge::MergeError;
+use keepass::error::ChallengeResponseKeyError;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -22,4 +24,10 @@ pub enum KeePassXcError {
 
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Merge error: {0}")]
+    Merge(#[from] MergeError),
+
+    #[error("Challenge-response error: {0}")]
+    ChallengeResponse(#[from] ChallengeResponseKeyError),
 }
