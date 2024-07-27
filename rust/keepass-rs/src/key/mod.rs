@@ -14,7 +14,7 @@ pub type KeyElements = Vec<KeyElement>;
 mod yubikey;
 
 #[cfg(feature = "challenge_response")]
-pub use yubikey::{ChallengeResponseKey, ChallengeResponseKeyError};
+pub use yubikey::{ChallengeResponseKey, ChallengeResponseKeyError, Yubikey};
 
 fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
     let mut tag_stack = Vec::new();

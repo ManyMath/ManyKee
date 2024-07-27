@@ -8,7 +8,9 @@
 pub mod entry;
 pub mod error;
 pub mod group;
+pub mod merge;
 pub mod recycle_bin;
+pub mod yubikey;
 
 // Re-export CRUD extension traits and operations
 pub use entry::{update_entry, EntryExt, EntryFieldExt};
@@ -31,6 +33,14 @@ pub use keepass::DatabaseKey;
 
 // Re-export config for database creation
 pub use keepass::config::DatabaseConfig;
+
+// Re-export merge API
+pub use merge::{merge, ConflictResolution, MergeConflict, MergeResult, MergeWarning};
+
+// Re-export YubiKey convenience API
+pub use yubikey::{
+    list_yubikeys, open_with_local_challenge, open_with_yubikey, ChallengeResponseKey, Yubikey,
+};
 
 // Crate-level error
 pub use error::KeePassXcError;
