@@ -1,2 +1,4 @@
 .planning/
 rust/target/
+.dart_tool/
+pubspec.lock

@@ -1,0 +1,33 @@
+// The Android build is handled by cargokit through the Flutter build system.
+// This file exists to satisfy Flutter's plugin structure requirements.
+group 'com.manykee.keepass_flutter'
+version '1.0'
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.3.0'
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply from: '../cargokit/gradle/plugin.gradle'
+
+android {
+    compileSdkVersion 33
+    namespace 'com.manykee.keepass_flutter'
+
+    defaultConfig {
+        minSdkVersion 21
+    }
+}

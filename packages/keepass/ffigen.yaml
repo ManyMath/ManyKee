@@ -1,0 +1,15 @@
+name: KeePassXcFfiBindings
+description: Generated bindings for keepassxc-ffi
+output: 'lib/src/bindings.g.dart'
+headers:
+  entry-points:
+    - '../../rust/keepassxc-ffi/bindings.h'
+  include-directives:
+    - '../../rust/keepassxc-ffi/bindings.h'
+preamble: |
+  // ignore_for_file: always_specify_types
+  // ignore_for_file: camel_case_types
+  // ignore_for_file: non_constant_identifier_names
+comments:
+  style: any
+  length: full

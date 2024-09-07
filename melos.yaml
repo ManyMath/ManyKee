@@ -1,0 +1,23 @@
+name: manykee
+packages:
+  - packages/*
+
+scripts:
+  format:
+    run: dart format .
+    exec:
+      concurrency: 1
+  analyze:
+    run: dart analyze --fatal-infos
+    exec:
+      concurrency: 1
+  test:
+    run: dart test
+    exec:
+      concurrency: 1
+      failFast: true
+  ffigen:
+    run: dart run ffigen --config ffigen.yaml
+    packageFilters:
+      fileExists:
+        - ffigen.yaml

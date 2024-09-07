@@ -1,0 +1,15 @@
+language = "C"
+include_guard = "KEEPASSXC_FFI_H"
+no_includes = false
+style = "both"
+
+[export]
+prefix = ""
+item_types = ["functions", "constants"]
+
+[fn]
+prefix = ""
+postfix = ""
+
+[parse]
+parse_deps = false
