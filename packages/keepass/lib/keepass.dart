@@ -6,3 +6,4 @@ export 'src/entry.dart';
 export 'src/group.dart';
 export 'src/merge_result.dart';
 export 'src/error.dart' show KeePassError;
+export 'src/keepass_api.dart';

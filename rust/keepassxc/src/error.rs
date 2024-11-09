@@ -1,4 +1,5 @@
 use keepass::db::merge::MergeError;
+#[cfg(feature = "yubikey")]
 use keepass::error::ChallengeResponseKeyError;
 use thiserror::Error;
 use uuid::Uuid;
@@ -7,27 +8,28 @@ use uuid::Uuid;
 /// Wraps upstream keepass-rs errors and adds ManyKee-specific variants.
 #[derive(Debug, Error)]
 pub enum KeePassXcError {
-    #[error("Failed to open database: {0}")]
-    Open(#[from] keepass::db::DatabaseOpenError),
+ #[error("Failed to open database: {0}")]
+ Open(#[from] keepass::db::DatabaseOpenError),
 
-    #[error("Failed to save database: {0}")]
-    Save(#[from] keepass::db::DatabaseSaveError),
+ #[error("Failed to save database: {0}")]
+ Save(#[from] keepass::db::DatabaseSaveError),
 
-    #[error("Entry not found: {0}")]
-    EntryNotFound(Uuid),
+ #[error("Entry not found: {0}")]
+ EntryNotFound(Uuid),
 
-    #[error("Group not found: {0}")]
-    GroupNotFound(Uuid),
+ #[error("Group not found: {0}")]
+ GroupNotFound(Uuid),
 
-    #[error("Recycle bin is not enabled")]
-    RecycleBinDisabled,
+ #[error("Recycle bin is not enabled")]
+ RecycleBinDisabled,
 
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+ #[error("I/O error: {0}")]
+ Io(#[from] std::io::Error),
 
-    #[error("Merge error: {0}")]
-    Merge(#[from] MergeError),
+ #[error("Merge error: {0}")]
+ Merge(#[from] MergeError),
 
-    #[error("Challenge-response error: {0}")]
-    ChallengeResponse(#[from] ChallengeResponseKeyError),
+ #[cfg(feature = "yubikey")]
+ #[error("Challenge-response error: {0}")]
+ ChallengeResponse(#[from] ChallengeResponseKeyError),
 }
