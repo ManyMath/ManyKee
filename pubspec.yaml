@@ -7,3 +7,4 @@ workspace:
   - packages/keepass_cli
   - packages/keepass_flutter
   - packages/keepass_web
+  - packages/keepass_app
