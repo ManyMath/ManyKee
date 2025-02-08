@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'src/screens/unlock_screen.dart';
+import 'src/screens/vault_screen.dart';
 import 'src/state/vault_state.dart';
 import 'src/theme/app_theme.dart';
 
@@ -40,12 +41,7 @@ class _ManyKeeAppState extends State<ManyKeeApp> {
               isLockScreen: _vaultState.lastFilename != null,
             );
           }
-          // Placeholder for vault browser (replaced in Plan 03).
-          return const Scaffold(
-            body: Center(
-              child: Text('Vault Browser'),
-            ),
-          );
+          return VaultScreen(vaultState: _vaultState);
         },
       ),
     );
