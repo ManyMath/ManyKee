@@ -51,9 +51,10 @@ class _UnlockScreenState extends State<UnlockScreen> {
   @override
   void initState() {
     super.initState();
-    // Lock screen: pre-fill filename from previous session.
+    // Lock screen: pre-fill filename and db bytes from previous session.
     if (widget.isLockScreen && widget.vaultState.lastFilename != null) {
       _dbFilename = widget.vaultState.lastFilename;
+      _dbBytes = widget.vaultState.lastDbBytes;
       _wizardStep = 1; // Skip to credentials step on lock screen.
     }
     // Auto-focus password on lock screen.
@@ -84,10 +85,14 @@ class _UnlockScreenState extends State<UnlockScreen> {
     try {
       String? crHex;
       if (_yubiKeyDevice != null) {
-        // Compute challenge-response on main thread per D-03.
+        // Extract the KDF seed (challenge) from the KDBX header,
+        // then compute HMAC-SHA1 challenge-response on the YubiKey.
+        final challengeHex =
+            await widget.vaultState.extractChallenge(_dbBytes!);
+        final challengeBytes = _hexDecode(challengeHex);
         crHex = await yubikeyChallengeResponse(
           _yubiKeyDevice!,
-          Uint8List(32),
+          challengeBytes,
         );
       }
       await widget.vaultState.unlock(
@@ -439,5 +444,13 @@ class _UnlockScreenState extends State<UnlockScreen> {
 
   Widget _buildProgressBar(BuildContext context) {
     return const LinearProgressIndicator();
+  }
+
+  static Uint8List _hexDecode(String hex) {
+    final bytes = Uint8List(hex.length ~/ 2);
+    for (var i = 0; i < bytes.length; i++) {
+      bytes[i] = int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    return bytes;
   }
 }

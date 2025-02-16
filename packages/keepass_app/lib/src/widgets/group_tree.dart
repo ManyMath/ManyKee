@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../models/vault_group.dart';
+import '../state/vault_state.dart';
 import '../theme/spacing.dart';
+import 'search_bar.dart';
 
 /// Hierarchical group tree sidebar for the vault browser.
 ///
-/// Displays groups as an expandable/collapsible tree with folder icons.
-/// Selected group is highlighted with accent background.
+/// Displays a search bar at the top (D-09) followed by an expandable/
+/// collapsible tree with folder icons. Selected group is highlighted
+/// with accent background.
 class GroupTree extends StatefulWidget {
   /// The root-level groups (each may have children).
   final List<VaultGroup> groups;
@@ -17,11 +20,15 @@ class GroupTree extends StatefulWidget {
   /// Callback when a group is tapped.
   final void Function(VaultGroup) onGroupSelected;
 
+  /// Vault state for the search bar.
+  final VaultState vaultState;
+
   const GroupTree({
     super.key,
     required this.groups,
     this.selectedGroup,
     required this.onGroupSelected,
+    required this.vaultState,
   });
 
   @override
@@ -71,20 +78,32 @@ class _GroupTreeState extends State<GroupTree> {
   Widget build(BuildContext context) {
     final nodes = _flatten(widget.groups, 0);
 
-    return ListView.builder(
-      itemCount: nodes.length,
-      itemBuilder: (context, index) {
-        final node = nodes[index];
-        return _GroupTile(
-          group: node.group,
-          depth: node.depth,
-          isSelected: widget.selectedGroup?.uuid == node.group.uuid,
-          isExpanded: _expanded.contains(node.group.uuid),
-          hasChildren: node.group.children.isNotEmpty,
-          onTap: () => widget.onGroupSelected(node.group),
-          onToggleExpand: () => _toggleExpanded(node.group),
-        );
-      },
+    return Column(
+      children: [
+        // Search bar above group tree (D-09).
+        VaultSearchBar(
+          vaultState: widget.vaultState,
+          enabled: widget.vaultState.allEntriesCached,
+        ),
+        // Group tree.
+        Expanded(
+          child: ListView.builder(
+            itemCount: nodes.length,
+            itemBuilder: (context, index) {
+              final node = nodes[index];
+              return _GroupTile(
+                group: node.group,
+                depth: node.depth,
+                isSelected: widget.selectedGroup?.uuid == node.group.uuid,
+                isExpanded: _expanded.contains(node.group.uuid),
+                hasChildren: node.group.children.isNotEmpty,
+                onTap: () => widget.onGroupSelected(node.group),
+                onToggleExpand: () => _toggleExpanded(node.group),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

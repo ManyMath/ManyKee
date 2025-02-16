@@ -1,144 +1,208 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
+import 'dart:math';
 import 'dart:typed_data';
 
-/// WebUSB YubiKey challenge-response for browser-based authentication.
-///
-/// This module handles the Dart side of WASM-03: YubiKey challenge-response
-/// in the browser via WebUSB API. The computed response bytes are passed to
-/// the WASM module's `open_db_with_challenge_response` function.
-///
-/// Usage:
-/// 1. Call [requestYubiKey] from a user gesture handler to get device access
-/// 2. Call [yubikeyChallengeResponse] with the challenge from the KDBX header
-/// 3. Pass the hex response to KeePassWebApi.openDatabaseWithChallengeResponse
-
-/// YubiKey USB vendor ID.
 const int _yubiKeyVendorId = 0x1050;
+const int _ctapHidInit = 0x06 | 0x80; // 0x86
+const int _ctapHidMsg = 0x03 | 0x80; // 0x83
+const int _reportSize = 64;
+const int _initPayloadMax = 57;
 
-/// YubiKey HID interface number for challenge-response.
-const int _yubiKeyInterface = 0;
+final Uint8List _otpAppletAid =
+ Uint8List.fromList([0xA0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01]);
 
-/// YubiKey HID configuration value.
-const int _yubiKeyConfiguration = 1;
+@JS('navigator.hid')
+external JSObject? get _navigatorHid;
 
-/// HID report size for YubiKey.
-const int _hidReportSize = 64;
+bool get isWebUsbAvailable => _navigatorHid != null;
 
-/// Slot 2 challenge-response command byte.
-const int _slot2ChallengeCmd = 0x20;
-
-// WebUSB JS interop types
-@JS('navigator.usb')
-external JSObject? get _navigatorUsb;
-
-/// Check if WebUSB is available in this browser.
-bool get isWebUsbAvailable => _navigatorUsb != null;
-
-/// Request access to a YubiKey device via WebUSB.
-///
-/// MUST be called from a user gesture handler (click, tap).
-/// Returns a [JSObject] representing the USBDevice, or null if user cancelled.
-///
-/// Throws if WebUSB is not available.
 Future<JSObject?> requestYubiKey() async {
-  final usb = _navigatorUsb;
-  if (usb == null) {
-    throw UnsupportedError('WebUSB is not available in this browser');
-  }
+ final hid = _navigatorHid;
+ if (hid == null) {
+ throw UnsupportedError('WebHID is not available in this browser');
+ }
 
-  try {
-    final filters = [
-      {'vendorId': _yubiKeyVendorId}.jsify(),
-    ].toJS;
-    final options = {'filters': filters}.jsify();
+ try {
+ // Filter for YubiKey vendor ID. Chrome will show all non-blocked HID
+ // collections — the vendor-specific interface (0xFF00) is accessible.
+ final filters = [
+ {'vendorId': _yubiKeyVendorId}.jsify(),
+ ].toJS;
+ final options = {'filters': filters}.jsify();
 
-    final device = await (usb.callMethod<JSPromise<JSObject>>(
-      'requestDevice'.toJS,
-      options,
-    ))
-        .toDart;
+ final devices = await (hid.callMethod<JSPromise<JSAny>>(
+ 'requestDevice'.toJS,
+ options,
+ ))
+ .toDart;
 
-    return device;
-  } catch (e) {
-    // User cancelled the device picker or no device found
-    return null;
-  }
+ final deviceArray = devices as JSArray;
+ if (deviceArray.length == 0) return null;
+ return deviceArray[0] as JSObject;
+ } catch (e) {
+ return null;
+ }
 }
 
-/// Perform HMAC-SHA1 challenge-response with a YubiKey via WebUSB.
-///
-/// [device] is a USBDevice obtained from [requestYubiKey].
-/// [challenge] is the challenge bytes from the KDBX database header.
-///
-/// Returns the 20-byte HMAC-SHA1 response as a hex string suitable for
-/// passing to `openDatabaseWithChallengeResponse`.
-///
-/// Per D-07: All WebUSB communication happens on the main thread via
-/// dart:js_interop. The response hex is then passed to the WASM Worker
-/// which uses ChallengeResponseKey::LocalChallenge for the KDF.
 Future<String> yubikeyChallengeResponse(
-  JSObject device,
-  Uint8List challenge,
+ JSObject device,
+ Uint8List challenge,
 ) async {
-  // Open device and claim HID interface
-  await (device.callMethod<JSPromise<JSAny?>>('open'.toJS)).toDart;
+ await (device.callMethod<JSPromise<JSAny?>>('open'.toJS)).toDart;
 
-  try {
-    await (device.callMethod<JSPromise<JSAny?>>(
-      'selectConfiguration'.toJS,
-      _yubiKeyConfiguration.toJS,
-    ))
-        .toDart;
+ try {
+ final nonce = _randomBytes(8);
+ final initPayload = Uint8List(8);
+ initPayload.setAll(0, nonce);
 
-    await (device.callMethod<JSPromise<JSAny?>>(
-      'claimInterface'.toJS,
-      _yubiKeyInterface.toJS,
-    ))
-        .toDart;
+ final initResponse = await _ctapHidExchange(
+ device,
+ Uint8List.fromList([0xFF, 0xFF, 0xFF, 0xFF]),
+ _ctapHidInit,
+ initPayload,
+ );
 
-    // Build the HID report frame for slot 2 challenge-response
-    // Frame format: [slot_cmd, challenge_length, ...challenge_bytes, ...padding]
-    final frame = Uint8List(_hidReportSize);
-    frame[0] = _slot2ChallengeCmd;
-    frame[1] = challenge.length;
-    for (var i = 0; i < challenge.length && i < _hidReportSize - 2; i++) {
-      frame[i + 2] = challenge[i];
-    }
+ if (initResponse.length < 12) {
+ throw Exception('CTAP INIT response too short: ${initResponse.length}');
+ }
+ final channelId = Uint8List.fromList(initResponse.sublist(8, 12));
 
-    // Send challenge to YubiKey
-    await (device.callMethod<JSPromise<JSAny?>>(
-      'transferOut'.toJS,
-      1.toJS, // endpoint 1 (OUT)
-      frame.buffer.toJS,
-    ))
-        .toDart;
+ final selectApdu = Uint8List.fromList([
+ 0x00, 0xA4, 0x04, 0x00, // CLA INS P1 P2
+ _otpAppletAid.length, // Lc
+ ..._otpAppletAid, // AID data
+ ]);
+ final selectResp = await _ctapHidExchange(
+ device,
+ channelId,
+ _ctapHidMsg,
+ selectApdu,
+ );
 
-    // Read response from YubiKey
-    final transferResult = await (device.callMethod<JSPromise<JSObject>>(
-      'transferIn'.toJS,
-      1.toJS, // endpoint 1 (IN)
-      _hidReportSize.toJS,
-    ))
-        .toDart;
+ if (selectResp.length < 2 ||
+ selectResp[selectResp.length - 2] != 0x90 ||
+ selectResp[selectResp.length - 1] != 0x00) {
+ throw Exception(
+ 'OTP applet SELECT failed: ${_hexEncode(selectResp)}',
+ );
+ }
 
-    // Extract the data view from the transfer result
-    final dataView = transferResult.getProperty<JSDataView>('data'.toJS);
-    final responseBytes = dataView.toDart.buffer.asUint8List();
+ final hmacApdu = Uint8List.fromList([
+ 0x00, 0x01, 0x38, 0x00, // CLA INS P1 P2
+ challenge.length, // Lc
+ ...challenge, // Challenge bytes
+ 0x16, // Le = 22 (20 HMAC + 2 status)
+ ]);
+ final hmacResp = await _ctapHidExchange(
+ device,
+ channelId,
+ _ctapHidMsg,
+ hmacApdu,
+ );
 
-    // HMAC-SHA1 produces 20 bytes
-    final hmacResponse = responseBytes.sublist(0, 20);
+ if (hmacResp.length < 22) {
+ throw Exception(
+ 'HMAC response too short (${hmacResp.length}): ${_hexEncode(hmacResp)}',
+ );
+ }
 
-    // Convert to hex string
-    return hmacResponse
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join();
-  } finally {
-    // Always close the device
-    try {
-      await (device.callMethod<JSPromise<JSAny?>>('close'.toJS)).toDart;
-    } catch (_) {
-      // Best-effort close
-    }
-  }
+ final hmacOutput = hmacResp.sublist(0, 20);
+ return _hexEncode(hmacOutput);
+ } finally {
+ try {
+ await (device.callMethod<JSPromise<JSAny?>>('close'.toJS)).toDart;
+ } catch (_) {}
+ }
+}
+
+Future<Uint8List> _ctapHidExchange(
+ JSObject device,
+ Uint8List channelId,
+ int command,
+ Uint8List payload,
+) async {
+ // Build initialization packet
+ final packet = Uint8List(_reportSize);
+ packet.setAll(0, channelId); // bytes 0-3: channel
+ packet[4] = command; // byte 4: command
+ packet[5] = (payload.length >> 8) & 0xFF; // byte 5: length high
+ packet[6] = payload.length & 0xFF; // byte 6: length low
+
+ // Copy payload (max 57 bytes in init packet)
+ final firstLen =
+ payload.length < _initPayloadMax ? payload.length : _initPayloadMax;
+ for (var i = 0; i < firstLen; i++) {
+ packet[7 + i] = payload[i];
+ }
+
+ final completer = Completer<Uint8List>();
+
+ void handleReport(JSObject event) {
+ try {
+ final dataView = event.getProperty<JSDataView>('data'.toJS);
+ final bytes = dataView.toDart.buffer.asUint8List();
+ if (bytes.length < 7) return;
+
+ if (bytes[0] != channelId[0] ||
+ bytes[1] != channelId[1] ||
+ bytes[2] != channelId[2] ||
+ bytes[3] != channelId[3]) {
+ return;
+ }
+
+ if (bytes[4] & 0x80 == 0) return;
+
+ final respLen = (bytes[5] << 8) | bytes[6];
+ final dataEnd = 7 + respLen;
+ final end = dataEnd < bytes.length ? dataEnd : bytes.length;
+ final respPayload = Uint8List.fromList(bytes.sublist(7, end));
+
+ if (!completer.isCompleted) {
+ completer.complete(respPayload);
+ }
+ } catch (e) {
+ if (!completer.isCompleted) {
+ completer.completeError(e);
+ }
+ }
+ }
+
+ final jsCallback = handleReport.toJS;
+ device.callMethod<JSAny?>(
+ 'addEventListener'.toJS,
+ 'inputreport'.toJS,
+ jsCallback,
+ );
+
+ try {
+ await (device.callMethod<JSPromise<JSAny?>>(
+ 'sendReport'.toJS,
+ 0.toJS,
+ packet.buffer.toJS,
+ ))
+ .toDart;
+
+ return await completer.future.timeout(
+ const Duration(seconds: 10),
+ onTimeout: () =>
+ throw TimeoutException('YubiKey did not respond within 10 seconds'),
+ );
+ } finally {
+ device.callMethod<JSAny?>(
+ 'removeEventListener'.toJS,
+ 'inputreport'.toJS,
+ jsCallback,
+ );
+ }
+}
+
+Uint8List _randomBytes(int length) {
+ final rng = Random.secure();
+ return Uint8List.fromList(List.generate(length, (_) => rng.nextInt(256)));
+}
+
+String _hexEncode(Uint8List bytes) {
+ return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }

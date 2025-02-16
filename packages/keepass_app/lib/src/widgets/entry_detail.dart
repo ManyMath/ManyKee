@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 
 import '../models/vault_entry.dart';
 import '../state/clipboard_manager.dart';
@@ -287,11 +288,7 @@ class _EntryDetailState extends State<EntryDetail> {
   }
 
   void _launchUrl(String url) {
-    // Attempt to open URL in new tab using dart:js_interop would
-    // require a web-only import. For now, we'll use a simple
-    // approach that the platform can handle.
-    // This is a placeholder — the actual implementation can use
-    // url_launcher package or dart:js_interop window.open.
+    web.window.open(url, '_blank');
   }
 }
 

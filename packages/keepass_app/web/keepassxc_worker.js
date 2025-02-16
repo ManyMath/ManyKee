@@ -25,6 +25,7 @@ const methods = {
   'list_entries':                   (params) => wasm.list_entries(params[0], params[1]),
   'read_entry_fields':              (params) => wasm.read_entry_fields(params[0], params[1]),
   'merge_databases':                (params) => wasm.merge_databases(params[0], params[1]),
+  'extract_challenge':              (params) => wasm.extract_challenge(params[0]),
 };
 
 self.onmessage = async (e) => {

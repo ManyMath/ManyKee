@@ -24,6 +24,7 @@ class VaultState extends ChangeNotifier {
   String _searchQuery = '';
   bool _isLocked = true;
   String? _lastFilename;
+  Uint8List? _lastDbBytes;
   String? _errorMessage;
   String? _errorCode;
 
@@ -38,6 +39,7 @@ class VaultState extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   bool get isLocked => _isLocked;
   String? get lastFilename => _lastFilename;
+  Uint8List? get lastDbBytes => _lastDbBytes;
   String? get errorMessage => _errorMessage;
   String? get errorCode => _errorCode;
 
@@ -76,6 +78,7 @@ class VaultState extends ChangeNotifier {
     }
 
     _lastFilename = filename;
+    _lastDbBytes = dbBytes;
     await _loadRootGroups();
 
     // Select root group by default (D-05).
@@ -159,6 +162,17 @@ class VaultState extends ChangeNotifier {
   void clearSearch() {
     _searchQuery = '';
     notifyListeners();
+  }
+
+  // -- Challenge extraction (YubiKey) --
+
+  /// Extract the KDF seed (YubiKey challenge) from a KDBX file header.
+  ///
+  /// Returns hex-encoded challenge bytes. Requires WASM worker to be
+  /// initialized ([init] must have been called or [unlock] will call it).
+  Future<String> extractChallenge(Uint8List dbBytes) async {
+    await _api.init();
+    return _api.extractChallenge(dbBytes);
   }
 
   // -- Error handling --

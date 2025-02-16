@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 
 import '../models/vault_entry.dart';
 import '../models/vault_group.dart';
 import '../state/clipboard_manager.dart';
+import '../state/idle_timer.dart';
 import '../state/vault_state.dart';
 import '../theme/spacing.dart';
 import '../widgets/entry_detail.dart';
@@ -28,18 +30,54 @@ class VaultScreen extends StatefulWidget {
 
 class _VaultScreenState extends State<VaultScreen> {
   late final ClipboardManager _clipboardManager;
+  late final IdleTimer _idleTimer;
+
+  /// Currently selected idle timeout in minutes (null = never).
+  int? _selectedTimeoutMinutes = 5;
 
   /// Mobile navigation state.
   _MobileView _mobileView = _MobileView.groups;
+
+  /// Timeout options for the settings dropdown.
+  static const List<({String label, int? minutes})> _timeoutOptions = [
+    (label: '1 min', minutes: 1),
+    (label: '5 min', minutes: 5),
+    (label: '15 min', minutes: 15),
+    (label: '30 min', minutes: 30),
+    (label: 'Never', minutes: null),
+  ];
 
   @override
   void initState() {
     super.initState();
     _clipboardManager = ClipboardManager();
+    _idleTimer = IdleTimer();
+
+    // Restore timeout from localStorage.
+    final stored =
+        web.window.localStorage.getItem('manykee_idle_timeout');
+    if (stored != null) {
+      if (stored == 'never') {
+        _selectedTimeoutMinutes = null;
+        // For "Never", don't set an idle timeout but still start for
+        // visibility change detection. Use a very large duration.
+        _idleTimer.updateTimeout(const Duration(days: 365));
+      } else {
+        final minutes = int.tryParse(stored);
+        if (minutes != null) {
+          _selectedTimeoutMinutes = minutes;
+          _idleTimer.updateTimeout(Duration(minutes: minutes));
+        }
+      }
+    }
+
+    // Start idle timer with lock callback (D-06/D-07).
+    _idleTimer.start(() => widget.vaultState.lock());
   }
 
   @override
   void dispose() {
+    _idleTimer.dispose();
     _clipboardManager.dispose();
     super.dispose();
   }
@@ -120,13 +158,42 @@ class _VaultScreenState extends State<VaultScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // Settings placeholder (Plan 04).
-            IconButton(
+            // Settings: auto-lock timeout configuration.
+            PopupMenuButton<int?>(
               icon: const Icon(Icons.settings),
               tooltip: 'Settings',
-              onPressed: () {
-                // Placeholder for Plan 04 (timeout config).
+              onSelected: (minutes) {
+                setState(() => _selectedTimeoutMinutes = minutes);
+                if (minutes == null) {
+                  // "Never" -- use very large duration (visibility change still locks).
+                  _idleTimer.updateTimeout(const Duration(days: 365));
+                  web.window.localStorage
+                      .setItem('manykee_idle_timeout', 'never');
+                } else {
+                  _idleTimer.updateTimeout(Duration(minutes: minutes));
+                  web.window.localStorage
+                      .setItem('manykee_idle_timeout', minutes.toString());
+                }
               },
+              itemBuilder: (context) => [
+                PopupMenuItem<int?>(
+                  enabled: false,
+                  child: Text(
+                    'Auto-lock after',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                const PopupMenuDivider(),
+                for (final option in _timeoutOptions)
+                  CheckedPopupMenuItem<int?>(
+                    value: option.minutes,
+                    checked: _selectedTimeoutMinutes == option.minutes,
+                    child: Text(option.label),
+                  ),
+              ],
             ),
             // Lock button.
             IconButton(
@@ -137,6 +204,126 @@ class _VaultScreenState extends State<VaultScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Whether the search query is active (>= 2 chars).
+  bool get _isSearchActive =>
+      widget.vaultState.searchQuery.length >= 2;
+
+  /// Handle selecting a search result: navigate to its group and entry.
+  void _onSearchResultSelected(VaultEntry entry) {
+    // Find the group containing this entry by matching the breadcrumb.
+    final targetGroup = _findGroupByBreadcrumb(
+      entry.breadcrumb,
+      widget.vaultState.groups,
+      <String>[],
+    );
+    if (targetGroup != null) {
+      widget.vaultState.selectGroup(targetGroup);
+    }
+    widget.vaultState.selectEntry(entry);
+    widget.vaultState.clearSearch();
+    setState(() => _mobileView = _MobileView.detail);
+  }
+
+  /// Recursively find a group whose path matches the breadcrumb string.
+  VaultGroup? _findGroupByBreadcrumb(
+    String? breadcrumb,
+    List<VaultGroup> groups,
+    List<String> path,
+  ) {
+    if (breadcrumb == null) return null;
+    for (final group in groups) {
+      final currentPath = [...path, group.name];
+      final currentBreadcrumb = ['Root', ...currentPath.skip(path.isEmpty ? 0 : 0)].join(' > ');
+      // Check if this group's breadcrumb matches.
+      if (breadcrumb.startsWith(currentBreadcrumb)) {
+        // Check children for a more specific match.
+        final childMatch = _findGroupByBreadcrumb(
+          breadcrumb,
+          group.children,
+          currentPath,
+        );
+        return childMatch ?? group;
+      }
+    }
+    return null;
+  }
+
+  /// Build the search results panel replacing the entry list.
+  Widget _buildSearchResults(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final vaultState = widget.vaultState;
+    final results = vaultState.searchResults;
+
+    if (results.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'No matches',
+              style: textTheme.titleMedium,
+            ),
+            const SizedBox(height: Spacing.sm),
+            Text(
+              "No entries match '${vaultState.searchQuery}'. Try a different search.",
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final entry = results[index];
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _onSearchResultSelected(entry),
+            hoverColor: colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.title,
+                    style: textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (entry.username.isNotEmpty)
+                    Text(
+                      entry.username,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (entry.breadcrumb != null)
+                    Text(
+                      entry.breadcrumb!,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -155,6 +342,7 @@ class _VaultScreenState extends State<VaultScreen> {
               groups: vaultState.groups,
               selectedGroup: vaultState.selectedGroup,
               onGroupSelected: _onGroupSelected,
+              vaultState: vaultState,
             ),
           ),
         ),
@@ -163,7 +351,7 @@ class _VaultScreenState extends State<VaultScreen> {
           thickness: 1,
           color: colorScheme.outline,
         ),
-        // Center: Entry list (flexible, min 320px).
+        // Center: Entry list or search results (D-10).
         Expanded(
           child: ConstrainedBox(
             constraints: const BoxConstraints(
@@ -171,15 +359,17 @@ class _VaultScreenState extends State<VaultScreen> {
             ),
             child: ColoredBox(
               color: colorScheme.surfaceContainerLow,
-              child: EntryList(
-                entries: vaultState.entries,
-                selectedEntry: vaultState.selectedEntry,
-                onEntrySelected: _onEntrySelected,
-                groupName:
-                    vaultState.selectedGroup?.name ?? 'All Entries',
-                clipboardManager: _clipboardManager,
-                fetchPassword: _fetchPassword,
-              ),
+              child: _isSearchActive
+                  ? _buildSearchResults(context)
+                  : EntryList(
+                      entries: vaultState.entries,
+                      selectedEntry: vaultState.selectedEntry,
+                      onEntrySelected: _onEntrySelected,
+                      groupName:
+                          vaultState.selectedGroup?.name ?? 'All Entries',
+                      clipboardManager: _clipboardManager,
+                      fetchPassword: _fetchPassword,
+                    ),
             ),
           ),
         ),
@@ -214,20 +404,23 @@ class _VaultScreenState extends State<VaultScreen> {
             groups: vaultState.groups,
             selectedGroup: vaultState.selectedGroup,
             onGroupSelected: _onGroupSelected,
+            vaultState: vaultState,
           ),
         );
       case _MobileView.entries:
         return ColoredBox(
           color: colorScheme.surfaceContainerLow,
-          child: EntryList(
-            entries: vaultState.entries,
-            selectedEntry: vaultState.selectedEntry,
-            onEntrySelected: _onEntrySelected,
-            groupName:
-                vaultState.selectedGroup?.name ?? 'All Entries',
-            clipboardManager: _clipboardManager,
-            fetchPassword: _fetchPassword,
-          ),
+          child: _isSearchActive
+              ? _buildSearchResults(context)
+              : EntryList(
+                  entries: vaultState.entries,
+                  selectedEntry: vaultState.selectedEntry,
+                  onEntrySelected: _onEntrySelected,
+                  groupName:
+                      vaultState.selectedGroup?.name ?? 'All Entries',
+                  clipboardManager: _clipboardManager,
+                  fetchPassword: _fetchPassword,
+                ),
         );
       case _MobileView.detail:
         return vaultState.selectedEntry != null
