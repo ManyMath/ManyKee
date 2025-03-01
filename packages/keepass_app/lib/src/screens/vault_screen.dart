@@ -1,3 +1,5 @@
+import 'dart:js_interop';
+
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
@@ -10,6 +12,27 @@ import '../theme/spacing.dart';
 import '../widgets/entry_detail.dart';
 import '../widgets/entry_list.dart';
 import '../widgets/group_tree.dart';
+
+@JS('chrome.runtime.id')
+external JSString? get _chromeRuntimeId;
+
+/// Whether the app is running inside a Chrome extension context.
+bool get _isExtensionContext {
+  try {
+    return _chromeRuntimeId != null;
+  } catch (_) {
+    return false;
+  }
+}
+
+@JS('chrome.runtime.sendMessage')
+external JSPromise _chromeSendMessage(JSAny message);
+
+/// Sends openFullPage message to the extension background script.
+Future<void> _openFullPage() async {
+  final message = {'action': 'openFullPage'}.jsify()!;
+  await _chromeSendMessage(message).toDart;
+}
 
 /// Three-panel vault browser with responsive layout.
 ///
@@ -195,6 +218,13 @@ class _VaultScreenState extends State<VaultScreen> {
                   ),
               ],
             ),
+            // Open full page button (extension context only).
+            if (_isExtensionContext)
+              IconButton(
+                icon: const Icon(Icons.open_in_new),
+                tooltip: 'Open in full tab',
+                onPressed: _openFullPage,
+              ),
             // Lock button.
             IconButton(
               icon: const Icon(Icons.lock_outline),

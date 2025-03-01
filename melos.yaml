@@ -16,6 +16,9 @@ scripts:
     exec:
       concurrency: 1
       failFast: true
+  build:extension:
+    run: bash $MELOS_ROOT_PATH/scripts/build_extension.sh
+    description: Build Chrome MV3 extension from Flutter web output
   ffigen:
     run: dart run ffigen --config ffigen.yaml
     packageFilters:
