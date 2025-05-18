@@ -9,3 +9,4 @@ workspace:
   - packages/keepass_web
   - packages/keepass_app
   - packages/keepass_ui
+  - packages/keepass_web/example

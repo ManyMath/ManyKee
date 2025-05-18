@@ -1,0 +1,24 @@
+name: keepass_web_example
+description: ManyKee Flutter Web vault browser.
+publish_to: none
+resolution: workspace
+version: 0.1.0
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  keepass_ui:
+    path: ../../keepass_ui
+  keepass_web:
+    path: ../
+  web: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

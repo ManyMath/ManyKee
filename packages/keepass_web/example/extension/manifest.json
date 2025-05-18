@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "ManyKee",
+  "version": "0.1.0",
+  "description": "KeePass vault browser - KDBX 4.x password manager",
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "downloads"
+  ],
+
+  "action": {
+    "default_icon": {
+      "16": "icons/Icon-192.png",
+      "48": "icons/Icon-192.png",
+      "128": "icons/Icon-512.png"
+    },
+    "default_title": "ManyKee"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "side_panel": {
+    "default_path": "index.html"
+  },
+
+  "icons": {
+    "16": "icons/Icon-192.png",
+    "48": "icons/Icon-192.png",
+    "128": "icons/Icon-512.png"
+  },
+
+  "web_accessible_resources": [{
+    "resources": ["*.wasm", "*.js"],
+    "matches": ["<all_urls>"]
+  }]
+}
