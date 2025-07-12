@@ -7,6 +7,6 @@ workspace:
   - packages/keepass_cli
   - packages/keepass_flutter
   - packages/keepass_web
-  - packages/keepass_app
   - packages/keepass_ui
   - packages/keepass_web/example
+  - packages/keepass_flutter/example

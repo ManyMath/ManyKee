@@ -1,6 +1,6 @@
 {
-    "name": "keepass_app",
-    "short_name": "keepass_app",
+    "name": "keepass_web_example",
+    "short_name": "keepass_web_example",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
