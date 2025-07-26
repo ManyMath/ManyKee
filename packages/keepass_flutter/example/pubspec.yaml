@@ -16,6 +16,9 @@ dependencies:
     path: ../
   keepass_ui:
     path: ../../keepass_ui
+  file_picker: ^10.2.0
+  shared_preferences: ^2.4.0
+  url_launcher: ^6.2.0
 
 dev_dependencies:
   flutter_test:

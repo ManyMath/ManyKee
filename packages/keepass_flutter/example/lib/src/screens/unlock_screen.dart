@@ -1,13 +1,15 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:keepass/keepass.dart';
 import 'package:keepass_ui/keepass_ui.dart' show Spacing;
 
 import '../state/native_vault_state.dart';
 
-/// Minimal native unlock screen with file path input and master password.
+/// Native unlock screen with file picker, key file disclosure, and rich errors.
 ///
-/// Desktop-only for Phase 8 scaffold. No key file, no YubiKey, no mobile
-/// wizard -- those are Phase 9.
+/// Replaces the Phase 8 text-field scaffold with a production unlock flow
+/// using OS-native file dialogs (D-01), optional key file (D-02), and
+/// detailed error feedback (D-03).
 class NativeUnlockScreen extends StatefulWidget {
   final NativeVaultState vaultState;
 
@@ -21,21 +23,53 @@ class NativeUnlockScreen extends StatefulWidget {
 }
 
 class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
-  final _filePathController = TextEditingController();
+  String? _filePath;
+  String? _filename;
+  String? _keyFilePath;
+  String? _keyFilename;
+  bool _showKeyFile = false;
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
   bool _isDecrypting = false;
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _filePathController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
   bool get _canUnlock =>
-      _filePathController.text.isNotEmpty &&
-      _passwordController.text.isNotEmpty;
+      _filePath != null && _passwordController.text.isNotEmpty;
+
+  Future<void> _pickDatabase() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['kdbx'],
+      dialogTitle: 'Choose KDBX File',
+    );
+    if (result != null && result.files.isNotEmpty) {
+      setState(() {
+        _filePath = result.files.single.path;
+        _filename = result.files.single.name;
+      });
+    }
+  }
+
+  Future<void> _pickKeyFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['key', 'keyx', 'xml'],
+      dialogTitle: 'Choose Key File',
+    );
+    if (result != null && result.files.isNotEmpty) {
+      setState(() {
+        _keyFilePath = result.files.single.path;
+        _keyFilename = result.files.single.name;
+      });
+    }
+  }
 
   Future<void> _unlock() async {
     setState(() {
@@ -44,18 +78,23 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
     widget.vaultState.clearError();
 
     try {
-      await widget.vaultState.unlock(
-        filePath: _filePathController.text,
+      await widget.vaultState.unlockNative(
+        filePath: _filePath!,
         password: _passwordController.text,
+        keyFilePath: _keyFilePath,
+        filename: _filename,
       );
     } on KeePassError catch (e) {
       final message = e.message.toLowerCase();
-      if (message.contains('password') || message.contains('key')) {
+      if (message.contains('password') ||
+          message.contains('key') ||
+          message.contains('credentials')) {
         widget.vaultState.setError(
           'WRONG_PASSWORD',
           'Incorrect password. Please try again.',
         );
         _passwordController.clear();
+        _passwordFocusNode.requestFocus();
       } else if (message.contains('no such file') ||
           message.contains('not found') ||
           message.contains('cannot open')) {
@@ -63,10 +102,44 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
           'FILE_NOT_FOUND',
           'File not found. Check the path and try again.',
         );
+      } else if (message.contains('permission') ||
+          message.contains('denied')) {
+        widget.vaultState.setError(
+          'PERMISSION_DENIED',
+          'Permission denied. Check file permissions and try again.',
+        );
+      } else if (message.contains('locked') || message.contains('in use')) {
+        widget.vaultState.setError(
+          'FILE_LOCKED',
+          'File is locked by another process. Close other applications using '
+              'this file and try again.',
+        );
+      } else if (message.contains('header') || message.contains('corrupt')) {
+        widget.vaultState.setError(
+          'CORRUPT_HEADER',
+          'Database header is corrupted. The file may be damaged.',
+        );
+      } else if (message.contains('kdbx') &&
+          (message.contains('version') ||
+              message.contains('format') ||
+              message.contains('not a'))) {
+        widget.vaultState.setError(
+          'NOT_KDBX4',
+          'This is not a KDBX 4.x database. ManyKee requires KDBX 4 format.',
+        );
+      } else if (message.contains('key file') &&
+          (message.contains('invalid') ||
+              message.contains('read') ||
+              message.contains('parse'))) {
+        widget.vaultState.setError(
+          'KEY_FILE_INVALID',
+          'Key file could not be read. Check the file and try again.',
+        );
       } else {
         widget.vaultState.setError(
           'PARSE_ERROR',
-          'This file could not be read. It may be corrupted or not a KDBX 4.x database.',
+          'This file could not be read. It may be corrupted or not a '
+              'KDBX 4.x database.',
         );
       }
     } catch (e) {
@@ -106,22 +179,21 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
                 ),
                 const SizedBox(height: Spacing.xxl),
 
-                // File path input.
-                TextField(
-                  controller: _filePathController,
-                  decoration: const InputDecoration(
-                    labelText: 'KDBX File Path',
-                    hintText: '/path/to/database.kdbx',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.description),
+                // File picker button (D-01).
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isDecrypting ? null : _pickDatabase,
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(_filename ?? 'Choose KDBX File'),
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: Spacing.lg),
 
                 // Master password.
                 TextField(
                   controller: _passwordController,
+                  focusNode: _passwordFocusNode,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
                     labelText: 'Master Password',
@@ -145,7 +217,44 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
                   },
                 ),
 
-                // Error display.
+                // Key file disclosure (D-02).
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _showKeyFile = !_showKeyFile;
+                      });
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _showKeyFile ? Icons.expand_less : Icons.expand_more,
+                          size: 18,
+                        ),
+                        const SizedBox(width: Spacing.xs),
+                        const Text('Key File (optional)'),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_showKeyFile)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Spacing.sm),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _isDecrypting ? null : _pickKeyFile,
+                        icon: const Icon(Icons.key),
+                        label: Text(_keyFilename ?? 'Choose Key File'),
+                      ),
+                    ),
+                  ),
+
+                // TODO(09-02): YubiKey section goes here
+
+                // Error display (D-03).
                 if (widget.vaultState.errorMessage != null) ...[
                   Padding(
                     padding: const EdgeInsets.only(top: Spacing.sm),
@@ -177,6 +286,13 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
                         : const Text('Unlock Vault'),
                   ),
                 ),
+
+                // Progress indicator during decryption.
+                if (_isDecrypting)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Spacing.sm),
+                    child: const LinearProgressIndicator(),
+                  ),
               ],
             ),
           ),
