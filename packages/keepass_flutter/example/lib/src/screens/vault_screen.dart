@@ -1,234 +1,376 @@
 import 'package:flutter/material.dart';
 import 'package:keepass_ui/keepass_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../state/native_vault_state.dart';
 
-/// Minimal three-panel vault browser for the native example app.
-///
-/// Desktop-only layout for Phase 8 scaffold:
-/// - Left: GroupTree sidebar (280px)
-/// - Center: EntryList (expanded)
-/// - Right: EntryDetail or EntryDetailEmpty (expanded)
-///
-/// No responsive breakpoints, auto-lock, settings, or lock button -- Phase 9.
+/// Responsive three-panel vault browser for the native example app.
 class NativeVaultScreen extends StatefulWidget {
-  final NativeVaultState vaultState;
+ final NativeVaultState vaultState;
 
-  const NativeVaultScreen({
-    super.key,
-    required this.vaultState,
-  });
+ /// Callback when the lock button is pressed.
+ /// When null, defaults to calling `vaultState.lock()`.
+ final VoidCallback? onLockPressed;
 
-  @override
-  State<NativeVaultScreen> createState() => _NativeVaultScreenState();
+ /// Callback when the settings button is pressed.
+ /// When null, the button is shown but performs no action.
+ final VoidCallback? onSettingsPressed;
+
+ const NativeVaultScreen({
+ super.key,
+ required this.vaultState,
+ this.onLockPressed,
+ this.onSettingsPressed,
+ });
+
+ @override
+ State<NativeVaultScreen> createState() => _NativeVaultScreenState();
 }
 
 class _NativeVaultScreenState extends State<NativeVaultScreen> {
-  late final ClipboardManager _clipboardManager;
+ late final ClipboardManager _clipboardManager;
 
-  @override
-  void initState() {
-    super.initState();
-    _clipboardManager = ClipboardManager();
-  }
+int _mobileNavIndex = 0;
 
-  @override
-  void dispose() {
-    _clipboardManager.dispose();
-    super.dispose();
-  }
+ @override
+ void initState() {
+ super.initState();
+ _clipboardManager = ClipboardManager();
+ }
 
-  Future<String> _fetchPassword(String entryUuid) async {
-    final fields = await widget.vaultState.readEntryFields(entryUuid);
-    return fields['Password'] as String? ?? '';
-  }
+ @override
+ void dispose() {
+ _clipboardManager.dispose();
+ super.dispose();
+ }
 
-  void _onGroupSelected(VaultGroup group) {
-    widget.vaultState.selectGroup(group);
-  }
+bool _isMobile(BuildContext context) {
+ return MediaQuery.sizeOf(context).width < 600;
+ }
 
-  void _onEntrySelected(VaultEntry entry) {
-    widget.vaultState.selectEntry(entry);
-  }
+ bool get _isSearchActive => widget.vaultState.searchQuery.length >= 2;
 
-  /// Whether the search query is active (>= 2 chars).
-  bool get _isSearchActive =>
-      widget.vaultState.searchQuery.length >= 2;
+ Future<String> _fetchPassword(String entryUuid) async {
+ final fields = await widget.vaultState.readEntryFields(entryUuid);
+ return fields['Password'] as String? ?? '';
+ }
 
-  /// Handle selecting a search result.
-  void _onSearchResultSelected(VaultEntry entry) {
-    final targetGroup = _findGroupByBreadcrumb(
-      entry.breadcrumb,
-      widget.vaultState.groups,
-      <String>[],
-    );
-    if (targetGroup != null) {
-      widget.vaultState.selectGroup(targetGroup);
-    }
-    widget.vaultState.selectEntry(entry);
-    widget.vaultState.clearSearch();
-  }
+ void _onGroupSelected(VaultGroup group) {
+ widget.vaultState.selectGroup(group);
+ if (_isMobile(context)) {
+ setState(() => _mobileNavIndex = 1);
+ }
+ }
 
-  /// Recursively find a group whose path matches the breadcrumb string.
-  VaultGroup? _findGroupByBreadcrumb(
-    String? breadcrumb,
-    List<VaultGroup> groups,
-    List<String> path,
-  ) {
-    if (breadcrumb == null) return null;
-    for (final group in groups) {
-      final currentPath = [...path, group.name];
-      final currentBreadcrumb =
-          ['Root', ...currentPath].join(' > ');
-      if (breadcrumb.startsWith(currentBreadcrumb)) {
-        final childMatch = _findGroupByBreadcrumb(
-          breadcrumb,
-          group.children,
-          currentPath,
-        );
-        return childMatch ?? group;
-      }
-    }
-    return null;
-  }
+ void _onEntrySelected(VaultEntry entry) {
+ widget.vaultState.selectEntry(entry);
+ if (_isMobile(context)) {
+ setState(() => _mobileNavIndex = 2);
+ }
+ }
 
-  Widget _buildSearchResults(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final results = widget.vaultState.searchResults;
+ /// Handle selecting a search result: navigate to the matching group/entry.
+ void _onSearchResultSelected(VaultEntry entry) {
+ final targetGroup = _findGroupByBreadcrumb(
+ entry.breadcrumb,
+ widget.vaultState.groups,
+ <String>[],
+ );
+ if (targetGroup != null) {
+ widget.vaultState.selectGroup(targetGroup);
+ }
+ widget.vaultState.selectEntry(entry);
+ widget.vaultState.clearSearch();
+ if (_isMobile(context)) {
+ setState(() => _mobileNavIndex = 2);
+ }
+ }
 
-    if (results.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('No matches', style: textTheme.titleMedium),
-            const SizedBox(height: Spacing.sm),
-            Text(
-              "No entries match '${widget.vaultState.searchQuery}'. Try a different search.",
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
+ /// Recursively find a group whose path matches the breadcrumb string.
+ VaultGroup? _findGroupByBreadcrumb(
+ String? breadcrumb,
+ List<VaultGroup> groups,
+ List<String> path,
+ ) {
+ if (breadcrumb == null) return null;
+ for (final group in groups) {
+ final currentPath = [...path, group.name];
+ final currentBreadcrumb = ['Root', ...currentPath].join(' > ');
+ if (breadcrumb.startsWith(currentBreadcrumb)) {
+ final childMatch = _findGroupByBreadcrumb(
+ breadcrumb,
+ group.children,
+ currentPath,
+ );
+ return childMatch ?? group;
+ }
+ }
+ return null;
+ }
 
-    return ListView.builder(
-      itemCount: results.length,
-      itemBuilder: (context, index) {
-        final entry = results[index];
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _onSearchResultSelected(entry),
-            hoverColor: colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.title,
-                    style: textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (entry.username.isNotEmpty)
-                    Text(
-                      entry.username,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  if (entry.breadcrumb != null)
-                    Text(
-                      entry.breadcrumb!,
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.4),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+ /// Open a URL via url_launcher.
+ void _onUrlTap(String url) {
+ launchUrl(Uri.parse(url));
+ }
 
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final vaultState = widget.vaultState;
+/// AppBar shared across desktop and tablet layouts.
+ AppBar _buildAppBar(BuildContext context, {bool showDrawerButton = false}) {
+ return AppBar(
+ leading: showDrawerButton
+ ? Builder(
+ builder: (scaffoldContext) => IconButton(
+ icon: const Icon(Icons.menu),
+ onPressed: () => Scaffold.of(scaffoldContext).openDrawer(),
+ ),
+ )
+ : null,
+ title: SizedBox(
+ width: 300,
+ child: VaultSearchBar(vaultState: widget.vaultState),
+ ),
+ actions: [
+ IconButton(
+ icon: const Icon(Icons.lock_outline),
+ tooltip: 'Lock Vault',
+ onPressed: widget.onLockPressed ?? () => widget.vaultState.lock(),
+ ),
+ IconButton(
+ icon: const Icon(Icons.settings),
+ tooltip: 'Settings',
+ onPressed: widget.onSettingsPressed,
+ ),
+ ],
+ );
+ }
 
-    return ListenableBuilder(
-      listenable: vaultState,
-      builder: (context, _) {
-        return Scaffold(
-          body: Row(
-            children: [
-              // Left: Group tree sidebar (280px fixed).
-              SizedBox(
-                width: Spacing.sidebarWidth,
-                child: ColoredBox(
-                  color: colorScheme.surfaceContainerLow,
-                  child: GroupTree(
-                    groups: vaultState.groups,
-                    selectedGroup: vaultState.selectedGroup,
-                    onGroupSelected: _onGroupSelected,
-                    vaultState: vaultState,
-                  ),
-                ),
-              ),
-              VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: colorScheme.outline,
-              ),
-              // Center: Entry list or search results.
-              Expanded(
-                child: ColoredBox(
-                  color: colorScheme.surfaceContainerLow,
-                  child: _isSearchActive
-                      ? _buildSearchResults(context)
-                      : EntryList(
-                          entries: vaultState.entries,
-                          selectedEntry: vaultState.selectedEntry,
-                          onEntrySelected: _onEntrySelected,
-                          groupName:
-                              vaultState.selectedGroup?.name ?? 'All Entries',
-                          clipboardManager: _clipboardManager,
-                          fetchPassword: _fetchPassword,
-                        ),
-                ),
-              ),
-              VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: colorScheme.outline,
-              ),
-              // Right: Entry detail (flexible).
-              Expanded(
-                child: vaultState.selectedEntry != null
-                    ? EntryDetail(
-                        entry: vaultState.selectedEntry!,
-                        vaultState: vaultState,
-                        clipboardManager: _clipboardManager,
-                        onUrlTap: null,
-                      )
-                    : const EntryDetailEmpty(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+ /// Group tree sidebar panel.
+ Widget _buildGroupSidebar(BuildContext context) {
+ final colorScheme = Theme.of(context).colorScheme;
+ return ColoredBox(
+ color: colorScheme.surfaceContainerLow,
+ child: GroupTree(
+ groups: widget.vaultState.groups,
+ selectedGroup: widget.vaultState.selectedGroup,
+ onGroupSelected: _onGroupSelected,
+ vaultState: widget.vaultState,
+ ),
+ );
+ }
+
+ /// Entry list panel (or search results when search is active).
+ Widget _buildEntryListPanel(BuildContext context) {
+ if (_isSearchActive) {
+ return _buildSearchResults(context);
+ }
+ return EntryList(
+ entries: widget.vaultState.entries,
+ selectedEntry: widget.vaultState.selectedEntry,
+ onEntrySelected: _onEntrySelected,
+ groupName: widget.vaultState.selectedGroup?.name ?? 'All Entries',
+ clipboardManager: _clipboardManager,
+ fetchPassword: _fetchPassword,
+ );
+ }
+
+ /// Detail panel (entry detail or empty state).
+ Widget _buildDetailPanel(BuildContext context) {
+ if (widget.vaultState.selectedEntry != null) {
+ return EntryDetail(
+ entry: widget.vaultState.selectedEntry!,
+ vaultState: widget.vaultState,
+ clipboardManager: _clipboardManager,
+ onUrlTap: _onUrlTap,
+ );
+ }
+ return const EntryDetailEmpty();
+ }
+
+ /// Search results list with breadcrumbs.
+ Widget _buildSearchResults(BuildContext context) {
+ final colorScheme = Theme.of(context).colorScheme;
+ final textTheme = Theme.of(context).textTheme;
+ final results = widget.vaultState.searchResults;
+
+ if (results.isEmpty) {
+ return Center(
+ child: Column(
+ mainAxisSize: MainAxisSize.min,
+ children: [
+ Text('No matches', style: textTheme.titleMedium),
+ const SizedBox(height: Spacing.sm),
+ Text(
+ "No entries match '${widget.vaultState.searchQuery}'. Try a different search.",
+ style: textTheme.bodyMedium?.copyWith(
+ color: colorScheme.onSurface.withValues(alpha: 0.6),
+ ),
+ textAlign: TextAlign.center,
+ ),
+ ],
+ ),
+ );
+ }
+
+ return ListView.builder(
+ itemCount: results.length,
+ itemBuilder: (context, index) {
+ final entry = results[index];
+ return Material(
+ color: Colors.transparent,
+ child: InkWell(
+ onTap: () => _onSearchResultSelected(entry),
+ hoverColor: colorScheme.surfaceContainerHighest,
+ child: Padding(
+ padding: const EdgeInsets.symmetric(
+ horizontal: Spacing.md,
+ vertical: Spacing.sm,
+ ),
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.start,
+ children: [
+ Text(
+ entry.title,
+ style: textTheme.titleMedium,
+ overflow: TextOverflow.ellipsis,
+ ),
+ if (entry.username.isNotEmpty)
+ Text(
+ entry.username,
+ style: textTheme.bodyMedium?.copyWith(
+ color: colorScheme.onSurface.withValues(alpha: 0.6),
+ ),
+ overflow: TextOverflow.ellipsis,
+ ),
+ if (entry.breadcrumb != null)
+ Text(
+ entry.breadcrumb!,
+ style: textTheme.labelSmall?.copyWith(
+ color: colorScheme.onSurface.withValues(alpha: 0.4),
+ ),
+ overflow: TextOverflow.ellipsis,
+ ),
+ ],
+ ),
+ ),
+ ),
+ );
+ },
+ );
+ }
+
+/// Desktop layout: three panels side-by-side.
+ Widget _buildDesktopLayout(BuildContext context) {
+ final colorScheme = Theme.of(context).colorScheme;
+ return Scaffold(
+ appBar: _buildAppBar(context),
+ body: Row(
+ children: [
+ SizedBox(
+ width: Spacing.sidebarWidth,
+ child: _buildGroupSidebar(context),
+ ),
+ VerticalDivider(width: 1, thickness: 1, color: colorScheme.outline),
+ Expanded(
+ child: ColoredBox(
+ color: colorScheme.surfaceContainerLow,
+ child: _buildEntryListPanel(context),
+ ),
+ ),
+ VerticalDivider(width: 1, thickness: 1, color: colorScheme.outline),
+ Expanded(child: _buildDetailPanel(context)),
+ ],
+ ),
+ );
+ }
+
+/// Tablet layout: two panels with groups in a Drawer.
+ Widget _buildTabletLayout(BuildContext context) {
+ final colorScheme = Theme.of(context).colorScheme;
+ return Scaffold(
+ appBar: _buildAppBar(context, showDrawerButton: true),
+ drawer: Drawer(
+ child: SafeArea(child: _buildGroupSidebar(context)),
+ ),
+ body: Row(
+ children: [
+ Expanded(
+ child: ColoredBox(
+ color: colorScheme.surfaceContainerLow,
+ child: _buildEntryListPanel(context),
+ ),
+ ),
+ VerticalDivider(width: 1, thickness: 1, color: colorScheme.outline),
+ Expanded(child: _buildDetailPanel(context)),
+ ],
+ ),
+ );
+ }
+
+/// Mobile layout: navigation stack using state index.
+ Widget _buildMobileLayout(BuildContext context) {
+ return Scaffold(
+ appBar: AppBar(
+ leading: _mobileNavIndex > 0
+ ? IconButton(
+ icon: const Icon(Icons.arrow_back),
+ onPressed: () =>
+ setState(() => _mobileNavIndex = _mobileNavIndex - 1),
+ )
+ : null,
+ title: _mobileNavIndex == 0
+ ? const Text('ManyKee')
+ : SizedBox(
+ width: double.infinity,
+ child: VaultSearchBar(vaultState: widget.vaultState),
+ ),
+ actions: [
+ IconButton(
+ icon: const Icon(Icons.lock_outline),
+ tooltip: 'Lock Vault',
+ onPressed: widget.onLockPressed ?? () => widget.vaultState.lock(),
+ ),
+ IconButton(
+ icon: const Icon(Icons.settings),
+ tooltip: 'Settings',
+ onPressed: widget.onSettingsPressed,
+ ),
+ ],
+ ),
+ body: _buildMobileBody(context),
+ );
+ }
+
+ /// Mobile body content based on navigation index.
+ Widget _buildMobileBody(BuildContext context) {
+ switch (_mobileNavIndex) {
+ case 0:
+ return _buildGroupSidebar(context);
+ case 1:
+ return _buildEntryListPanel(context);
+ case 2:
+ return _buildDetailPanel(context);
+ default:
+ return _buildGroupSidebar(context);
+ }
+ }
+
+@override
+ Widget build(BuildContext context) {
+ return ListenableBuilder(
+ listenable: widget.vaultState,
+ builder: (context, _) {
+ return LayoutBuilder(
+ builder: (context, constraints) {
+ final width = constraints.maxWidth;
+ if (width > 900) {
+ return _buildDesktopLayout(context);
+ } else if (width >= 600) {
+ return _buildTabletLayout(context);
+ } else {
+ return _buildMobileLayout(context);
+ }
+ },
+ );
+ },
+ );
+ }
 }
