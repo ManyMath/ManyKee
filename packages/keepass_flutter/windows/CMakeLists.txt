@@ -4,4 +4,4 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 
 # cargokit integration
 include(../cargokit/cmake/cargokit.cmake)
-apply_cargokit(${PROJECT_NAME} ../rust ${PROJECT_NAME})
+apply_cargokit(${PROJECT_NAME} ../rust keepass_flutter_native kpxc_database_open)
