@@ -1,0 +1,24 @@
+name: manykee_web
+description: ManyKee web app.
+publish_to: none
+resolution: workspace
+version: 0.1.0
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  keepass_ui:
+    path: ../../packages/keepass_ui
+  keepass_web:
+    path: ../../packages/keepass_web
+  web: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

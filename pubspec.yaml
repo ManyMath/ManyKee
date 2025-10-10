@@ -10,3 +10,5 @@ workspace:
   - packages/keepass_ui
   - packages/keepass_web/example
   - packages/keepass_flutter/example
+  - apps/web
+  - apps/native
