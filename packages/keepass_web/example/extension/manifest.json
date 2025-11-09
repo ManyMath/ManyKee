@@ -15,11 +15,6 @@
   ],
 
   "action": {
-    "default_icon": {
-      "16": "icons/Icon-192.png",
-      "48": "icons/Icon-192.png",
-      "128": "icons/Icon-512.png"
-    },
     "default_title": "ManyKee"
   },
 
@@ -29,12 +24,6 @@
 
   "side_panel": {
     "default_path": "index.html"
-  },
-
-  "icons": {
-    "16": "icons/Icon-192.png",
-    "48": "icons/Icon-192.png",
-    "128": "icons/Icon-512.png"
   },
 
   "web_accessible_resources": [{

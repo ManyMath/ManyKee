@@ -24,7 +24,7 @@ scripts:
     run: cd $MELOS_ROOT_PATH/packages/keepass_web/example/test/e2e && npm install --silent && npm run test:only
     description: Run Puppeteer E2E tests against Chrome extension (requires build:extension first)
   test:integration:
-    run: flutter test integration_test
+    run: flutter test integration_test -d linux
     description: Run Flutter integration tests (Linux desktop)
     exec:
       concurrency: 1

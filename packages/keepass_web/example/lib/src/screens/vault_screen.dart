@@ -28,6 +28,8 @@ Future<void> _openFullPage() async {
  await _chromeSendMessage(message).toDart;
 }
 
+enum _MobileView { groups, entries, detail }
+
 /// Three-panel vault browser with responsive layout.
 class VaultScreen extends StatefulWidget {
  /// Central vault state for group/entry selection and data access.
@@ -395,9 +397,6 @@ width: 1,
  ],
  );
  }
-
-/// Mobile view enum for navigation state.
- enum _MobileView { groups, entries, detail }
 
  Widget _buildMobileLayout(BuildContext context) {
  final colorScheme = Theme.of(context).colorScheme;

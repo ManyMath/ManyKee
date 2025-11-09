@@ -60,6 +60,9 @@ class NativeVaultState extends VaultState {
 
     if (groups.isNotEmpty) {
       await selectGroup(groups.first);
+    } else {
+      final maps = await _api.listEntries(handle, '');
+      entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
     }
 
     isLockedValue = false;

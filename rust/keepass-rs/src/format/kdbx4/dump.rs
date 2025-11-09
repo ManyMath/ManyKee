@@ -34,13 +34,13 @@ pub fn dump_kdbx4(
 
  // generate encryption keys and seeds on the fly when saving
  let mut master_seed = vec![0; HEADER_MASTER_SEED_SIZE];
- getrandom::fill(&mut master_seed)?;
+ getrandom::getrandom(&mut master_seed)?;
 
  let mut outer_iv = vec![0; db.config.outer_cipher_config.get_iv_size()];
- getrandom::fill(&mut outer_iv)?;
+ getrandom::getrandom(&mut outer_iv)?;
 
  let mut inner_random_stream_key = vec![0; db.config.inner_cipher_config.get_key_size()];
- getrandom::fill(&mut inner_random_stream_key)?;
+ getrandom::getrandom(&mut inner_random_stream_key)?;
 
  let (kdf, kdf_seed) = db.config.kdf_config.get_kdf_and_seed()?;
 

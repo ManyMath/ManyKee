@@ -39,6 +39,24 @@ async function shot(page, x, y, w, h) {
  return page.screenshot({ clip: { x, y, width: w, height: h }, encoding: 'binary' });
 }
 
+async function waitForExtensionId(browser, timeoutMs = 10000) {
+ const deadline = Date.now() + timeoutMs;
+
+ while (Date.now() < deadline) {
+ const targets = await browser.targets();
+ for (const target of targets) {
+ const match = target.url().match(/^chrome-extension:\/\/([a-z]{32})/);
+ if (match) {
+ return match[1];
+ }
+ }
+
+ await sleep(500);
+ }
+
+ throw new Error(`Could not determine extension ID after ${timeoutMs}ms`);
+}
+
 describe('ManyKee Chrome Extension', () => {
  let browser;
  let page;
@@ -55,29 +73,20 @@ describe('ManyKee Chrome Extension', () => {
 
  browser = await puppeteer.launch({
  headless: false,
+ enableExtensions: [EXT_PATH],
+ pipe: true,
  args: [
- `--disable-extensions-except=${EXT_PATH}`,
- `--load-extension=${EXT_PATH}`,
  '--no-sandbox',
  '--disable-setuid-sandbox',
  '--disable-dev-shm-usage',
+ '--disable-gpu',
  '--window-size=1280,1024',
  ],
  executablePath: process.env.CHROME_PATH || undefined,
  defaultViewport: { width: 1280, height: 1024 },
  });
 
- await sleep(3000);
-
- const targets = await browser.targets();
- for (const target of targets) {
- const match = target.url().match(/^chrome-extension:\/\/([a-z]{32})/);
- if (match) {
- extId = match[1];
- break;
- }
- }
- if (!extId) throw new Error('Could not determine extension ID');
+ extId = await waitForExtensionId(browser);
 
  page = await browser.newPage();
  page.on('console', (msg) => {

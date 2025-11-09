@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:keepass_ui/keepass_ui.dart';
+import 'package:web/web.dart' as web;
 
 import 'src/screens/unlock_screen.dart';
 import 'src/screens/vault_screen.dart';
@@ -18,9 +20,24 @@ class ManyKeeApp extends StatefulWidget {
 
 class _ManyKeeAppState extends State<ManyKeeApp> {
   final WebVaultState _vaultState = WebVaultState();
+  SemanticsHandle? _semanticsHandle;
+
+  bool get _shouldEnableSemantics {
+    final params = Uri.parse(web.window.location.href).queryParameters;
+    return params['e2e_semantics'] == '1';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (_shouldEnableSemantics) {
+      _semanticsHandle = SemanticsBinding.instance.ensureSemantics();
+    }
+  }
 
   @override
   void dispose() {
+    _semanticsHandle?.dispose();
     _vaultState.dispose();
     super.dispose();
   }

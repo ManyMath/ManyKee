@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -43,16 +44,17 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
   Future<void> _detectYubiKeys() async {
     try {
       final keys = await KeePassNativeApi().listYubiKeys();
-      developer.log('YubiKey detection: found ${keys.length} device(s): $keys', name: 'ManyKee');
+      developer.log('YubiKey detection: found ${keys.length} device(s): $keys',
+          name: 'ManyKee');
       if (mounted) {
         setState(() {
           _yubiKeys = keys;
-          _useYubiKey = keys.isNotEmpty;
           _yubiKeyLoading = false;
         });
       }
     } catch (e, stack) {
-      developer.log('YubiKey detection failed: $e', name: 'ManyKee', error: e, stackTrace: stack);
+      developer.log('YubiKey detection failed: $e',
+          name: 'ManyKee', error: e, stackTrace: stack);
       if (mounted) {
         setState(() {
           _yubiKeyLoading = false;
@@ -105,6 +107,14 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
     });
     widget.vaultState.clearError();
 
+    final unlockRequest = 'Unlock requested: filePath=$_filePath '
+        'exists=${_filePath != null ? File(_filePath!).existsSync() : false} '
+        'keyFilePath=$_keyFilePath '
+        'keyExists=${_keyFilePath != null ? File(_keyFilePath!).existsSync() : false} '
+        'useYubiKey=$_useYubiKey';
+    developer.log(unlockRequest, name: 'ManyKee');
+    debugPrint(unlockRequest);
+
     try {
       await widget.vaultState.unlockNative(
         filePath: _filePath!,
@@ -114,7 +124,9 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
         filename: _filename,
       );
     } on KeePassError catch (e, stack) {
-      developer.log('Unlock failed: ${e.message}', name: 'ManyKee', error: e, stackTrace: stack);
+      developer.log('Unlock failed: ${e.message}',
+          name: 'ManyKee', error: e, stackTrace: stack);
+      debugPrint('Unlock KeePassError: ${e.message}');
       final message = e.message.toLowerCase();
       if (message.contains('yubikey') || message.contains('challenge')) {
         widget.vaultState.setError(
@@ -128,7 +140,9 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
         );
       } else if (message.contains('password') ||
           message.contains('key') ||
-          message.contains('credentials')) {
+          message.contains('credentials') ||
+          message.contains('unpad') ||
+          message.contains('padding')) {
         widget.vaultState.setError(
           'WRONG_PASSWORD',
           'Incorrect password. Please try again.',
@@ -140,10 +154,10 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
           message.contains('cannot open')) {
         widget.vaultState.setError(
           'FILE_NOT_FOUND',
-          'File not found. Check the path and try again.',
+          'File not found: ${_filePath ?? _filename ?? 'selected file'}\n'
+              '${e.message}',
         );
-      } else if (message.contains('permission') ||
-          message.contains('denied')) {
+      } else if (message.contains('permission') || message.contains('denied')) {
         widget.vaultState.setError(
           'PERMISSION_DENIED',
           'Permission denied. Check file permissions and try again.',
@@ -152,7 +166,7 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
         widget.vaultState.setError(
           'FILE_LOCKED',
           'File is locked by another process. Close other applications using '
-          'this file and try again.',
+              'this file and try again.',
         );
       } else if (message.contains('header') || message.contains('corrupt')) {
         widget.vaultState.setError(
@@ -182,7 +196,9 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
         );
       }
     } catch (e, stack) {
-      developer.log('Unlock failed (unexpected): $e', name: 'ManyKee', error: e, stackTrace: stack);
+      developer.log('Unlock failed (unexpected): $e',
+          name: 'ManyKee', error: e, stackTrace: stack);
+      debugPrint('Unlock unexpected error: $e');
       widget.vaultState.setError('UNKNOWN', e.toString());
     } finally {
       if (mounted) {

@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsState extends ChangeNotifier {
+  static const _minutesKey = 'autoLockTimeout';
+  static const _secondsKey = 'autoLockTimeoutSeconds';
+
   SharedPreferences? _prefs;
 
   Future<void> init() async {
@@ -11,16 +14,27 @@ class SettingsState extends ChangeNotifier {
 
   bool get isInitialized => _prefs != null;
 
-  int get autoLockTimeoutMinutes => _prefs?.getInt('autoLockTimeout') ?? 5;
+  int get autoLockTimeoutMinutes => _prefs?.getInt(_minutesKey) ?? 5;
 
   Duration get autoLockTimeout {
+    final seconds = _prefs?.getInt(_secondsKey);
+    if (seconds != null) {
+      if (seconds <= 0) return Duration.zero;
+      return Duration(seconds: seconds);
+    }
     final minutes = autoLockTimeoutMinutes;
     if (minutes == 0) return Duration.zero;
     return Duration(minutes: minutes);
   }
 
   Future<void> setAutoLockTimeout(int minutes) async {
-    await _prefs?.setInt('autoLockTimeout', minutes);
+    await _prefs?.setInt(_minutesKey, minutes);
+    await _prefs?.remove(_secondsKey);
+    notifyListeners();
+  }
+
+  Future<void> setAutoLockTimeoutDuration(Duration duration) async {
+    await _prefs?.setInt(_secondsKey, duration.inSeconds);
     notifyListeners();
   }
 

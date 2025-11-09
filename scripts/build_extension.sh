@@ -10,6 +10,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="$PROJECT_ROOT/packages/keepass_web/example"
 BUILD_DIR="$APP_DIR/build"
+WASM_CRATE_DIR="$PROJECT_ROOT/rust/keepassxc-wasm"
+WASM_SOURCE_DIR="$PROJECT_ROOT/packages/keepass_web/web"
+WASM_PKG_DIR="$WASM_SOURCE_DIR/pkg"
 EXT_OUTPUT="$BUILD_DIR/extension"
 EXT_SOURCE="$APP_DIR/extension"
 
@@ -22,13 +25,23 @@ if ! command -v flutter &>/dev/null; then
 fi
 
 if ! command -v wasm-pack &>/dev/null; then
-  echo "WARNING: wasm-pack not found — WASM assets may be missing"
+  echo "ERROR: wasm-pack not found"
+  exit 1
 fi
+
+echo "Building WASM worker assets..."
+cd "$WASM_CRATE_DIR"
+wasm-pack build --target web --out-dir ../../packages/keepass_web/web/pkg
 
 # --- Build Flutter Web ---
 echo "Building Flutter Web (CSP mode, no CDN)..."
 cd "$APP_DIR"
 flutter build web --csp --no-web-resources-cdn --release
+
+echo "Copying WASM worker assets into web build..."
+mkdir -p "$BUILD_DIR/web/pkg"
+cp "$WASM_SOURCE_DIR/keepassxc_worker.js" "$BUILD_DIR/web/"
+cp "$WASM_PKG_DIR"/keepassxc_wasm*.{js,wasm,ts} "$BUILD_DIR/web/pkg/"
 
 # --- Create extension directory ---
 echo "Creating extension output directory..."
@@ -46,6 +59,12 @@ echo "Patching index.html..."
 
 # Fix base href for extension-relative paths
 sed -i 's|<base href="/">|<base href="./">|' "$EXT_OUTPUT/index.html"
+
+# Remove broken icon links from the extension shell; the extension manifest no
+# longer points at packaged icon files and the built web bundle does not ship
+# favicon/icon assets at these paths.
+sed -i '/apple-touch-icon/d' "$EXT_OUTPUT/index.html"
+sed -i '/href="favicon.png"/d' "$EXT_OUTPUT/index.html"
 
 # Inject disable_service_worker.js before flutter_bootstrap.js
 sed -i 's|<script src="flutter_bootstrap.js"|<script src="disable_service_worker.js"></script>\n  <script src="flutter_bootstrap.js"|' "$EXT_OUTPUT/index.html"
@@ -78,10 +97,11 @@ for file in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
-# Check for WASM assets (may be in pkg/ subdirectory)
+# Check for WASM assets (required for standalone web unlock flow)
 for wasm_file in "pkg/keepassxc_wasm_bg.wasm" "pkg/keepassxc_wasm.js" "keepassxc_worker.js"; do
   if [ ! -f "$EXT_OUTPUT/$wasm_file" ]; then
-    echo "WARNING: $wasm_file not found (expected if WASM not yet built)"
+    echo "MISSING: $wasm_file"
+    MISSING=1
   fi
 done
 

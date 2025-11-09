@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "pretest": "bash ../../../../scripts/build_extension.sh",
+    "pretest": "bash ../../../../../scripts/build_extension.sh",
     "test": "jest --runInBand",
     "test:only": "jest --runInBand"
   },

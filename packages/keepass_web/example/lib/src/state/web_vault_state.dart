@@ -48,9 +48,12 @@ Uint8List? _lastDbBytes;
  _lastDbBytes = dbBytes;
  await loadRootGroupsUsing(_api.listGroups);
 
- // Select root group by default.
+ // Select the first group when present; otherwise expose root-level entries.
  if (groups.isNotEmpty) {
  await selectGroup(groups.first);
+ } else {
+ final maps = await _api.listEntries(handle, '');
+ entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
  }
 
  isLockedValue = false;

@@ -5,3 +5,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 # cargokit integration
 include(../cargokit/cmake/cargokit.cmake)
 apply_cargokit(${PROJECT_NAME} ../rust keepass_flutter_native "")
+set(${PROJECT_NAME}_bundled_libraries
+  "${${PROJECT_NAME}_cargokit_lib}"
+  PARENT_SCOPE
+)

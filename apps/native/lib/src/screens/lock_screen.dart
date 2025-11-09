@@ -49,11 +49,14 @@ class _NativeLockScreenState extends State<NativeLockScreen> {
         filename: widget.vaultState.lastFilename,
       );
     } on KeePassError catch (e, stack) {
-      developer.log('Re-unlock failed: ${e.message}', name: 'ManyKee', error: e, stackTrace: stack);
+      developer.log('Re-unlock failed: ${e.message}',
+          name: 'ManyKee', error: e, stackTrace: stack);
       final message = e.message.toLowerCase();
       if (message.contains('password') ||
           message.contains('key') ||
-          message.contains('credentials')) {
+          message.contains('credentials') ||
+          message.contains('unpad') ||
+          message.contains('padding')) {
         widget.vaultState.setError(
           'WRONG_PASSWORD',
           'Incorrect password. Please try again.',
@@ -67,7 +70,8 @@ class _NativeLockScreenState extends State<NativeLockScreen> {
         );
       }
     } catch (e, stack) {
-      developer.log('Re-unlock failed (unexpected): $e', name: 'ManyKee', error: e, stackTrace: stack);
+      developer.log('Re-unlock failed (unexpected): $e',
+          name: 'ManyKee', error: e, stackTrace: stack);
       widget.vaultState.setError('UNKNOWN', e.toString());
     } finally {
       if (mounted) setState(() => _isDecrypting = false);
