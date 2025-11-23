@@ -411,6 +411,23 @@ describe('ManyKee Standalone Web Vault', () => {
     expect(lockState.text).toContain('test_with_entries.kdbx');
   });
 
+  it('re-unlocks after locking the standalone vault', async () => {
+    await typeIntoTextbox(page, client, 'Master Password', TEST_PASSWORD);
+    await page.keyboard.press('Enter');
+
+    const relockState = await waitForAccessibility(
+      page,
+      ({ nodes, text }) =>
+        !!findAccessibilityNode(nodes, 'Lock Vault', 'button') &&
+        !!findAccessibilityNode(nodes, 'Search entries...', 'textbox') &&
+        text.includes('Sample Entry #2'),
+      { timeout: 45000, interval: 500 },
+    );
+
+    expect(relockState.text).toContain('Sample Entry #2');
+    expect(relockState.text).toContain('Search entries...');
+  }, 45000);
+
   it('completes the standalone flow without critical console errors', () => {
     const critical = consoleErrors.filter(
       (error) =>
