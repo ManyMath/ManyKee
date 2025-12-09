@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:keepass_ui/keepass_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:manykee_native/main.dart';
+import 'package:manykee_native/src/screens/vault_screen.dart';
 import 'package:manykee_native/src/state/settings_state.dart';
 
 // ---------------------------------------------------------------------------
@@ -73,6 +75,16 @@ class _FakeFilePicker extends FilePicker {
   }
 }
 
+class _WritableFixture {
+  const _WritableFixture({
+    required this.path,
+    required this.name,
+  });
+
+  final String path;
+  final String name;
+}
+
 Future<bool> pumpUntilFound(
   WidgetTester tester,
   Finder finder, {
@@ -112,26 +124,137 @@ Future<void> _tapControl(WidgetTester tester, Finder finder) async {
   await tester.pump();
 }
 
+Future<void> _useDesktopLayout(WidgetTester tester) async {
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.binding.setSurfaceSize(const Size(1280, 800));
+}
+
+Future<_WritableFixture> _copyFixtureToTemp(String fixtureName) async {
+  final sourcePath = _fixturePath(fixtureName);
+  final tempDir = await Directory.systemTemp.createTemp('manykee-itest-');
+  addTearDown(() async {
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  final targetPath = '${tempDir.path}/$fixtureName';
+  await File(sourcePath).copy(targetPath);
+  return _WritableFixture(path: targetPath, name: fixtureName);
+}
+
+Future<void> _saveVaultAndReload(
+  WidgetTester tester, {
+  required String password,
+}) async {
+  await _tapControl(tester, find.byTooltip('Save Vault'));
+
+  final saved = await pumpUntilFound(
+    tester,
+    find.text('Vault saved'),
+    timeout: const Duration(seconds: 30),
+  );
+  expect(saved, isTrue, reason: 'Save action should complete successfully');
+
+  await _tapControl(tester, find.byTooltip('Lock Vault'));
+  await tester.pumpAndSettle();
+  expect(find.text('Vault Locked'), findsOneWidget);
+
+  await tester.enterText(
+    find.widgetWithText(TextField, 'Master Password'),
+    password,
+  );
+  await tester.pumpAndSettle();
+  await _tapControl(tester, _unlockVaultButton());
+
+  final reopened = await pumpUntilFound(
+    tester,
+    find.byTooltip('Lock Vault'),
+    timeout: const Duration(seconds: 120),
+  );
+  expect(reopened, isTrue, reason: 'Vault should reopen after save + lock');
+}
+
+Finder _groupLabel(String name) => find.descendant(
+      of: find.byType(GroupTree),
+      matching: find.text(name),
+    );
+
+VaultGroup? _findGroupByName(List<VaultGroup> groups, String name) {
+  for (final group in groups) {
+    if (group.name == name) {
+      return group;
+    }
+    final childMatch = _findGroupByName(group.children, name);
+    if (childMatch != null) {
+      return childMatch;
+    }
+  }
+  return null;
+}
+
+bool _groupExists(List<VaultGroup> groups, String name) =>
+    _findGroupByName(groups, name) != null;
+
+bool _groupIsChildOf(
+  List<VaultGroup> groups,
+  String parentName,
+  String childName,
+) {
+  final parent = _findGroupByName(groups, parentName);
+  if (parent == null) {
+    return false;
+  }
+  return _findGroupByName(parent.children, childName) != null;
+}
+
+Future<void> _openGroupMenu(WidgetTester tester, String name) async {
+  final tile = find
+      .ancestor(
+        of: _groupLabel(name).first,
+        matching: find.byType(Material),
+      )
+      .first;
+  await _tapControl(
+    tester,
+    find.descendant(
+      of: tile,
+      matching: find.byTooltip('Group actions'),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 /// Shared helper: boots app, picks fixture file, enters password, waits for vault.
 ///
 /// Returns the [SettingsState] so tests can inspect settings changes.
 Future<SettingsState> unlockVault(
   WidgetTester tester, {
   String? fixtureName,
+  String? fixturePath,
   String? keyFileName,
   String password = 'demopass',
   Duration timeout = const Duration(seconds: 120),
+  SettingsState? settings,
+  bool resetPreferences = true,
 }) async {
-  SharedPreferences.setMockInitialValues({});
-  final settings = SettingsState();
-  await settings.init();
-  await settings.setAutoLockTimeout(0);
+  if (resetPreferences) {
+    SharedPreferences.setMockInitialValues({});
+  }
+  final activeSettings = settings ?? SettingsState();
+  if (settings == null) {
+    await activeSettings.init();
+  }
+  await activeSettings.setAutoLockTimeout(0);
 
   final dbName = fixtureName ?? 'test_db_with_password.kdbx';
-  final dbPath = _fixturePath(dbName);
-  FilePicker.platform = _FakeFilePicker(dbPath, dbName);
+  final dbPath = fixturePath ?? _fixturePath(dbName);
+  final selectedName = File(dbPath).uri.pathSegments.isEmpty
+      ? dbName
+      : File(dbPath).uri.pathSegments.last;
+  FilePicker.platform = _FakeFilePicker(dbPath, selectedName);
 
-  runApp(ManyKeeNativeApp(settings: settings));
+  runApp(ManyKeeNativeApp(settings: activeSettings));
   await tester.pumpAndSettle(const Duration(seconds: 5));
 
   await _tapControl(tester, _chooseDatabaseButton());
@@ -164,7 +287,7 @@ Future<SettingsState> unlockVault(
   );
   expect(opened, isTrue, reason: 'Vault should open after correct password');
 
-  return settings;
+  return activeSettings;
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +438,8 @@ void main() {
       }
     });
 
-    testWidgets('navigates nested groups and shows child entries', (tester) async {
+    testWidgets('navigates nested groups and shows child entries',
+        (tester) async {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.binding.setSurfaceSize(const Size(1280, 800));
 
@@ -682,6 +806,435 @@ void main() {
 
       expect(settings.autoLockTimeoutMinutes, 15);
       expect(settings.themeMode, 'dark');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // v1.4 native write coverage
+  // -------------------------------------------------------------------------
+  group('v1.4 native write coverage', () {
+    testWidgets('ITEST-01: creates a new entry and reload keeps it', (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _tapControl(tester, find.text('New Entry'));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'Created Integration Entry');
+      await tester.enterText(fields.at(1), 'created-user');
+      await tester.enterText(fields.at(2), 'created-pass');
+      await tester.enterText(fields.at(3), 'https://created.example');
+      await tester.enterText(
+          fields.at(4), 'Created in native integration test');
+      await _tapControl(tester, find.text('Create Entry').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Created Integration Entry'), findsWidgets);
+
+      await _saveVaultAndReload(tester, password: 'testpass123');
+      expect(find.text('Created Integration Entry'), findsWidgets);
+    });
+
+    testWidgets('ITEST-02: edits an entry title and password with persistence',
+        (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _tapControl(tester, find.text('CustomFieldsEntry').first);
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.byTooltip('Edit Entry'));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'Edited Integration Entry');
+      await tester.enterText(fields.at(2), 'UpdatedPass!23');
+      await _tapControl(tester, find.text('Save Entry').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edited Integration Entry'), findsWidgets);
+
+      await _saveVaultAndReload(tester, password: 'testpass123');
+
+      await _tapControl(tester, find.text('Edited Integration Entry').last);
+      final editEntryFound = await pumpUntilFound(
+        tester,
+        find.byTooltip('Edit Entry'),
+        timeout: const Duration(seconds: 10),
+      );
+      expect(editEntryFound, isTrue);
+      final vaultScreen = tester.widget<NativeVaultScreen>(
+        find.byType(NativeVaultScreen),
+      );
+      final reopenedEntry = vaultScreen.vaultState.entries.firstWhere(
+        (entry) => entry.title == 'Edited Integration Entry',
+      );
+      final persistedFields = await vaultScreen.vaultState.readEntryFields(
+        reopenedEntry.uuid,
+      );
+      expect(persistedFields['Password'], 'UpdatedPass!23');
+    });
+
+    testWidgets('ITEST-03: deletes an entry after save', (tester) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _tapControl(tester, find.text('CustomFieldsEntry').first);
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.byTooltip('Delete Entry'));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.text('Delete Entry').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('CustomFieldsEntry'), findsNothing);
+
+      await _tapControl(tester, find.byTooltip('Save Vault'));
+      final saved = await pumpUntilFound(
+        tester,
+        find.text('Vault saved'),
+        timeout: const Duration(seconds: 30),
+      );
+      expect(saved, isTrue);
+      expect(find.text('CustomFieldsEntry'), findsNothing);
+    });
+
+    testWidgets(
+        'ITEST-04: moves an entry and save keeps it in the target group', (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _tapControl(tester, find.text('CustomFieldsEntry').first);
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.byTooltip('Move Entry'));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.textContaining('Level2Group').last);
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.text('Move Entry').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('CustomFieldsEntry'), findsNothing);
+
+      await _saveVaultAndReload(tester, password: 'testpass123');
+
+      await _tapControl(tester, _groupLabel('Level2Group').first);
+      await tester.pumpAndSettle();
+      expect(find.text('CustomFieldsEntry'), findsOneWidget);
+    });
+
+    testWidgets('ITEST-05: creates a subgroup from the group tree', (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _openGroupMenu(tester, 'Level1Group');
+      await _tapControl(tester, find.text('New Subgroup'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'Projects');
+      await _tapControl(tester, find.text('Create Group').last);
+      await tester.pumpAndSettle();
+
+      expect(_groupLabel('Projects'), findsOneWidget);
+
+      await _saveVaultAndReload(tester, password: 'testpass123');
+      final vaultScreen = tester.widget<NativeVaultScreen>(
+        find.byType(NativeVaultScreen),
+      );
+      expect(_groupExists(vaultScreen.vaultState.groups, 'Projects'), isTrue);
+    });
+
+    testWidgets('ITEST-06: renames a group in the tree', (tester) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _openGroupMenu(tester, 'Level2Group');
+      await _tapControl(tester, find.text('Rename Group'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'Renamed Level2');
+      await _tapControl(tester, find.text('Save Group').last);
+      await tester.pumpAndSettle();
+
+      expect(_groupLabel('Renamed Level2'), findsOneWidget);
+      expect(_groupLabel('Level2Group'), findsNothing);
+
+      await _saveVaultAndReload(tester, password: 'testpass123');
+      final vaultScreen = tester.widget<NativeVaultScreen>(
+        find.byType(NativeVaultScreen),
+      );
+      expect(
+        _groupExists(vaultScreen.vaultState.groups, 'Renamed Level2'),
+        isTrue,
+      );
+      expect(
+          _groupExists(vaultScreen.vaultState.groups, 'Level2Group'), isFalse);
+    });
+
+    testWidgets('ITEST-07: deletes a group and keeps recycle bin hidden', (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _openGroupMenu(tester, 'Level2Group');
+      await _tapControl(tester, find.text('Delete Group'));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.text('Delete Group').last);
+      await tester.pumpAndSettle();
+
+      expect(_groupLabel('Level2Group'), findsNothing);
+      expect(_groupLabel('Recycle Bin'), findsNothing);
+
+      await _saveVaultAndReload(tester, password: 'testpass123');
+      expect(_groupLabel('Level2Group'), findsNothing);
+      expect(_groupLabel('Recycle Bin'), findsNothing);
+    });
+
+    testWidgets('ITEST-08: moves a group to a different parent',
+        (tester) async {
+      await _useDesktopLayout(tester);
+      final writableFixture = await _copyFixtureToTemp(
+        'test_db_kdbx4_richcontent.kdbx',
+      );
+
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+        password: 'testpass123',
+      );
+
+      await _openGroupMenu(tester, 'Level1Group');
+      await _tapControl(tester, find.text('New Subgroup'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'Target Parent');
+      await _tapControl(tester, find.text('Create Group').last);
+      await tester.pumpAndSettle();
+
+      await _openGroupMenu(tester, 'Level2Group');
+      await _tapControl(tester, find.text('Move Group'));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.textContaining('Target Parent').last);
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.text('Move Group').last);
+      await tester.pumpAndSettle();
+
+      expect(_groupLabel('Target Parent'), findsOneWidget);
+      expect(_groupLabel('Level2Group'), findsOneWidget);
+
+      await _saveVaultAndReload(tester, password: 'testpass123');
+      final vaultScreen = tester.widget<NativeVaultScreen>(
+        find.byType(NativeVaultScreen),
+      );
+      expect(
+          _groupExists(vaultScreen.vaultState.groups, 'Target Parent'), isTrue);
+      expect(
+        _groupIsChildOf(
+          vaultScreen.vaultState.groups,
+          'Target Parent',
+          'Level2Group',
+        ),
+        isTrue,
+      );
+    });
+
+    testWidgets('ITEST-09: shows live TOTP details for a real fixture entry', (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      await unlockVault(
+        tester,
+        fixtureName: 'test_db_kdbx4_richcontent.kdbx',
+        password: 'testpass123',
+      );
+
+      await _tapControl(tester, _searchField().first);
+      await tester.pumpAndSettle();
+      tester.testTextInput.enterText('TOTPEntry');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+
+      final resultFound = await pumpUntilFound(
+        tester,
+        find.text('TOTPEntry'),
+        timeout: const Duration(seconds: 20),
+      );
+      expect(resultFound, isTrue);
+
+      await _tapControl(tester, find.text('TOTPEntry').last);
+      final totpPanelFound = await pumpUntilFound(
+        tester,
+        find.text('One-Time Code'),
+        timeout: const Duration(seconds: 10),
+      );
+      expect(totpPanelFound, isTrue);
+      expect(find.byTooltip('Copy one-time code'), findsOneWidget);
+
+      await _tapControl(tester, find.byTooltip('Copy one-time code').first);
+      await tester.pumpAndSettle();
+
+      final renderedTotp = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data ?? widget.textSpan?.toPlainText() ?? '')
+          .where((text) => RegExp(r'\d{3}\s?\d{3}').hasMatch(text))
+          .toList();
+      expect(
+        renderedTotp,
+        isNotEmpty,
+      );
+      expect(find.textContaining('Refreshes in '), findsOneWidget);
+    });
+
+    testWidgets(
+        'ITEST-10: clipboard delay updates and persists across settings reload',
+        (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      const fixtureName = 'test_db_kdbx4_richcontent.kdbx';
+      const fixturePassword = 'testpass123';
+      SharedPreferences.setMockInitialValues({});
+      final settings = SettingsState();
+      await settings.init();
+      await settings.setAutoLockTimeout(0);
+
+      await unlockVault(
+        tester,
+        fixtureName: fixtureName,
+        password: fixturePassword,
+        settings: settings,
+        resetPreferences: false,
+      );
+
+      await _tapControl(tester, find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+
+      await _tapControl(tester, find.text('30 seconds').last);
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.text('10 seconds').last);
+      await tester.pumpAndSettle();
+
+      expect(settings.clipboardAutoClearSeconds, 10);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      await _tapControl(tester, find.byTooltip('Copy username').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Copied to clipboard (clears in 10s)'), findsOneWidget);
+
+      final reloadedSettings = SettingsState();
+      await reloadedSettings.init();
+      expect(reloadedSettings.clipboardAutoClearSeconds, 10);
+    });
+
+    testWidgets('ITEST-11: biometric toggle is disabled with the stub label', (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      await unlockVault(tester);
+
+      await _tapControl(tester, find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Biometric unlock'), findsOneWidget);
+      expect(find.text('not supported on this platform'), findsOneWidget);
+
+      final biometricTile = tester.widget<SwitchListTile>(
+        find.widgetWithText(SwitchListTile, 'Biometric unlock'),
+      );
+      expect(biometricTile.onChanged, isNull);
+    });
+
+    testWidgets(
+        'ITEST-12: autofill toggle is disabled with the coming soon label', (
+      tester,
+    ) async {
+      await _useDesktopLayout(tester);
+      await unlockVault(tester);
+
+      await _tapControl(tester, find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Autofill'), findsOneWidget);
+      expect(find.text('coming soon'), findsOneWidget);
+
+      final autofillTile = tester.widget<SwitchListTile>(
+        find.widgetWithText(SwitchListTile, 'Autofill'),
+      );
+      expect(autofillTile.onChanged, isNull);
     });
   });
 
