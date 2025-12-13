@@ -61,8 +61,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
   }
 
   bool get _canUnlock =>
-      _dbBytes != null &&
-      _passwordController.text.isNotEmpty;
+      _dbBytes != null && _passwordController.text.isNotEmpty;
 
   Future<void> _unlock() async {
     setState(() {

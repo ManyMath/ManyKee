@@ -48,6 +48,7 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    ClipboardManager.handleAppLifecycleState(state);
     if (!widget.settings.lockOnBackground) return;
     if (_vaultState.isLocked) return;
 
@@ -89,6 +90,10 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
       listenable: widget.settings,
       builder: (context, _) {
         _idleTimer.updateTimeout(widget.settings.autoLockTimeout);
+        ClipboardManager.configure(
+          clearDelay: widget.settings.clipboardAutoClearDelay,
+          pasteOnceEnabled: widget.settings.clipboardPasteOnce,
+        );
 
         final ThemeMode themeMode;
         switch (widget.settings.themeMode) {

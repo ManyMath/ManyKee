@@ -102,6 +102,161 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
     launchUrl(Uri.parse(url));
   }
 
+  Map<String, dynamic> _extractCustomFields(Map<String, dynamic> fields) {
+    final customFields = <String, dynamic>{};
+    final rawCustomData = fields['custom_data'];
+    if (rawCustomData is Map) {
+      for (final entry in rawCustomData.entries) {
+        customFields[entry.key.toString()] = entry.value;
+      }
+    }
+
+    for (final entry in fields.entries) {
+      if (const {
+        'Title',
+        'UserName',
+        'Password',
+        'URL',
+        'Notes',
+        'Tags',
+        'custom_data',
+      }.contains(entry.key)) {
+        continue;
+      }
+      customFields[entry.key] = entry.value;
+    }
+    return customFields;
+  }
+
+  void _showActionError(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not complete entry action: $error')),
+    );
+  }
+
+  Future<void> _saveVault() async {
+    try {
+      await widget.vaultState.saveDatabase(password: '');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vault saved')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save vault: $error')),
+      );
+    }
+  }
+
+  Future<void> _createEntry() async {
+    final result = await showEntryFormDialog(
+      context,
+      title: 'Create Entry',
+      submitLabel: 'Create Entry',
+    );
+    if (result == null) {
+      return;
+    }
+
+    try {
+      final entryUuid = await widget.vaultState.createEntry(
+        widget.vaultState.selectedGroup?.uuid ?? '',
+      );
+      await widget.vaultState.updateEntry(
+        entryUuid,
+        result.toFields(),
+        protectedFields: result.protectedFields,
+      );
+      if (_isMobile(context) && mounted) {
+        setState(() => _mobileNavIndex = 2);
+      }
+    } catch (error) {
+      _showActionError(error);
+    }
+  }
+
+  Future<void> _editEntry() async {
+    final entry = widget.vaultState.selectedEntry;
+    if (entry == null) {
+      return;
+    }
+
+    try {
+      final fields = await widget.vaultState.readEntryFields(entry.uuid);
+      final result = await showEntryFormDialog(
+        context,
+        title: 'Edit Entry',
+        submitLabel: 'Save Entry',
+        initialFields: fields,
+        customFields: _extractCustomFields(fields),
+      );
+      if (result == null) {
+        return;
+      }
+
+      await widget.vaultState.updateEntry(
+        entry.uuid,
+        result.toFields(),
+        protectedFields: result.protectedFields,
+      );
+    } catch (error) {
+      _showActionError(error);
+    }
+  }
+
+  Future<void> _moveEntry() async {
+    final entry = widget.vaultState.selectedEntry;
+    if (entry == null) {
+      return;
+    }
+
+    try {
+      final targetGroupUuid = await showEntryMoveDialog(
+        context,
+        groups: widget.vaultState.groups,
+        initialGroupUuid: widget.vaultState.selectedGroup?.uuid,
+      );
+      if (targetGroupUuid == null ||
+          targetGroupUuid == widget.vaultState.selectedGroup?.uuid) {
+        return;
+      }
+
+      await widget.vaultState.moveEntry(entry.uuid, targetGroupUuid);
+      if (_isMobile(context) && mounted) {
+        setState(() => _mobileNavIndex = 1);
+      }
+    } catch (error) {
+      _showActionError(error);
+    }
+  }
+
+  Future<void> _deleteEntry() async {
+    final entry = widget.vaultState.selectedEntry;
+    if (entry == null) {
+      return;
+    }
+
+    final confirmed = await showEntryDeleteConfirmation(context);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await widget.vaultState.deleteEntry(entry.uuid);
+      if (_isMobile(context) && mounted) {
+        setState(() => _mobileNavIndex = 1);
+      }
+    } catch (error) {
+      _showActionError(error);
+    }
+  }
+
   AppBar _buildAppBar(BuildContext context, {bool showDrawerButton = false}) {
     return AppBar(
       leading: showDrawerButton
@@ -117,6 +272,11 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
         child: VaultSearchBar(vaultState: widget.vaultState),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.save_outlined),
+          tooltip: 'Save Vault',
+          onPressed: widget.vaultState.isDirty ? _saveVault : null,
+        ),
         IconButton(
           icon: const Icon(Icons.lock_outline),
           tooltip: 'Lock Vault',
@@ -155,6 +315,7 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
       groupName: widget.vaultState.selectedGroup?.name ?? 'All Entries',
       clipboardManager: _clipboardManager,
       fetchPassword: _fetchPassword,
+      onCreateEntry: _createEntry,
     );
   }
 
@@ -165,6 +326,9 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
         vaultState: widget.vaultState,
         clipboardManager: _clipboardManager,
         onUrlTap: _onUrlTap,
+        onEditEntry: _editEntry,
+        onMoveEntry: _moveEntry,
+        onDeleteEntry: _deleteEntry,
       );
     }
     return const EntryDetailEmpty();
@@ -304,6 +468,11 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
                 child: VaultSearchBar(vaultState: widget.vaultState),
               ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.save_outlined),
+            tooltip: 'Save Vault',
+            onPressed: widget.vaultState.isDirty ? _saveVault : null,
+          ),
           IconButton(
             icon: const Icon(Icons.lock_outline),
             tooltip: 'Lock Vault',
