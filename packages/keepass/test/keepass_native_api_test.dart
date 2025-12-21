@@ -87,6 +87,144 @@ void main() {
       await api.dispose();
     }
   });
+
+  test('entry CRUD and saveDatabase round-trip through the worker isolate',
+      () async {
+    final api = KeePassNativeApi();
+    final handle = await api.openFromPath(
+      passwordFixturePath,
+      password: 'demopass',
+    );
+
+    try {
+      final sourceGroupUuid = await _firstWritableGroupUuid(api, handle);
+      final targetGroupUuid = await api.createGroup(
+        handle,
+        sourceGroupUuid,
+        'Phase 21 Target',
+      );
+
+      final entryUuid = await api.createEntry(handle, sourceGroupUuid);
+      await api.setEntryField(handle, entryUuid, 'Title', 'Phase 21 Entry');
+      await api.setEntryField(
+        handle,
+        entryUuid,
+        'Password',
+        'super-secret',
+        isProtected: true,
+      );
+
+      final fields = await api.readEntryFields(handle, entryUuid);
+      expect(fields['Title'], 'Phase 21 Entry');
+      expect(fields['Password'], 'super-secret');
+
+      await api.moveEntry(handle, entryUuid, targetGroupUuid);
+      final movedEntries = await api.listEntries(handle, targetGroupUuid);
+      expect(
+        movedEntries.any((entry) => entry['uuid'] == entryUuid),
+        isTrue,
+      );
+
+      final savedBytes = await api.saveDatabase(handle, password: 'demopass');
+      final savedFile = await _writeTempDatabase(savedBytes, suffix: '.kdbx');
+      final reopenedHandle = await api.openFromPath(
+        savedFile.path,
+        password: 'demopass',
+      );
+      try {
+        final reopenedEntries =
+            await api.listEntries(reopenedHandle, targetGroupUuid);
+        expect(
+          reopenedEntries.any((entry) => entry['uuid'] == entryUuid),
+          isTrue,
+        );
+        final reopenedFields = await api.readEntryFields(
+          reopenedHandle,
+          entryUuid,
+        );
+        expect(reopenedFields['Title'], 'Phase 21 Entry');
+        expect(reopenedFields['Password'], 'super-secret');
+      } finally {
+        await api.closeDatabase(reopenedHandle);
+        await savedFile.delete();
+      }
+    } finally {
+      await api.closeDatabase(handle);
+      await api.dispose();
+    }
+  });
+
+  test('group CRUD operations run through the worker isolate', () async {
+    final api = KeePassNativeApi();
+    final handle = await api.openFromPath(
+      passwordFixturePath,
+      password: 'demopass',
+    );
+
+    try {
+      final parentUuid = await _firstWritableGroupUuid(api, handle);
+      final targetUuid =
+          await api.createGroup(handle, parentUuid, 'Move Target');
+      final groupUuid =
+          await api.createGroup(handle, parentUuid, 'Phase 21 Group');
+
+      await api.renameGroup(handle, groupUuid, 'Phase 21 Renamed');
+      var groups = await api.listGroups(handle, parentUuid);
+      expect(
+          groups.any((group) => group['name'] == 'Phase 21 Renamed'), isTrue);
+
+      await api.moveGroup(handle, groupUuid, targetUuid);
+      groups = await api.listGroups(handle, targetUuid);
+      expect(groups.any((group) => group['uuid'] == groupUuid), isTrue);
+
+      await api.deleteGroup(handle, groupUuid);
+      groups = await api.listGroups(handle, targetUuid);
+      expect(groups.any((group) => group['uuid'] == groupUuid), isFalse);
+    } finally {
+      await api.closeDatabase(handle);
+      await api.dispose();
+    }
+  });
+
+  test(
+      'saveDatabase preserves composite key databases when keyFileBytes are provided',
+      () async {
+    final api = KeePassNativeApi();
+    final keyFileBytes = await File(keyFilePath).readAsBytes();
+    final handle = await api.openFromPathWithKeyFile(
+      keyFileFixturePath,
+      password: 'demopass',
+      keyFilePath: keyFilePath,
+    );
+
+    try {
+      final sourceGroupUuid = await _firstWritableGroupUuid(api, handle);
+      final entryUuid = await api.createEntry(handle, sourceGroupUuid);
+      await api.setEntryField(handle, entryUuid, 'Title', 'Composite Save');
+
+      final savedBytes = await api.saveDatabase(
+        handle,
+        password: 'demopass',
+        keyFileBytes: keyFileBytes,
+      );
+      final savedFile = await _writeTempDatabase(savedBytes, suffix: '.kdbx');
+      final reopenedHandle = await api.openFromPathWithKeyFile(
+        savedFile.path,
+        password: 'demopass',
+        keyFilePath: keyFilePath,
+      );
+      try {
+        final entries = await api.listEntries(reopenedHandle, sourceGroupUuid);
+        expect(entries.any((entry) => entry['uuid'] == entryUuid), isTrue);
+      } finally {
+        await api.closeDatabase(reopenedHandle);
+        await savedFile.delete();
+      }
+    } finally {
+      await api.closeDatabase(handle);
+      await api.dispose();
+    }
+  });
 }
 
 String _firstExisting(List<String> candidates) {
@@ -120,4 +258,21 @@ Future<List<Map<String, dynamic>>> _listFirstAvailableEntries(
   final groups = await api.listGroups(handle, '');
   expect(groups, isNotEmpty);
   return api.listEntries(handle, groups.first['uuid']! as String);
+}
+
+Future<String> _firstWritableGroupUuid(KeePassNativeApi api, int handle) async {
+  final groups = await api.listGroups(handle, '');
+  if (groups.isEmpty) {
+    return '';
+  }
+  return groups.first['uuid']! as String;
+}
+
+Future<File> _writeTempDatabase(List<int> bytes,
+    {required String suffix}) async {
+  final file = File(
+    '${Directory.systemTemp.path}/manykee_test_${DateTime.now().microsecondsSinceEpoch}$suffix',
+  );
+  await file.writeAsBytes(bytes, flush: true);
+  return file;
 }

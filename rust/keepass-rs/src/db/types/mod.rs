@@ -31,27 +31,27 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 pub struct Database {
- /// Configuration settings of the database such as encryption and compression algorithms
- pub config: DatabaseConfig,
+    /// Configuration settings of the database such as encryption and compression algorithms
+    pub config: DatabaseConfig,
 
- /// Root node of the KeePass database
- pub root: Group,
+    /// Root node of the KeePass database
+    pub root: Group,
 
- /// References to previously-deleted objects and their deletion times.
- pub deleted_objects: HashMap<Uuid, Option<NaiveDateTime>>,
+    /// References to previously-deleted objects and their deletion times.
+    pub deleted_objects: HashMap<Uuid, Option<NaiveDateTime>>,
 
- /// Metadata of the KeePass database
- pub meta: Meta,
+    /// Metadata of the KeePass database
+    pub meta: Meta,
 }
 
 impl Database {
- /// Create a new, empty database
- pub fn new(config: DatabaseConfig) -> Database {
- Self {
- config,
- root: Group::new("Root"),
- deleted_objects: Default::default(),
- meta: Default::default(),
- }
- }
+    /// Create a new, empty database
+    pub fn new(config: DatabaseConfig) -> Database {
+        Self {
+            config,
+            root: Group::new("Root"),
+            deleted_objects: Default::default(),
+            meta: Default::default(),
+        }
+    }
 }

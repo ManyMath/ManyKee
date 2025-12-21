@@ -143,7 +143,149 @@ class KeePassNativeApi implements KeePassApi {
         'entryUuid': entryUuid,
       },
     );
-    return _castMap(result);
+    return _normalizeEntryFieldsPayload(_castMap(result));
+  }
+
+  @override
+  Future<String> createEntry(int handle, String groupUuid) async {
+    final result = await _invoke(
+      'createEntry',
+      <String, Object?>{
+        'handle': handle,
+        'groupUuid': groupUuid,
+      },
+    );
+    return result as String;
+  }
+
+  @override
+  Future<void> setEntryField(
+    int handle,
+    String entryUuid,
+    String field,
+    String value, {
+    bool isProtected = false,
+  }) async {
+    await _invoke(
+      'setEntryField',
+      <String, Object?>{
+        'handle': handle,
+        'entryUuid': entryUuid,
+        'field': field,
+        'value': value,
+        'isProtected': isProtected,
+      },
+    );
+  }
+
+  @override
+  Future<void> deleteEntry(int handle, String entryUuid) async {
+    await _invoke(
+      'deleteEntry',
+      <String, Object?>{
+        'handle': handle,
+        'entryUuid': entryUuid,
+      },
+    );
+  }
+
+  @override
+  Future<void> moveEntry(
+    int handle,
+    String entryUuid,
+    String targetGroupUuid,
+  ) async {
+    await _invoke(
+      'moveEntry',
+      <String, Object?>{
+        'handle': handle,
+        'entryUuid': entryUuid,
+        'targetGroupUuid': targetGroupUuid,
+      },
+    );
+  }
+
+  @override
+  Future<String> createGroup(int handle, String parentUuid, String name) async {
+    final result = await _invoke(
+      'createGroup',
+      <String, Object?>{
+        'handle': handle,
+        'parentUuid': parentUuid,
+        'name': name,
+      },
+    );
+    return result as String;
+  }
+
+  @override
+  Future<void> renameGroup(int handle, String groupUuid, String name) async {
+    await _invoke(
+      'renameGroup',
+      <String, Object?>{
+        'handle': handle,
+        'groupUuid': groupUuid,
+        'name': name,
+      },
+    );
+  }
+
+  @override
+  Future<void> deleteGroup(int handle, String groupUuid) async {
+    await _invoke(
+      'deleteGroup',
+      <String, Object?>{
+        'handle': handle,
+        'groupUuid': groupUuid,
+      },
+    );
+  }
+
+  @override
+  Future<void> moveGroup(
+    int handle,
+    String groupUuid,
+    String targetParentUuid,
+  ) async {
+    await _invoke(
+      'moveGroup',
+      <String, Object?>{
+        'handle': handle,
+        'groupUuid': groupUuid,
+        'targetParentUuid': targetParentUuid,
+      },
+    );
+  }
+
+  @override
+  Future<List<int>> saveDatabase(
+    int handle, {
+    required String password,
+    List<int>? keyFileBytes,
+  }) async {
+    final result = await _invoke(
+      'saveDatabase',
+      <String, Object?>{
+        'handle': handle,
+        'password': password,
+        if (keyFileBytes != null) 'keyFileBytes': keyFileBytes,
+      },
+    );
+    return _castBytes(result);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getTotpCode(int handle, String entryUuid) {
+    return _invoke(
+      'getTotpCode',
+      <String, Object?>{
+        'handle': handle,
+        'entryUuid': entryUuid,
+      },
+    ).then(
+      (result) =>
+          result == null ? null : Map<String, dynamic>.from((result as Map)),
+    );
   }
 
   @override
@@ -314,6 +456,16 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
           'listGroups' => _workerListGroups(databases, args),
           'listEntries' => _workerListEntries(databases, args),
           'readEntryFields' => _workerReadEntryFields(databases, args),
+          'getTotpCode' => _workerGetTotpCode(databases, args),
+          'createEntry' => _workerCreateEntry(databases, args),
+          'setEntryField' => _workerSetEntryField(databases, args),
+          'deleteEntry' => _workerDeleteEntry(databases, args),
+          'moveEntry' => _workerMoveEntry(databases, args),
+          'createGroup' => _workerCreateGroup(databases, args),
+          'renameGroup' => _workerRenameGroup(databases, args),
+          'deleteGroup' => _workerDeleteGroup(databases, args),
+          'moveGroup' => _workerMoveGroup(databases, args),
+          'saveDatabase' => _workerSaveDatabase(databases, args),
           'mergeDatabases' => _workerMergeDatabases(databases, args),
           'listYubiKeys' => Database.listYubiKeys(),
           'shutdown' => null,
@@ -441,13 +593,118 @@ Map<String, dynamic> _workerReadEntryFields(
 ) {
   final database = _workerGetDatabase(databases, args['handle']! as int);
   final entry = Entry(database, args['entryUuid']! as String);
-  return <String, dynamic>{
-    'Title': entry.title ?? '',
-    'UserName': entry.userName ?? '',
-    'Password': entry.password ?? '',
-    'URL': entry.url ?? '',
-    'Notes': entry.notes ?? '',
-  };
+  return entry.readFields();
+}
+
+Map<String, dynamic>? _workerGetTotpCode(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final entry = Entry(database, args['entryUuid']! as String);
+  return entry.getTotpCode();
+}
+
+String _workerCreateEntry(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final groupUuid = args['groupUuid']! as String;
+  if (groupUuid.isEmpty) {
+    return database.rootGroup.createEntry().uuid;
+  }
+  return Group(database, groupUuid).createEntry().uuid;
+}
+
+Object? _workerSetEntryField(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final entry = Entry(database, args['entryUuid']! as String);
+  entry.setField(
+    args['field']! as String,
+    args['value']! as String,
+    protected: args['isProtected'] == true,
+  );
+  return null;
+}
+
+Object? _workerDeleteEntry(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final entry = Entry(database, args['entryUuid']! as String);
+  entry.delete();
+  return null;
+}
+
+Object? _workerMoveEntry(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final entry = Entry(database, args['entryUuid']! as String);
+  entry.move(args['targetGroupUuid']! as String);
+  return null;
+}
+
+String _workerCreateGroup(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final parentUuid = args['parentUuid']! as String;
+  if (parentUuid.isEmpty) {
+    return database.rootGroup.createGroup(args['name']! as String).uuid;
+  }
+  return Group(database, parentUuid).createGroup(args['name']! as String).uuid;
+}
+
+Object? _workerRenameGroup(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final group = Group(database, args['groupUuid']! as String);
+  group.name = args['name']! as String;
+  return null;
+}
+
+Object? _workerDeleteGroup(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final group = Group(database, args['groupUuid']! as String);
+  group.delete();
+  return null;
+}
+
+Object? _workerMoveGroup(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final group = Group(database, args['groupUuid']! as String);
+  group.move(args['targetParentUuid']! as String);
+  return null;
+}
+
+List<int> _workerSaveDatabase(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final keyFileBytes = (args['keyFileBytes'] as List<dynamic>?)
+      ?.map((value) => value as int)
+      .toList();
+  return database.saveBytes(
+    password: args['password']! as String,
+    keyFileBytes: keyFileBytes,
+  );
 }
 
 Map<String, dynamic> _workerMergeDatabases(
@@ -476,4 +733,22 @@ List<Map<String, dynamic>> _castListOfMaps(dynamic value) {
 
 Map<String, dynamic> _castMap(dynamic value) {
   return Map<String, dynamic>.from((value as Map).cast<String, dynamic>());
+}
+
+Map<String, dynamic> _normalizeEntryFieldsPayload(
+    Map<String, dynamic> payload) {
+  final fields = (payload['fields'] as Map?)?.cast<String, dynamic>();
+  if (fields == null) {
+    return payload;
+  }
+
+  return <String, dynamic>{
+    ...fields,
+    'custom_data': (payload['custom_data'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{},
+  };
+}
+
+List<int> _castBytes(dynamic value) {
+  return (value as List<dynamic>).map((item) => item as int).toList();
 }

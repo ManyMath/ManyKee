@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:ffi';
+import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'bindings.g.dart';
 import 'error.dart';
@@ -87,6 +88,68 @@ class Database implements Finalizable {
     } finally {
       malloc.free(pathPtr);
       malloc.free(passPtr);
+    }
+  }
+
+  /// Save the database using a password + key file composite key.
+  void saveWithKeyFile(
+    String path, {
+    required String password,
+    required String keyFilePath,
+  }) {
+    _ensureOpen();
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final keyPtr = toNativeString(keyFilePath);
+    try {
+      final result = bindings.kpxc_database_save_with_keyfile(
+        _handle,
+        pathPtr,
+        passPtr,
+        keyPtr,
+      );
+      KeePassError.checkResult(result, 'Failed to save database with key file');
+    } finally {
+      malloc.free(pathPtr);
+      malloc.free(passPtr);
+      malloc.free(keyPtr);
+    }
+  }
+
+  /// Save the database to a temporary file and return its bytes.
+  List<int> saveBytes({
+    required String password,
+    List<int>? keyFileBytes,
+  }) {
+    _ensureOpen();
+    final tempDir = Directory.systemTemp;
+    final tempPath =
+        '${tempDir.path}/manykee_save_${DateTime.now().microsecondsSinceEpoch}.kdbx';
+    final tempFile = File(tempPath);
+
+    File? tempKeyFile;
+    try {
+      if (keyFileBytes != null) {
+        final keyPath =
+            '${tempDir.path}/manykee_save_${DateTime.now().microsecondsSinceEpoch}.key';
+        tempKeyFile = File(keyPath);
+        tempKeyFile.writeAsBytesSync(keyFileBytes, flush: true);
+        saveWithKeyFile(
+          tempFile.path,
+          password: password,
+          keyFilePath: tempKeyFile.path,
+        );
+      } else {
+        save(tempFile.path, password: password);
+      }
+      return tempFile.readAsBytesSync();
+    } finally {
+      if (tempFile.existsSync()) {
+        tempFile.deleteSync();
+      }
+      if (tempKeyFile != null && tempKeyFile.existsSync()) {
+        tempKeyFile.deleteSync();
+      }
     }
   }
 

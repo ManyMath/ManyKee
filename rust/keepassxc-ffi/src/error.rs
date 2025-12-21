@@ -22,61 +22,61 @@ thread_local! {
 }
 
 pub(crate) fn set_last_error(msg: &str) {
- LAST_ERROR.with(|cell| {
- *cell.borrow_mut() = CString::new(msg).ok();
- });
+    LAST_ERROR.with(|cell| {
+        *cell.borrow_mut() = CString::new(msg).ok();
+    });
 }
 
 pub(crate) fn clear_last_error() {
- LAST_ERROR.with(|cell| {
- *cell.borrow_mut() = None;
- });
+    LAST_ERROR.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
 }
 
 pub(crate) fn set_error_from_kpxc(e: &KeePassXcError) -> c_int {
- let msg = e.to_string();
- set_last_error(&msg);
- match e {
- KeePassXcError::Open(_) => KPXC_ERR_OPEN,
- KeePassXcError::Save(_) => KPXC_ERR_SAVE,
- KeePassXcError::EntryNotFound(_) | KeePassXcError::GroupNotFound(_) => KPXC_ERR_NOT_FOUND,
- KeePassXcError::RecycleBinDisabled => KPXC_ERR_NOT_FOUND,
- KeePassXcError::Io(_) => KPXC_ERR_IO,
- KeePassXcError::Merge(_) => KPXC_ERR_MERGE,
- KeePassXcError::ChallengeResponse(_) => KPXC_ERR_YUBIKEY,
- }
+    let msg = e.to_string();
+    set_last_error(&msg);
+    match e {
+        KeePassXcError::Open(_) => KPXC_ERR_OPEN,
+        KeePassXcError::Save(_) => KPXC_ERR_SAVE,
+        KeePassXcError::EntryNotFound(_) | KeePassXcError::GroupNotFound(_) => KPXC_ERR_NOT_FOUND,
+        KeePassXcError::RecycleBinDisabled => KPXC_ERR_NOT_FOUND,
+        KeePassXcError::Io(_) => KPXC_ERR_IO,
+        KeePassXcError::Merge(_) => KPXC_ERR_MERGE,
+        KeePassXcError::ChallengeResponse(_) => KPXC_ERR_YUBIKEY,
+    }
 }
 
 pub(crate) fn get_last_error() -> *const c_char {
- LAST_ERROR.with(|cell| {
- let borrow = cell.borrow();
- match borrow.as_ref() {
- Some(cstr) => cstr.as_ptr(),
- None => std::ptr::null(),
- }
- })
+    LAST_ERROR.with(|cell| {
+        let borrow = cell.borrow();
+        match borrow.as_ref() {
+            Some(cstr) => cstr.as_ptr(),
+            None => std::ptr::null(),
+        }
+    })
 }
 
 macro_rules! check_null {
- ($ptr:expr, $ret:expr) => {
- if $ptr.is_null() {
- $crate::error::set_last_error("null pointer argument");
- return $ret;
- }
- };
+    ($ptr:expr, $ret:expr) => {
+        if $ptr.is_null() {
+            $crate::error::set_last_error("null pointer argument");
+            return $ret;
+        }
+    };
 }
 
 macro_rules! cstr_to_str {
- ($ptr:expr, $ret:expr) => {{
- check_null!($ptr, $ret);
- match unsafe { std::ffi::CStr::from_ptr($ptr) }.to_str() {
- Ok(s) => s,
- Err(_) => {
- $crate::error::set_last_error("invalid UTF-8 in string argument");
- return $ret;
- }
- }
- }};
+    ($ptr:expr, $ret:expr) => {{
+        check_null!($ptr, $ret);
+        match unsafe { std::ffi::CStr::from_ptr($ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                $crate::error::set_last_error("invalid UTF-8 in string argument");
+                return $ret;
+            }
+        }
+    }};
 }
 
 pub(crate) use check_null;

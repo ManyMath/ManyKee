@@ -5,6 +5,9 @@ library keepass_ui;
 export 'src/models/vault_group.dart';
 export 'src/models/vault_entry.dart';
 export 'src/models/search_result.dart';
+export 'src/models/storage_provider.dart';
+export 'src/models/biometric_provider.dart';
+export 'src/models/autofill_provider.dart';
 
 // State
 export 'src/state/vault_state.dart';
@@ -21,3 +24,4 @@ export 'src/widgets/entry_detail.dart';
 export 'src/widgets/search_bar.dart';
 export 'src/widgets/copy_button.dart';
 export 'src/widgets/password_field.dart';
+export 'src/widgets/entry_form_dialog.dart';

@@ -9,20 +9,20 @@ use crate::db::Value;
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 pub struct Attachment {
- /// The binary data of the attachment.
- pub data: Value<Vec<u8>>,
+    /// The binary data of the attachment.
+    pub data: Value<Vec<u8>>,
 }
 
 impl Deref for Attachment {
- type Target = Value<Vec<u8>>;
+    type Target = Value<Vec<u8>>;
 
- fn deref(&self) -> &Self::Target {
- &self.data
- }
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
 }
 
 impl DerefMut for Attachment {
- fn deref_mut(&mut self) -> &mut Self::Target {
- &mut self.data
- }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
 }

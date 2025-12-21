@@ -38,6 +38,13 @@ struct KpxcDatabase *kpxc_database_open_with_keyfile(const char *path,
 
  int kpxc_database_save(struct KpxcDatabase *db, const char *path, const char *password) ;
 
+
+int kpxc_database_save_with_keyfile(struct KpxcDatabase *db,
+                                    const char *path,
+                                    const char *password,
+                                    const char *keyfile_path)
+;
+
  void kpxc_database_free(struct KpxcDatabase *db) ;
 
  char *kpxc_database_root_uuid(struct KpxcDatabase *db) ;
@@ -47,6 +54,10 @@ char *kpxc_entry_get_field(struct KpxcDatabase *db,
                            const char *entry_uuid,
                            const char *field_name)
 ;
+
+ char *kpxc_entry_read_fields(struct KpxcDatabase *db, const char *entry_uuid) ;
+
+ char *kpxc_entry_get_totp(struct KpxcDatabase *db, const char *entry_uuid) ;
 
 
 int kpxc_entry_set_field(struct KpxcDatabase *db,
@@ -61,6 +72,12 @@ int kpxc_entry_set_field(struct KpxcDatabase *db,
  char *kpxc_entry_create(struct KpxcDatabase *db, const char *group_uuid) ;
 
  int kpxc_entry_delete(struct KpxcDatabase *db, const char *entry_uuid, int permanent) ;
+
+
+int kpxc_entry_move(struct KpxcDatabase *db,
+                    const char *entry_uuid,
+                    const char *target_group_uuid)
+;
 
  char *kpxc_group_get_name(struct KpxcDatabase *db, const char *group_uuid) ;
 
@@ -77,6 +94,12 @@ int kpxc_entry_set_field(struct KpxcDatabase *db,
  int kpxc_group_delete(struct KpxcDatabase *db, const char *group_uuid, int permanent) ;
 
  char *kpxc_group_root_uuid(struct KpxcDatabase *db) ;
+
+
+int kpxc_group_move(struct KpxcDatabase *db,
+                    const char *group_uuid,
+                    const char *target_parent_uuid)
+;
 
  char *kpxc_database_merge(struct KpxcDatabase *db, struct KpxcDatabase *other) ;
 

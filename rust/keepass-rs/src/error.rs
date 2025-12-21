@@ -1,19 +1,19 @@
 //! Error types that this crate can return
 
 pub use crate::{
- config::{CompressionConfigError, InnerCipherConfigError, KdfConfigError, OuterCipherConfigError},
- crypt::CryptographyError,
- db::{DatabaseFormatError, DatabaseOpenError, ParseColorError},
- format::{
- hmac_block_stream::BlockStreamError,
- kdb::KdbOpenError,
- kdbx3::{Kdbx3OpenError, Kdbx3OuterHeaderError},
- kdbx4::{Kdbx4InnerHeaderError, Kdbx4OpenError, Kdbx4OuterHeaderError},
- variant_dictionary::VariantDictionaryError,
- xml_db::ParseXmlError,
- DatabaseVersionParseError,
- },
- key::{DatabaseKeyError, ParseXmlKeyFileError},
+    config::{CompressionConfigError, InnerCipherConfigError, KdfConfigError, OuterCipherConfigError},
+    crypt::CryptographyError,
+    db::{DatabaseFormatError, DatabaseOpenError, ParseColorError},
+    format::{
+        hmac_block_stream::BlockStreamError,
+        kdb::KdbOpenError,
+        kdbx3::{Kdbx3OpenError, Kdbx3OuterHeaderError},
+        kdbx4::{Kdbx4InnerHeaderError, Kdbx4OpenError, Kdbx4OuterHeaderError},
+        variant_dictionary::VariantDictionaryError,
+        xml_db::ParseXmlError,
+        DatabaseVersionParseError,
+    },
+    key::{DatabaseKeyError, ParseXmlKeyFileError},
 };
 
 #[cfg(feature = "challenge_response")]
