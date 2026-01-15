@@ -158,7 +158,6 @@ fn argon2d_rfc9106_test_vector() {
         mem_cost: 32, // 32 KiB
         time_cost: 3,
         lanes: 4,
-        thread_mode: argon2::ThreadMode::Parallel,
         secret: &[],
         ad: &[],
         hash_length: 32,
@@ -208,7 +207,6 @@ fn argon2id_rfc9106_test_vector() {
         mem_cost: 32, // 32 KiB
         time_cost: 3,
         lanes: 4,
-        thread_mode: argon2::ThreadMode::Sequential,
         secret: &secret,
         ad: &ad,
         hash_length: 32,
