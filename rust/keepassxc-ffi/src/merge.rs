@@ -2,27 +2,10 @@
 
 use std::ffi::{c_char, CString};
 
-use serde::Serialize;
-
 use crate::database::KpxcDatabase;
 use crate::error::{check_null, clear_last_error, set_error_from_kpxc, set_last_error};
 
-/// Serializable mirror of `keepassxc::MergeResult` for JSON output.
-#[derive(Serialize)]
-pub struct FfiMergeResult {
-    pub entries_added: usize,
-    pub entries_updated: usize,
-    pub entries_deleted: usize,
-    pub entries_relocated: usize,
-    pub groups_added: usize,
-    pub groups_updated: usize,
-    pub groups_deleted: usize,
-    pub groups_relocated: usize,
-    pub total_changes: usize,
-    pub conflicts_count: usize,
-    pub warnings_count: usize,
-    pub warnings: Vec<String>,
-}
+use keepassxc::serialization::MergeInfo;
 
 #[no_mangle]
 pub extern "C" fn kpxc_database_merge(
@@ -43,25 +26,8 @@ pub extern "C" fn kpxc_database_merge(
 
     match keepassxc::merge(&mut db.0, &other.0) {
         Ok(result) => {
-            let warnings: Vec<String> =
-                result.warnings.iter().map(|w| format!("{:?}", w)).collect();
-
-            let ffi_result = FfiMergeResult {
-                entries_added: result.entries_added,
-                entries_updated: result.entries_updated,
-                entries_deleted: result.entries_deleted,
-                entries_relocated: result.entries_relocated,
-                groups_added: result.groups_added,
-                groups_updated: result.groups_updated,
-                groups_deleted: result.groups_deleted,
-                groups_relocated: result.groups_relocated,
-                total_changes: result.total_changes(),
-                conflicts_count: result.conflicts.len(),
-                warnings_count: result.warnings.len(),
-                warnings,
-            };
-
-            match serde_json::to_string(&ffi_result) {
+            let info = MergeInfo::from(&result);
+            match serde_json::to_string(&info) {
                 Ok(json) => match CString::new(json) {
                     Ok(cs) => cs.into_raw(),
                     Err(_) => {

@@ -7,7 +7,6 @@ use keepassxc::{
     delete_entry, move_entry, read_entry_fields, read_entry_totp_at, update_entry, Entry, EntryExt,
     EntryFieldExt, GroupExt,
 };
-use serde_json::json;
 use uuid::Uuid;
 
 use crate::database::KpxcDatabase;
@@ -79,6 +78,8 @@ pub extern "C" fn kpxc_entry_get_field(
     }
 }
 
+use keepassxc::serialization::{EntryFields, TotpInfo};
+
 #[no_mangle]
 pub extern "C" fn kpxc_entry_read_fields(
     db: *mut KpxcDatabase,
@@ -103,15 +104,18 @@ pub extern "C" fn kpxc_entry_read_fields(
     };
 
     let payload = read_entry_fields(entry);
-    let json = json!({
-     "fields": payload.fields,
-     "custom_data": payload.custom_data,
-    });
+    let fields = EntryFields::from(payload);
 
-    match CString::new(json.to_string()) {
-        Ok(value) => value.into_raw(),
-        Err(_) => {
-            set_last_error("Field payload contains null byte");
+    match serde_json::to_string(&fields) {
+        Ok(json) => match CString::new(json) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => {
+                set_last_error("JSON contains null byte");
+                std::ptr::null_mut()
+            }
+        },
+        Err(e) => {
+            set_last_error(&format!("Failed to serialize fields: {}", e));
             std::ptr::null_mut()
         }
     }
@@ -157,12 +161,10 @@ pub extern "C" fn kpxc_entry_get_totp(
     };
 
     let json = match payload {
-        Some(payload) => json!({
-            "code": payload.code,
-            "valid_for": payload.valid_for,
-            "period": payload.period,
-        })
-        .to_string(),
+        Some(payload) => {
+            let info = TotpInfo::from(payload);
+            serde_json::to_string(&info).unwrap_or_else(|_| "null".to_string())
+        }
         None => "null".to_string(),
     };
 

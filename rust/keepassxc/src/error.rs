@@ -26,6 +26,9 @@ pub enum KeePassXcError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("Parse error: {0}")]
+    Parse(String),
+
     #[error("Merge error: {0}")]
     Merge(#[from] MergeError),
 

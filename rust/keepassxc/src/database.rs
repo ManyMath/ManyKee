@@ -8,6 +8,18 @@ use uuid::Uuid;
 
 use crate::{Database, DatabaseKey, KeePassXcError};
 
+/// Parse a database from a byte slice.
+pub fn open_bytes(bytes: &[u8], key: DatabaseKey) -> Result<Database, KeePassXcError> {
+    Database::parse(bytes, key).map_err(KeePassXcError::Open)
+}
+
+/// Save a database to a byte vector.
+pub fn save_bytes(db: &Database, key: DatabaseKey) -> Result<Vec<u8>, KeePassXcError> {
+    let mut buffer = Vec::new();
+    db.save(&mut buffer, key).map_err(KeePassXcError::Save)?;
+    Ok(buffer)
+}
+
 /// Save a database atomically by writing to a temporary file and renaming it.
 ///
 /// The temporary file is created in the same directory as `path` so the final

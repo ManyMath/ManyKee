@@ -16,6 +16,7 @@ pub const KPXC_ERR_MERGE: c_int = -5;
 pub const KPXC_ERR_YUBIKEY: c_int = -6;
 pub const KPXC_ERR_NULL_PTR: c_int = -7;
 pub const KPXC_ERR_INVALID_UTF8: c_int = -8;
+pub const KPXC_ERR_PARSE: c_int = -9;
 
 thread_local! {
  static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
@@ -44,6 +45,7 @@ pub(crate) fn set_error_from_kpxc(e: &KeePassXcError) -> c_int {
         KeePassXcError::Io(_) => KPXC_ERR_IO,
         KeePassXcError::Merge(_) => KPXC_ERR_MERGE,
         KeePassXcError::ChallengeResponse(_) => KPXC_ERR_YUBIKEY,
+        KeePassXcError::Parse(_) => KPXC_ERR_PARSE,
     }
 }
 
