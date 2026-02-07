@@ -1,5 +1,5 @@
 name: keepass_flutter_example
-description: ManyKee native vault browser example.
+description: Canonical ManyKee reference GUI for the keepass_flutter plugin.
 publish_to: none
 resolution: workspace
 version: 0.1.0
@@ -10,8 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  keepass:
-    path: ../../keepass
   keepass_flutter:
     path: ../
   keepass_ui:

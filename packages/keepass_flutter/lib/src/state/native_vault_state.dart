@@ -75,7 +75,6 @@ class NativeVaultState extends VaultState {
     lastFilenameValue = filename ?? filePath;
     await loadRootGroupsUsing(_api.listGroups);
 
-    // Select first group by default.
     if (groups.isNotEmpty) {
       await selectGroup(groups.first);
     }
@@ -97,7 +96,6 @@ class NativeVaultState extends VaultState {
     resetBrowsingState();
   }
 
-  /// Clear stored file path to return to fresh unlock screen.
   void openDifferentFile() {
     _lastFilePath = null;
     _lastKeyFilePath = null;
@@ -109,7 +107,6 @@ class NativeVaultState extends VaultState {
     notifyListeners();
   }
 
-  /// Select a group and load its entries.
   @override
   Future<void> selectGroup(VaultGroup group) async {
     selectedGroupValue = group;
@@ -119,7 +116,6 @@ class NativeVaultState extends VaultState {
     notifyListeners();
   }
 
-  /// Read all fields of an entry (including password, notes, custom fields).
   @override
   Future<Map<String, dynamic>> readEntryFields(String entryUuid) async {
     return _api.readEntryFields(handle!, entryUuid);

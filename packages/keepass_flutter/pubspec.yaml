@@ -11,8 +11,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  file_picker: ^10.3.10
   keepass:
     path: ../keepass
+  keepass_ui:
+    path: ../keepass_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
 
 flutter:
   plugin:

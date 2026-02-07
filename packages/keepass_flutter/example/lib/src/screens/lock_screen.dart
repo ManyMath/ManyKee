@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:keepass/keepass.dart';
+import 'package:keepass_flutter/keepass_flutter.dart';
 import 'package:keepass_ui/keepass_ui.dart' show Spacing;
-
-import '../state/native_vault_state.dart';
 
 /// Lock screen for re-unlock without re-picking the file.
 class NativeLockScreen extends StatefulWidget {

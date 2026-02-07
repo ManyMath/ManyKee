@@ -5,3 +5,5 @@
 library keepass_flutter;
 
 export 'package:keepass/keepass.dart';
+export 'src/state/local_file_storage_provider.dart';
+export 'src/state/native_vault_state.dart';

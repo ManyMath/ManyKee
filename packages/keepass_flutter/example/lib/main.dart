@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:keepass_flutter/keepass_flutter.dart';
 import 'package:keepass_ui/keepass_ui.dart';
 
 import 'src/screens/lock_screen.dart';
@@ -6,7 +7,6 @@ import 'src/screens/settings_screen.dart';
 import 'src/screens/unlock_screen.dart';
 import 'src/screens/vault_screen.dart';
 import 'src/state/native_idle_timer.dart';
-import 'src/state/native_vault_state.dart';
 import 'src/state/settings_state.dart';
 
 void main() async {
