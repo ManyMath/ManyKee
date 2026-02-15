@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:keepass_ui/keepass_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../state/native_vault_state.dart';
-
 /// Responsive three-panel vault browser for the native example app.
 class NativeVaultScreen extends StatefulWidget {
-  final NativeVaultState vaultState;
+  final VaultState vaultState;
 
   /// Callback when the lock button is pressed.
   /// When null, defaults to calling `vaultState.lock()`.

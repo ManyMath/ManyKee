@@ -1,5 +1,5 @@
 name: manykee_native
-description: ManyKee native desktop/mobile app.
+description: Secondary/transitional ManyKee native host; canonical reference GUI lives in packages/keepass_flutter/example.
 publish_to: none
 resolution: workspace
 version: 0.1.0

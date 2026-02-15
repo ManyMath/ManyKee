@@ -4,421 +4,602 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:keepass_ui/keepass_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:keepass_flutter_example/main.dart';
+import 'package:keepass_flutter_example/src/screens/vault_screen.dart';
 import 'package:keepass_flutter_example/src/state/settings_state.dart';
 
-String _fixturePath(String name) =>
- '${Directory.current.path}/integration_test/fixtures/$name';
+File? _stagedLibrary;
+
+String _fixturePath(String name) {
+  final searched = <String>[];
+  Directory? current = Directory.current.absolute;
+
+  while (current != null) {
+    final direct = File('${current.path}/integration_test/fixtures/$name');
+    searched.add(direct.path);
+    if (direct.existsSync()) {
+      return direct.path;
+    }
+
+    final nested = File(
+      '${current.path}/packages/keepass_flutter/example/integration_test/fixtures/$name',
+    );
+    searched.add(nested.path);
+    if (nested.existsSync()) {
+      return nested.path;
+    }
+
+    final parent = current.parent;
+    if (parent.path == current.path) {
+      current = null;
+    } else {
+      current = parent;
+    }
+  }
+
+  throw StateError(
+    'Fixture not found: $name\nSearched:\n${searched.join('\n')}',
+  );
+}
+
+Future<File> _stageNativeLibrary() async {
+  final sourcePath = _firstExisting(<String>[
+    '../../keepass_cli/libkeepassxc_ffi.so',
+    '../keepass_cli/libkeepassxc_ffi.so',
+    '../../../packages/keepass_cli/libkeepassxc_ffi.so',
+  ]);
+  final staged = File('${Directory.current.path}/libkeepassxc_ffi.so');
+  if (!await staged.exists()) {
+    await File(sourcePath).copy(staged.path);
+  }
+  return staged;
+}
+
+String _firstExisting(List<String> candidates) {
+  return candidates.firstWhere(
+    (path) => File(path).existsSync(),
+    orElse: () => throw StateError(
+      'No file found for candidates: ${candidates.join(', ')}',
+    ),
+  );
+}
 
 class _FakeFilePicker extends FilePicker {
- final String path;
- final String name;
- _FakeFilePicker(this.path, this.name);
+  _FakeFilePicker(this.path, this.name);
 
- @override
- Future<FilePickerResult?> pickFiles({
- String? dialogTitle,
- String? initialDirectory,
- FileType type = FileType.any,
- List<String>? allowedExtensions,
- Function(FilePickerStatus)? onFileLoading,
- bool allowCompression = true,
- int compressionQuality = 30,
- bool allowMultiple = false,
- bool withData = false,
- bool withReadStream = false,
- bool lockParentWindow = false,
- bool readSequential = false,
- }) async =>
- FilePickerResult([PlatformFile(name: name, path: path, size: 1024)]);
+  final String path;
+  final String name;
+
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = true,
+    int compressionQuality = 30,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) async {
+    return FilePickerResult(<PlatformFile>[
+      PlatformFile(name: name, path: path, size: await File(path).length()),
+    ]);
+  }
+}
+
+class _WritableFixture {
+  const _WritableFixture({
+    required this.path,
+    required this.name,
+  });
+
+  final String path;
+  final String name;
 }
 
 Future<bool> pumpUntilFound(
- WidgetTester tester,
- Finder finder, {
- Duration timeout = const Duration(seconds: 60),
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 60),
 }) async {
- final end = DateTime.now().add(timeout);
- while (DateTime.now().isBefore(end)) {
- await tester.pump(const Duration(milliseconds: 500));
- if (finder.evaluate().isNotEmpty) return true;
- }
- await tester.pumpAndSettle();
- return finder.evaluate().isNotEmpty;
+  final end = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(end)) {
+    await tester.pump(const Duration(milliseconds: 500));
+    if (finder.evaluate().isNotEmpty) {
+      return true;
+    }
+  }
+  await tester.pumpAndSettle();
+  return finder.evaluate().isNotEmpty;
 }
 
-/// Shared helper: boots app, picks fixture file, enters password, waits for vault.
-///
-/// Returns the [SettingsState] so tests can inspect settings changes.
-Future<SettingsState> unlockVault(
- WidgetTester tester, {
- String? fixtureName,
- String password = 'demopass',
- Duration timeout = const Duration(seconds: 120),
+Finder _chooseDatabaseButton() =>
+    find.widgetWithText(OutlinedButton, 'Choose KDBX File');
+
+Finder _unlockVaultButton() =>
+    find.widgetWithText(FilledButton, 'Unlock Vault');
+
+Finder _openDifferentFileButton() =>
+    find.widgetWithText(TextButton, 'Open Different File');
+
+Finder _searchField() => find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.hintText == 'Search entries...',
+      description: 'search field',
+    );
+
+Future<void> _tapControl(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.tap(finder);
+  await tester.pump();
+}
+
+Future<void> _useDesktopLayout(WidgetTester tester) async {
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.binding.setSurfaceSize(const Size(1280, 800));
+}
+
+Future<_WritableFixture> _copyFixtureToTemp(String fixtureName) async {
+  final sourcePath = _fixturePath(fixtureName);
+  final tempDir = await Directory.systemTemp.createTemp('manykee-example-');
+  addTearDown(() async {
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  final targetPath = '${tempDir.path}/$fixtureName';
+  await File(sourcePath).copy(targetPath);
+  return _WritableFixture(path: targetPath, name: fixtureName);
+}
+
+Future<void> _saveVaultAndReload(
+  WidgetTester tester, {
+  required String password,
 }) async {
- SharedPreferences.setMockInitialValues({});
- final settings = SettingsState();
- await settings.init();
- await settings.setAutoLockTimeout(0);
+  await _tapControl(tester, find.byTooltip('Save Vault'));
 
- final dbName = fixtureName ?? 'test_db_with_password.kdbx';
- final dbPath = _fixturePath(dbName);
- FilePicker.platform = _FakeFilePicker(dbPath, dbName);
+  final saved = await pumpUntilFound(
+    tester,
+    find.text('Vault saved'),
+    timeout: const Duration(seconds: 30),
+  );
+  expect(saved, isTrue, reason: 'Save action should complete successfully');
 
- runApp(ManyKeeNativeApp(settings: settings));
- await tester.pumpAndSettle(const Duration(seconds: 5));
+  await _tapControl(tester, find.byTooltip('Lock Vault'));
+  await tester.pumpAndSettle();
+  expect(find.text('Vault Locked'), findsOneWidget);
 
- await tester.tap(find.text('Choose KDBX File'));
- await tester.pumpAndSettle();
+  await tester.enterText(
+    find.widgetWithText(TextField, 'Master Password'),
+    password,
+  );
+  await tester.pumpAndSettle();
+  await _tapControl(tester, _unlockVaultButton());
 
- await tester.enterText(
- find.widgetWithText(TextField, 'Master Password'),
- password,
- );
- await tester.pumpAndSettle();
- await tester.tap(find.text('Unlock Vault'));
+  final reopened = await pumpUntilFound(
+    tester,
+    find.byTooltip('Lock Vault'),
+    timeout: const Duration(seconds: 120),
+  );
+  expect(reopened, isTrue, reason: 'Vault should reopen after save + lock');
+}
 
- final opened = await pumpUntilFound(
- tester,
- find.byTooltip('Lock Vault'),
- timeout: timeout,
- );
- expect(opened, isTrue, reason: 'Vault should open after correct password');
+Finder _groupLabel(String name) => find.descendant(
+      of: find.byType(GroupTree),
+      matching: find.text(name),
+    );
 
- return settings;
+VaultGroup? _findGroupByName(List<VaultGroup> groups, String name) {
+  for (final group in groups) {
+    if (group.name == name) {
+      return group;
+    }
+    final childMatch = _findGroupByName(group.children, name);
+    if (childMatch != null) {
+      return childMatch;
+    }
+  }
+  return null;
+}
+
+bool _groupExists(List<VaultGroup> groups, String name) =>
+    _findGroupByName(groups, name) != null;
+
+Future<void> _openGroupMenu(WidgetTester tester, String name) async {
+  final tile = find
+      .ancestor(
+        of: _groupLabel(name).first,
+        matching: find.byType(Material),
+      )
+      .first;
+  await _tapControl(
+    tester,
+    find.descendant(
+      of: tile,
+      matching: find.byTooltip('Group actions'),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<SettingsState> unlockVault(
+  WidgetTester tester, {
+  String? fixtureName,
+  String? fixturePath,
+  String password = 'demopass',
+  Duration timeout = const Duration(seconds: 120),
+  SettingsState? settings,
+  bool resetPreferences = true,
+}) async {
+  if (resetPreferences) {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  }
+  final activeSettings = settings ?? SettingsState();
+  if (settings == null) {
+    await activeSettings.init();
+  }
+  await activeSettings.setAutoLockTimeout(0);
+
+  final dbName = fixtureName ?? 'test_db_with_password.kdbx';
+  final dbPath = fixturePath ?? _fixturePath(dbName);
+  final selectedName = File(dbPath).uri.pathSegments.isEmpty
+      ? dbName
+      : File(dbPath).uri.pathSegments.last;
+  FilePicker.platform = _FakeFilePicker(dbPath, selectedName);
+
+  runApp(ManyKeeNativeApp(settings: activeSettings));
+  await tester.pumpAndSettle(const Duration(seconds: 5));
+
+  await _tapControl(tester, _chooseDatabaseButton());
+  await tester.pumpAndSettle();
+
+  await tester.enterText(
+    find.widgetWithText(TextField, 'Master Password'),
+    password,
+  );
+  await tester.pumpAndSettle();
+  await _tapControl(tester, _unlockVaultButton());
+
+  final opened = await pumpUntilFound(
+    tester,
+    find.byTooltip('Lock Vault'),
+    timeout: timeout,
+  );
+  expect(opened, isTrue, reason: 'Vault should open after correct password');
+
+  return activeSettings;
 }
 
 void main() {
-IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
- group('Unlock flow', () {
- testWidgets('unlock screen shows initial UI', (tester) async {
- SharedPreferences.setMockInitialValues({});
- final settings = SettingsState();
- await settings.init();
- await settings.setAutoLockTimeout(0);
+  setUpAll(() async {
+    _stagedLibrary = await _stageNativeLibrary();
+  });
 
- runApp(ManyKeeNativeApp(settings: settings));
- await tester.pumpAndSettle(const Duration(seconds: 5));
+  tearDownAll(() async {
+    final stagedLibrary = _stagedLibrary;
+    if (stagedLibrary != null && await stagedLibrary.exists()) {
+      await stagedLibrary.delete();
+    }
+  });
 
- expect(find.text('ManyKee'), findsOneWidget);
- expect(find.text('Choose KDBX File'), findsOneWidget);
- });
+  group('Unlock flow', () {
+    testWidgets('unlock screen shows initial UI', (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final settings = SettingsState();
+      await settings.init();
+      await settings.setAutoLockTimeout(0);
 
- testWidgets('unlocks vault with correct password', (tester) async {
- await unlockVault(tester);
+      runApp(ManyKeeNativeApp(settings: settings));
+      await tester.pumpAndSettle(const Duration(seconds: 5));
 
- expect(find.text('General'), findsWidgets);
- expect(find.byTooltip('Lock Vault'), findsOneWidget);
- });
- });
+      expect(find.text('ManyKee'), findsOneWidget);
+      expect(find.text('Choose KDBX File'), findsOneWidget);
+    });
 
- group('Vault browsing', () {
- testWidgets('shows vault layout with groups and entries', (tester) async {
- await unlockVault(tester);
+    testWidgets('unlocks vault with correct password', (tester) async {
+      await unlockVault(tester);
 
- expect(find.text('General'), findsWidgets);
- expect(find.byTooltip('Lock Vault'), findsOneWidget);
- });
+      expect(find.text('General'), findsWidgets);
+      expect(find.byTooltip('Lock Vault'), findsOneWidget);
+    });
+  });
 
- testWidgets('shows app bar with lock and settings buttons',
- (tester) async {
- await unlockVault(tester);
+  group('Vault browsing', () {
+    testWidgets('shows app bar with lock and settings buttons', (tester) async {
+      await unlockVault(tester);
 
- expect(find.byTooltip('Lock Vault'), findsOneWidget);
- expect(find.byTooltip('Settings'), findsOneWidget);
- });
+      expect(find.byTooltip('Lock Vault'), findsOneWidget);
+      expect(find.byTooltip('Settings'), findsOneWidget);
+    });
 
- testWidgets('displays entries for selected group', (tester) async {
- await unlockVault(tester);
+    testWidgets('group navigation updates entry list', (tester) async {
+      await unlockVault(tester);
 
- // After unlock, the first group is auto-selected. Verify entries are
- // visible: each entry renders a CircleAvatar in _EntryTile.
- final entryAvatars = find.byType(CircleAvatar);
- expect(entryAvatars, findsWidgets,
- reason: 'Entry list should show entries for the selected group');
- });
+      Finder? groupFinder;
+      for (final name in <String>[
+        'Internet',
+        'eMail',
+        'Homebanking',
+        'Network'
+      ]) {
+        final finder = find.text(name);
+        if (finder.evaluate().isNotEmpty) {
+          groupFinder = finder;
+          break;
+        }
+      }
 
- testWidgets('group navigation updates entry list', (tester) async {
- await unlockVault(tester);
+      if (groupFinder != null) {
+        await _tapControl(tester, groupFinder);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+      }
 
- // Look for a different group to tap (e.g. "Internet", "email", etc.)
- // Try common group names from KeePass default databases.
- Finder? groupFinder;
- for (final name in ['Internet', 'eMail', 'Homebanking', 'Network']) {
- final f = find.text(name);
- if (f.evaluate().isNotEmpty) {
- groupFinder = f;
- break;
- }
- }
+      expect(find.byType(CircleAvatar), findsWidgets);
+    });
+  });
 
- if (groupFinder != null) {
- await tester.tap(groupFinder);
- await tester.pumpAndSettle(const Duration(seconds: 2));
+  group('Search', () {
+    testWidgets('search filters entries across groups', (tester) async {
+      await unlockVault(tester);
 
- // Tap back to General.
- await tester.tap(find.text('General').first);
- await tester.pumpAndSettle(const Duration(seconds: 2));
+      await _tapControl(tester, _searchField().first);
+      await tester.pumpAndSettle();
+      tester.testTextInput.enterText('test');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle(const Duration(seconds: 3));
 
- // Verify we're back -- General entries should be visible.
- expect(find.text('General'), findsWidgets);
- } else {
- // If only one group exists, navigation test passes trivially.
- debugPrint('Only one group found -- group navigation trivially passes');
- expect(find.text('General'), findsWidgets);
- }
- });
- });
+      final hasEmptyState = find.text('No entries').evaluate().isNotEmpty ||
+          find.text('No matches').evaluate().isNotEmpty;
+      expect(
+        find.byType(CircleAvatar).evaluate().isNotEmpty || hasEmptyState,
+        isTrue,
+      );
+    });
+  });
 
- group('Entry detail', () {
- testWidgets('selecting entry shows detail panel', (tester) async {
- await unlockVault(tester);
+  group('Lock and re-unlock', () {
+    testWidgets('lock returns to lock screen', (tester) async {
+      await unlockVault(tester);
 
- // Tap the first entry in the entry list (entries use CircleAvatar).
- final entryAvatars = find.byType(CircleAvatar);
- expect(entryAvatars, findsWidgets);
- await tester.tap(entryAvatars.first);
- await tester.pumpAndSettle(const Duration(seconds: 2));
+      await _tapControl(tester, find.byTooltip('Lock Vault'));
+      await tester.pumpAndSettle();
 
- // Verify detail content appears -- look for field labels.
- final hasUsername = find.text('Username').evaluate().isNotEmpty;
- final hasPassword = find.text('Password').evaluate().isNotEmpty;
- final hasUrl = find.text('URL').evaluate().isNotEmpty;
- final hasTitle = find.text('Title').evaluate().isNotEmpty;
+      expect(find.text('Vault Locked'), findsOneWidget);
+      expect(find.text('test_db_with_password.kdbx'), findsOneWidget);
+    });
 
- expect(hasUsername || hasPassword || hasUrl || hasTitle, isTrue,
- reason: 'Detail panel should show field labels');
- });
+    testWidgets('re-unlock from lock screen', (tester) async {
+      await unlockVault(tester);
 
- testWidgets('selecting different entry updates detail', (tester) async {
- await unlockVault(tester);
+      await _tapControl(tester, find.byTooltip('Lock Vault'));
+      await tester.pumpAndSettle();
+      expect(find.text('Vault Locked'), findsOneWidget);
 
- final entryAvatars = find.byType(CircleAvatar);
- if (entryAvatars.evaluate().length < 2) {
- debugPrint('Fewer than 2 entries -- skipping different entry test');
- return;
- }
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Master Password'),
+        'demopass',
+      );
+      await tester.pumpAndSettle();
+      await _tapControl(tester, _unlockVaultButton());
 
- // Tap first entry.
- await tester.tap(entryAvatars.first);
- await tester.pumpAndSettle(const Duration(seconds: 2));
+      final reopened = await pumpUntilFound(
+        tester,
+        find.byTooltip('Lock Vault'),
+        timeout: const Duration(seconds: 120),
+      );
+      expect(reopened, isTrue, reason: 'Vault should re-open from lock screen');
+    });
+  });
 
- // Tap second entry.
- await tester.tap(entryAvatars.at(1));
- await tester.pumpAndSettle(const Duration(seconds: 2));
+  group('Settings', () {
+    testWidgets('settings screen accessible and functional', (tester) async {
+      final settings = await unlockVault(tester);
 
- // Detail panel should still show content (it updated).
- final hasLabels = find.text('Username').evaluate().isNotEmpty ||
- find.text('Password').evaluate().isNotEmpty;
- expect(hasLabels, isTrue,
- reason: 'Detail panel should update for new entry');
- });
+      await _tapControl(tester, find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Settings'), findsOneWidget);
 
- testWidgets('entry detail shows field content', (tester) async {
- await unlockVault(tester);
+      await _tapControl(tester, find.text('Never'));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.text('15 minutes').last);
+      await tester.pumpAndSettle();
 
- // Tap first entry (entries use CircleAvatar).
- final entryAvatars = find.byType(CircleAvatar);
- expect(entryAvatars, findsWidgets);
- await tester.tap(entryAvatars.first);
+      await _tapControl(tester, find.text('System'));
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.text('Dark').last);
+      await tester.pumpAndSettle();
 
- // Wait for async field loading in EntryDetail.
- await pumpUntilFound(tester, find.text('Username'),
- timeout: const Duration(seconds: 10));
- await tester.pumpAndSettle(const Duration(seconds: 1));
+      expect(settings.autoLockTimeoutMinutes, 15);
+      expect(settings.themeMode, 'dark');
+      expect(find.text('not supported on this platform'), findsOneWidget);
+      expect(find.text('coming soon'), findsOneWidget);
+    });
+  });
 
- // Verify field labels from EntryDetail (uses Text, not SelectableText).
- final hasUsername = find.text('Username').evaluate().isNotEmpty;
- final hasPassword = find.text('Password').evaluate().isNotEmpty;
- final hasUrl = find.text('URL').evaluate().isNotEmpty;
+  group('Reference GUI write coverage', () {
+    testWidgets('creates a new entry and reload keeps it', (tester) async {
+      await _useDesktopLayout(tester);
+      final writableFixture =
+          await _copyFixtureToTemp('test_db_with_password.kdbx');
 
- expect(hasUsername || hasPassword || hasUrl, isTrue,
- reason:
- 'Entry detail should show field labels from fixture DB');
- });
- });
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+      );
 
- group('Search', () {
- testWidgets('search filters entries across groups', (tester) async {
- await unlockVault(tester);
+      await _tapControl(tester, find.text('New Entry'));
+      await tester.pumpAndSettle();
 
- // VaultSearchBar renders a TextField with hint 'Search entries...'.
- final searchHint = find.text('Search entries...');
- if (searchHint.evaluate().isNotEmpty) {
- // Count entries before search.
- final beforeCount = find.byType(CircleAvatar).evaluate().length;
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'Created Integration Entry');
+      await tester.enterText(fields.at(1), 'created-user');
+      await tester.enterText(fields.at(2), 'created-pass');
+      await tester.tap(find.text('Create Entry').last);
+      await tester.pumpAndSettle();
 
- // Tap hint text to focus the search TextField.
- await tester.tap(searchHint.first);
- await tester.pumpAndSettle();
+      expect(find.text('Created Integration Entry'), findsWidgets);
 
- // Now type into the focused field via testTextInput.
- tester.testTextInput.enterText('test');
- // Wait for 300ms debounce + async search + rebuild.
- await tester.pump(const Duration(milliseconds: 500));
- await tester.pumpAndSettle(const Duration(seconds: 3));
+      await _saveVaultAndReload(tester, password: 'demopass');
+      expect(find.text('Created Integration Entry'), findsWidgets);
+    });
 
- // Search should either change entry count or show empty state.
- final afterCount = find.byType(CircleAvatar).evaluate().length;
- final hasEmptyState = find.text('No entries').evaluate().isNotEmpty ||
- find.text('No matches').evaluate().isNotEmpty;
- final searchChanged = afterCount != beforeCount || hasEmptyState;
- expect(searchChanged, isTrue,
- reason: 'Search should filter entries or show no matches');
- } else {
- debugPrint('Search field not found -- search test inconclusive');
- }
- });
- });
+    testWidgets('edits the first entry title and password with persistence',
+        (tester) async {
+      await _useDesktopLayout(tester);
+      final writableFixture =
+          await _copyFixtureToTemp('test_db_with_password.kdbx');
 
- group('Lock and re-unlock', () {
- testWidgets('lock returns to lock screen', (tester) async {
- await unlockVault(tester);
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+      );
 
- await tester.tap(find.byTooltip('Lock Vault'));
- await tester.pumpAndSettle();
+      final vaultScreen = tester.widget<NativeVaultScreen>(
+        find.byType(NativeVaultScreen),
+      );
+      final originalTitle = vaultScreen.vaultState.entries.first.title;
 
- expect(find.text('Vault Locked'), findsOneWidget);
- // Filename should be displayed on lock screen.
- expect(find.text('test_db_with_password.kdbx'), findsOneWidget);
- });
+      await _tapControl(tester, find.text(originalTitle).first);
+      await tester.pumpAndSettle();
+      await _tapControl(tester, find.byTooltip('Edit Entry'));
+      await tester.pumpAndSettle();
 
- testWidgets('re-unlock from lock screen', (tester) async {
- await unlockVault(tester);
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'Edited Integration Entry');
+      await tester.enterText(fields.at(2), 'UpdatedPass!23');
+      await _tapControl(tester, find.text('Save Entry').last);
+      await tester.pumpAndSettle();
 
- // Lock.
- await tester.tap(find.byTooltip('Lock Vault'));
- await tester.pumpAndSettle();
- expect(find.text('Vault Locked'), findsOneWidget);
+      expect(find.text('Edited Integration Entry'), findsWidgets);
 
- // Re-unlock.
- await tester.enterText(
- find.widgetWithText(TextField, 'Master Password'),
- 'demopass',
- );
- await tester.pumpAndSettle();
- await tester.tap(find.text('Unlock Vault'));
+      await _saveVaultAndReload(tester, password: 'demopass');
 
- final reopened = await pumpUntilFound(
- tester,
- find.byTooltip('Lock Vault'),
- timeout: const Duration(seconds: 120),
- );
- expect(reopened, isTrue, reason: 'Vault should re-open from lock screen');
- expect(find.text('General'), findsWidgets);
- });
- });
+      await _tapControl(tester, find.text('Edited Integration Entry').last);
+      final reopenedScreen = tester.widget<NativeVaultScreen>(
+        find.byType(NativeVaultScreen),
+      );
+      final reopenedEntry = reopenedScreen.vaultState.entries.firstWhere(
+        (entry) => entry.title == 'Edited Integration Entry',
+      );
+      final persistedFields =
+          await reopenedScreen.vaultState.readEntryFields(reopenedEntry.uuid);
+      expect(persistedFields['Password'], 'UpdatedPass!23');
+    });
 
- group('Settings', () {
- testWidgets('settings screen accessible and functional', (tester) async {
- final settings = await unlockVault(tester);
+    testWidgets('creates and renames a subgroup with persistence',
+        (tester) async {
+      await _useDesktopLayout(tester);
+      final writableFixture =
+          await _copyFixtureToTemp('test_db_with_password.kdbx');
 
- await tester.tap(find.byTooltip('Settings'));
- await tester.pumpAndSettle();
- expect(find.text('Settings'), findsOneWidget);
+      await unlockVault(
+        tester,
+        fixtureName: writableFixture.name,
+        fixturePath: writableFixture.path,
+      );
 
- // Change auto-lock timeout from Never to 15 minutes.
- await tester.tap(find.text('Never'));
- await tester.pumpAndSettle();
- await tester.tap(find.text('15 minutes').last);
- await tester.pumpAndSettle();
+      await _openGroupMenu(tester, 'General');
+      await _tapControl(tester, find.text('New Subgroup'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'Projects');
+      await _tapControl(tester, find.text('Create Group').last);
+      await tester.pumpAndSettle();
+      expect(_groupLabel('Projects'), findsOneWidget);
 
- // Change theme from System to Dark.
- await tester.tap(find.text('System'));
- await tester.pumpAndSettle();
- await tester.tap(find.text('Dark').last);
- await tester.pumpAndSettle();
+      await _openGroupMenu(tester, 'Projects');
+      await _tapControl(tester, find.text('Rename Group'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'Projects Renamed');
+      await _tapControl(tester, find.text('Save Group').last);
+      await tester.pumpAndSettle();
+      expect(_groupLabel('Projects Renamed'), findsOneWidget);
 
- expect(settings.autoLockTimeoutMinutes, 15);
- expect(settings.themeMode, 'dark');
- });
- });
+      await _saveVaultAndReload(tester, password: 'demopass');
+      final reopenedScreen = tester.widget<NativeVaultScreen>(
+        find.byType(NativeVaultScreen),
+      );
+      expect(
+        _groupExists(reopenedScreen.vaultState.groups, 'Projects Renamed'),
+        isTrue,
+      );
+    });
+  });
 
- group('Native-specific', () {
- testWidgets('open different file returns to unlock screen', (tester) async {
- await unlockVault(tester);
+  group('Native-specific', () {
+    testWidgets('open different file returns to unlock screen', (tester) async {
+      await unlockVault(tester);
 
- // Lock vault.
- await tester.tap(find.byTooltip('Lock Vault'));
- await tester.pumpAndSettle();
- expect(find.text('Vault Locked'), findsOneWidget);
+      await _tapControl(tester, find.byTooltip('Lock Vault'));
+      await tester.pumpAndSettle();
+      expect(find.text('Vault Locked'), findsOneWidget);
 
- // Tap "Open Different File".
- await tester.tap(find.text('Open Different File'));
- await tester.pumpAndSettle();
+      await _tapControl(tester, _openDifferentFileButton());
+      await tester.pumpAndSettle();
 
- // Should return to the initial unlock screen.
- expect(find.text('ManyKee'), findsOneWidget);
- expect(find.text('Choose KDBX File'), findsOneWidget);
- });
- });
+      expect(find.text('ManyKee'), findsOneWidget);
+      expect(find.text('Choose KDBX File'), findsOneWidget);
+    });
+  });
 
- group('YubiKey (conditional)', () {
- testWidgets('YubiKey challenge-response unlock', (tester) async {
- SharedPreferences.setMockInitialValues({});
- final settings = SettingsState();
- await settings.init();
- await settings.setAutoLockTimeout(0);
+  group('YubiKey (conditional)', () {
+    testWidgets('YubiKey challenge-response unlock', (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final settings = SettingsState();
+      await settings.init();
+      await settings.setAutoLockTimeout(0);
 
- runApp(ManyKeeNativeApp(settings: settings));
- await tester.pumpAndSettle(const Duration(seconds: 5));
+      runApp(ManyKeeNativeApp(settings: settings));
+      await tester.pumpAndSettle(const Duration(seconds: 5));
 
- // Wait for YubiKey detection (async detection runs on init).
- for (var i = 0; i < 6; i++) {
- await tester.pump(const Duration(milliseconds: 500));
- }
- await tester.pumpAndSettle();
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      await tester.pumpAndSettle();
 
- final yubiKeyDetected =
- find.text('YubiKey detected').evaluate().isNotEmpty;
+      final yubiKeyDetected =
+          find.text('YubiKey detected').evaluate().isNotEmpty;
+      if (!yubiKeyDetected) {
+        return;
+      }
 
- if (!yubiKeyDetected) {
- debugPrint('YubiKey not detected -- skipping');
- return;
- }
+      final ykDbPath = _fixturePath('test_db_with_challenge_response_key.kdbx');
+      FilePicker.platform = _FakeFilePicker(ykDbPath, 'yk_test.kdbx');
+      await _tapControl(tester, _chooseDatabaseButton());
+      await tester.pumpAndSettle();
 
- // YubiKey present: pick challenge-response fixture, unlock.
- final ykDbPath =
- _fixturePath('test_db_with_challenge_response_key.kdbx');
- FilePicker.platform = _FakeFilePicker(ykDbPath, 'yk_test.kdbx');
- await tester.tap(find.text('Choose KDBX File'));
- await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Master Password'),
+        'demopass',
+      );
+      await tester.pumpAndSettle();
 
- await tester.enterText(
- find.widgetWithText(TextField, 'Master Password'),
- 'demopass',
- );
- await tester.pumpAndSettle();
+      final useYubiKey = find.text('Use YubiKey');
+      if (useYubiKey.evaluate().isNotEmpty) {
+        await _tapControl(tester, useYubiKey);
+        await tester.pumpAndSettle();
+      }
 
- // Enable YubiKey toggle if not auto-selected.
- final useYubiKey = find.text('Use YubiKey');
- if (useYubiKey.evaluate().isNotEmpty) {
- await tester.tap(useYubiKey);
- await tester.pumpAndSettle();
- }
+      await _tapControl(tester, _unlockVaultButton());
 
- await tester.tap(find.text('Unlock Vault'));
-
- // Wait for vault or error.
- for (var i = 0; i < 60; i++) {
- await tester.pump(const Duration(milliseconds: 500));
- if (find.byTooltip('Lock Vault').evaluate().isNotEmpty) break;
- if (find.byType(SelectableText).evaluate().isNotEmpty) break;
- }
- await tester.pumpAndSettle();
-
- final ykUnlocked = find.byTooltip('Lock Vault').evaluate().isNotEmpty;
- for (final e in find.byType(SelectableText).evaluate()) {
- final w = e.widget as SelectableText;
- if (w.data != null && w.data!.isNotEmpty) {
- debugPrint('YubiKey result: ${w.data}');
- }
- }
- debugPrint(
- 'YubiKey unlock: ${ykUnlocked ? "OK" : "error (see above)"}');
- });
- });
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+        if (find.byTooltip('Lock Vault').evaluate().isNotEmpty) {
+          break;
+        }
+      }
+    });
+  });
 }

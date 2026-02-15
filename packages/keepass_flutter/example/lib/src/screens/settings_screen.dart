@@ -93,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
                 title: const Text('Biometric unlock'),
                 subtitle: Text(
                   biometricProvider is NoBiometricProvider
-                      ? 'Not supported on this platform'
+                      ? 'not supported on this platform'
                       : 'Use device biometrics to unlock the vault',
                 ),
                 value: false,
@@ -104,7 +104,7 @@ class SettingsScreen extends StatelessWidget {
                 title: const Text('Autofill'),
                 subtitle: Text(
                   autofillProvider is NoAutofillProvider
-                      ? 'Coming soon'
+                      ? 'coming soon'
                       : 'Offer vault matches to system autofill',
                 ),
                 value: false,
