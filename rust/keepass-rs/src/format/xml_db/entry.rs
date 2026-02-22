@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     crypt::{ciphers::Cipher, CryptographyError},
-    db::Color,
+    db::{fields, Color},
     format::xml_db::{
         custom_serde::{cs_bool, cs_opt_bool, cs_opt_bool_int, cs_opt_fromstr, cs_opt_string},
         meta::CustomData,
@@ -65,10 +65,28 @@ pub struct Entry {
     pub auto_type: Option<AutoType>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub history: Option<History>,
+    pub custom_data: Option<CustomData>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub custom_data: Option<CustomData>,
+    pub history: Option<History>,
+}
+
+fn custom_data_otp_value(custom_data: &HashMap<String, crate::db::CustomDataItem>) -> Option<&str> {
+    custom_data.get(fields::OTP).and_then(|item| {
+        item.value.as_ref().and_then(|value| match value {
+            crate::db::CustomDataValue::String(value) => Some(value.as_str()),
+            crate::db::CustomDataValue::Binary(_) => None,
+        })
+    })
+}
+
+#[cfg(feature = "save_kdbx4")]
+fn compatibility_totp_uri(db: &crate::db::Entry) -> Option<&str> {
+    if db.fields.contains_key(fields::OTP) {
+        return None;
+    }
+
+    custom_data_otp_value(&db.custom_data).filter(|value| value.starts_with("otpauth://totp/"))
 }
 
 impl Entry {
@@ -143,6 +161,13 @@ impl Entry {
 
         if let Some(cd) = self.custom_data {
             target.custom_data = cd.into();
+
+            if matches!(
+                (target.fields.get(fields::OTP), custom_data_otp_value(&target.custom_data)),
+                (Some(field), Some(custom_otp)) if field.as_str() == custom_otp
+            ) {
+                target.fields.remove(fields::OTP);
+            }
         }
 
         Ok(())
@@ -162,7 +187,8 @@ impl Entry {
             None
         };
 
-        let mut string_fields = Vec::with_capacity(db.fields.len());
+        let compatibility_totp = compatibility_totp_uri(db);
+        let mut string_fields = Vec::with_capacity(db.fields.len() + usize::from(compatibility_totp.is_some()));
         for (k, v) in &db.fields {
             let value = if v.is_protected() {
                 let encrypted = inner_encryptor.encrypt(v.get().as_bytes())?;
@@ -185,7 +211,21 @@ impl Entry {
             });
         }
 
+        if let Some(otp) = compatibility_totp {
+            let encrypted = inner_encryptor.encrypt(otp.as_bytes())?;
+            let encoded = base64_engine::STANDARD.encode(&encrypted);
+
+            string_fields.push(StringField {
+                key: fields::OTP.to_string(),
+                value: StringValue {
+                    protected: true,
+                    value: Some(encoded),
+                },
+            });
+        }
+
         let mut binary_fields = Vec::with_capacity(db.attachments.len());
+
         for (key, attachment) in &db.attachments {
             binary_fields.push(BinaryField {
                 key: key.clone(),
@@ -228,8 +268,8 @@ impl Entry {
             string_fields,
             binary_fields,
             auto_type: db.autotype.as_ref().map(|at| at.clone().into()),
-            history,
             custom_data,
+            history,
         })
     }
 }
@@ -594,6 +634,72 @@ mod tests {
             deserialized.0.previous_parent_group.unwrap().0.as_bytes(),
             &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
         );
+    }
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn test_db_to_xml_adds_compatibility_totp_string_from_custom_data() {
+        let otp = "otpauth://totp/ManyKee:fixture?secret=JBSWY3DPEHPK3PXP&issuer=ManyKee";
+        let mut entry = crate::db::Entry::new();
+        entry.custom_data.insert(
+            fields::OTP.to_string(),
+            crate::db::CustomDataItem {
+                value: Some(crate::db::CustomDataValue::String(otp.to_string())),
+                last_modification_time: None,
+            },
+        );
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let mut attachments = Vec::new();
+        let mut custom_icons = HashMap::new();
+        let xml_entry = Entry::db_to_xml(&entry, &mut cipher, &mut attachments, &mut custom_icons).unwrap();
+
+        let otp_field = xml_entry
+            .string_fields
+            .iter()
+            .find(|field| field.key == fields::OTP)
+            .expect("compatibility otp string field should be written");
+        assert!(otp_field.value.protected);
+        assert_eq!(
+            String::from_utf8(
+                base64_engine::STANDARD
+                    .decode(otp_field.value.value.as_ref().unwrap())
+                    .unwrap()
+            )
+            .unwrap(),
+            otp
+        );
+        assert!(
+            xml_entry
+                .custom_data
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .any(|item| item.key == fields::OTP),
+            "custom data otp item must still be preserved"
+        );
+    }
+
+    #[test]
+    fn test_xml_to_db_handle_deduplicates_compatibility_totp_string_when_custom_data_matches() {
+        let otp = "otpauth://totp/ManyKee:fixture?secret=JBSWY3DPEHPK3PXP&issuer=ManyKee";
+        let otp_xml = otp.replace('&', "&amp;");
+        let xml = format!(
+    "<Entry><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><String><Key>otp</Key><Value>{otp_xml}</Value></String><CustomData><Item><Key>otp</Key><Value>{otp_xml}</Value></Item></CustomData></Entry>"
+);
+        let xml_entry: Test<Entry> = quick_xml::de::from_str(&xml).unwrap();
+
+        let mut target = crate::db::Entry::new();
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        xml_entry
+            .0
+            .xml_to_db_handle(&mut target, &[], &HashMap::new(), &mut cipher)
+            .unwrap();
+
+        assert!(target.fields.get(fields::OTP).is_none());
+        assert_eq!(target.get_raw_otp_value(), Some(otp));
+        assert!(target.custom_data.contains_key(fields::OTP));
     }
 
     #[test]

@@ -52,7 +52,14 @@ impl<'a> Entry {
 
     /// Convenience method for getting the raw value of the 'otp' field
     pub fn get_raw_otp_value(&'a self) -> Option<&'a str> {
-        self.get(fields::OTP)
+        self.get(fields::OTP).or_else(|| {
+            self.custom_data.get(fields::OTP).and_then(|item| {
+                item.value.as_ref().and_then(|value| match value {
+                    crate::db::CustomDataValue::String(value) => Some(value.as_str()),
+                    crate::db::CustomDataValue::Binary(_) => None,
+                })
+            })
+        })
     }
 
     /// Convenience method for getting the value of the 'Title' field
@@ -144,7 +151,7 @@ impl<'a> Entry {
 mod entry_tests {
     use std::{thread, time};
 
-    use crate::db::{fields, Entry, Value};
+    use crate::db::{fields, CustomDataItem, CustomDataValue, Entry, Value};
 
     #[test]
     fn update_history() {
@@ -207,6 +214,21 @@ mod entry_tests {
         for history_entry in &entry.history.unwrap().entries {
             assert!(history_entry.history.is_none());
         }
+    }
+
+    #[test]
+    fn get_raw_otp_value_falls_back_to_custom_data() {
+        let otp = "otpauth://totp/ManyKee:fixture?secret=JBSWY3DPEHPK3PXP&issuer=ManyKee";
+        let mut entry = Entry::new();
+        entry.custom_data.insert(
+            fields::OTP.to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String(otp.to_string())),
+                last_modification_time: None,
+            },
+        );
+
+        assert_eq!(entry.get_raw_otp_value(), Some(otp));
     }
 
     #[cfg(feature = "serialization")]

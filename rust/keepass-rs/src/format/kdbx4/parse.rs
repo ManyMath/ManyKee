@@ -302,9 +302,16 @@ fn parse_inner_header(
     let mut header_attachments = Vec::new();
 
     loop {
-        let entry_type = data[pos];
-        let entry_length: usize = LittleEndian::read_u32(&data[pos + 1..(pos + 5)]) as usize;
-        let entry_buffer = &data[(pos + 5)..(pos + 5 + entry_length)];
+        let entry_type = *data.get(pos).ok_or(Kdbx4InnerHeaderError::UnexpectedEof)?;
+        let entry_length = data
+            .get(pos + 1..(pos + 5))
+            .ok_or(Kdbx4InnerHeaderError::UnexpectedEof)?;
+
+        let entry_length: usize = LittleEndian::read_u32(entry_length) as usize;
+
+        let entry_buffer = data
+            .get((pos + 5)..(pos + 5 + entry_length))
+            .ok_or(Kdbx4InnerHeaderError::UnexpectedEof)?;
 
         pos += 5 + entry_length;
 
@@ -353,6 +360,9 @@ pub enum Kdbx4InnerHeaderError {
 
     #[error("Inner header incomplete - missing {0}")]
     Incomplete(&'static str),
+
+    #[error("inner header truncated at entry start")]
+    UnexpectedEof,
 }
 
 #[derive(Debug, Error)]
@@ -371,4 +381,36 @@ pub enum Kdbx4OpenError {
 
     #[error(transparent)]
     BlockStream(#[from] hmac_block_stream::BlockStreamError),
+}
+
+#[cfg(test)]
+mod inner_header_negative {
+    use super::*;
+
+    #[test]
+    fn truncation_at_entry_header() {
+        let buf = [0u8; 3];
+        match parse_inner_header(&buf) {
+            Err(Kdbx4InnerHeaderError::UnexpectedEof) => {}
+            Err(other) => panic!("expected UnexpectedEof, got {:?}", other),
+            Ok(_) => panic!("3-byte buffer must not parse as a valid inner header"),
+        }
+    }
+
+    #[test]
+    fn oversized_attachment_entry_length() {
+        let mut buf: Vec<u8> = Vec::new();
+        buf.push(INNER_HEADER_RANDOM_STREAM_ID);
+        buf.extend_from_slice(&4u32.to_le_bytes());
+        buf.extend_from_slice(&0x02u32.to_le_bytes());
+
+        buf.push(INNER_HEADER_BINARY_ATTACHMENTS);
+        buf.extend_from_slice(&u32::MAX.to_le_bytes());
+
+        match parse_inner_header(&buf) {
+            Err(Kdbx4InnerHeaderError::UnexpectedEof) => {}
+            Err(other) => panic!("expected UnexpectedEof, got {:?}", other),
+            Ok(_) => panic!("oversized attachment entry must not parse"),
+        }
+    }
 }
