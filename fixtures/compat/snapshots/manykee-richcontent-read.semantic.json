@@ -1,0 +1,834 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "generator": null,
+    "database_name": "ManyKee Test Database",
+    "database_name_changed": null,
+    "database_description": "Rich content fixture for round-trip tests",
+    "database_description_changed": null,
+    "default_username": null,
+    "default_username_changed": null,
+    "maintenance_history_days": 365,
+    "color": null,
+    "master_key_changed": null,
+    "master_key_change_rec": null,
+    "master_key_change_force": null,
+    "memory_protection": {
+      "protect_title": false,
+      "protect_username": false,
+      "protect_password": true,
+      "protect_url": false,
+      "protect_notes": false
+    },
+    "recyclebin_enabled": true,
+    "recyclebin_uuid": null,
+    "recyclebin_changed": null,
+    "entry_templates_group": null,
+    "entry_templates_group_changed": null,
+    "last_selected_group": null,
+    "last_top_visible_group": null,
+    "history_max_items": 10,
+    "history_max_size": 6291456,
+    "settings_changed": null,
+    "custom_data": {
+      "KPXC_DECRYPTION_TIME_PREFERENCE": {
+        "kind": "string",
+        "value": "100",
+        "protected": false,
+        "size": 3,
+        "sha256": null,
+        "last_modification_time": null
+      },
+      "ManyKee_TestKey": {
+        "kind": "string",
+        "value": "test_value_123",
+        "protected": false,
+        "size": 14,
+        "sha256": null,
+        "last_modification_time": null
+      }
+    },
+    "unknown_xml": []
+  },
+  "root_group": {
+    "uuid": "b88ce528-79b4-45ef-873c-f93f70d66831",
+    "name": "Root",
+    "path": "/Root",
+    "order": [
+      0
+    ],
+    "notes": null,
+    "icon_id": null,
+    "custom_icon_uuid": null,
+    "tags": null,
+    "times": {
+      "creation": "2026-03-25 03:23:35",
+      "last_modification": "2026-03-25 03:23:35",
+      "last_access": "2026-03-25 03:23:35",
+      "expiry": null,
+      "location_changed": "2026-03-25 03:23:35",
+      "expires": false,
+      "usage_count": 0
+    },
+    "custom_data": {},
+    "unknown_xml": [],
+    "entries": [
+      {
+        "uuid": "0eef8112-2657-4866-a387-faf2653b4a20",
+        "title": "AutoTypeEntry",
+        "path": "/Root/AutoTypeEntry",
+        "order": 0
+      },
+      {
+        "uuid": "97271f74-2c51-4273-8d83-b4b44c0ee76c",
+        "title": "TaggedEntry",
+        "path": "/Root/TaggedEntry",
+        "order": 1
+      },
+      {
+        "uuid": "d38d98bc-0d50-4913-84ea-1e02bc508554",
+        "title": "AttachmentEntry",
+        "path": "/Root/AttachmentEntry",
+        "order": 2
+      },
+      {
+        "uuid": "afff60af-5b25-41fc-874e-6b712fef6245",
+        "title": "TOTPEntry",
+        "path": "/Root/TOTPEntry",
+        "order": 3
+      },
+      {
+        "uuid": "24a689c8-434f-4ae4-84ae-479948f2680a",
+        "title": "HistoryEntry",
+        "path": "/Root/HistoryEntry",
+        "order": 4
+      }
+    ],
+    "children": [
+      {
+        "uuid": "9179d605-5682-491e-82e1-420ae102758c",
+        "name": "Level1Group",
+        "path": "/Root/Level1Group",
+        "order": [
+          0,
+          0
+        ],
+        "notes": null,
+        "icon_id": null,
+        "custom_icon_uuid": null,
+        "tags": null,
+        "times": {
+          "creation": "2026-03-25 03:23:35",
+          "last_modification": "2026-03-25 03:23:35",
+          "last_access": "2026-03-25 03:23:35",
+          "expiry": null,
+          "location_changed": "2026-03-25 03:23:35",
+          "expires": false,
+          "usage_count": 0
+        },
+        "custom_data": {},
+        "unknown_xml": [],
+        "entries": [
+          {
+            "uuid": "d593124c-c419-4d3c-beca-2529480cefd5",
+            "title": "CustomFieldsEntry",
+            "path": "/Root/Level1Group/CustomFieldsEntry",
+            "order": 0
+          }
+        ],
+        "children": [
+          {
+            "uuid": "9b9f35e6-2060-421a-ac4f-133b909f4a05",
+            "name": "Level2Group",
+            "path": "/Root/Level1Group/Level2Group",
+            "order": [
+              0,
+              0,
+              0
+            ],
+            "notes": null,
+            "icon_id": null,
+            "custom_icon_uuid": null,
+            "tags": null,
+            "times": {
+              "creation": "2026-03-25 03:23:35",
+              "last_modification": "2026-03-25 03:23:35",
+              "last_access": "2026-03-25 03:23:35",
+              "expiry": null,
+              "location_changed": "2026-03-25 03:23:35",
+              "expires": false,
+              "usage_count": 0
+            },
+            "custom_data": {},
+            "unknown_xml": [],
+            "entries": [
+              {
+                "uuid": "b5b2779c-e6fc-4620-b18e-8b5ed9debb5d",
+                "title": "StandardEntry",
+                "path": "/Root/Level1Group/Level2Group/StandardEntry",
+                "order": 0
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "groups": [
+    {
+      "uuid": "b88ce528-79b4-45ef-873c-f93f70d66831",
+      "name": "Root",
+      "path": "/Root",
+      "order": [
+        0
+      ],
+      "notes": null,
+      "icon_id": null,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [
+        {
+          "uuid": "0eef8112-2657-4866-a387-faf2653b4a20",
+          "title": "AutoTypeEntry",
+          "path": "/Root/AutoTypeEntry",
+          "order": 0
+        },
+        {
+          "uuid": "97271f74-2c51-4273-8d83-b4b44c0ee76c",
+          "title": "TaggedEntry",
+          "path": "/Root/TaggedEntry",
+          "order": 1
+        },
+        {
+          "uuid": "d38d98bc-0d50-4913-84ea-1e02bc508554",
+          "title": "AttachmentEntry",
+          "path": "/Root/AttachmentEntry",
+          "order": 2
+        },
+        {
+          "uuid": "afff60af-5b25-41fc-874e-6b712fef6245",
+          "title": "TOTPEntry",
+          "path": "/Root/TOTPEntry",
+          "order": 3
+        },
+        {
+          "uuid": "24a689c8-434f-4ae4-84ae-479948f2680a",
+          "title": "HistoryEntry",
+          "path": "/Root/HistoryEntry",
+          "order": 4
+        }
+      ],
+      "children": [
+        {
+          "uuid": "9179d605-5682-491e-82e1-420ae102758c",
+          "name": "Level1Group",
+          "path": "/Root/Level1Group",
+          "order": [
+            0,
+            0
+          ],
+          "notes": null,
+          "icon_id": null,
+          "custom_icon_uuid": null,
+          "tags": null,
+          "times": {
+            "creation": "2026-03-25 03:23:35",
+            "last_modification": "2026-03-25 03:23:35",
+            "last_access": "2026-03-25 03:23:35",
+            "expiry": null,
+            "location_changed": "2026-03-25 03:23:35",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "unknown_xml": [],
+          "entries": [
+            {
+              "uuid": "d593124c-c419-4d3c-beca-2529480cefd5",
+              "title": "CustomFieldsEntry",
+              "path": "/Root/Level1Group/CustomFieldsEntry",
+              "order": 0
+            }
+          ],
+          "children": [
+            {
+              "uuid": "9b9f35e6-2060-421a-ac4f-133b909f4a05",
+              "name": "Level2Group",
+              "path": "/Root/Level1Group/Level2Group",
+              "order": [
+                0,
+                0,
+                0
+              ],
+              "notes": null,
+              "icon_id": null,
+              "custom_icon_uuid": null,
+              "tags": null,
+              "times": {
+                "creation": "2026-03-25 03:23:35",
+                "last_modification": "2026-03-25 03:23:35",
+                "last_access": "2026-03-25 03:23:35",
+                "expiry": null,
+                "location_changed": "2026-03-25 03:23:35",
+                "expires": false,
+                "usage_count": 0
+              },
+              "custom_data": {},
+              "unknown_xml": [],
+              "entries": [
+                {
+                  "uuid": "b5b2779c-e6fc-4620-b18e-8b5ed9debb5d",
+                  "title": "StandardEntry",
+                  "path": "/Root/Level1Group/Level2Group/StandardEntry",
+                  "order": 0
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "9179d605-5682-491e-82e1-420ae102758c",
+      "name": "Level1Group",
+      "path": "/Root/Level1Group",
+      "order": [
+        0,
+        0
+      ],
+      "notes": null,
+      "icon_id": null,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [
+        {
+          "uuid": "d593124c-c419-4d3c-beca-2529480cefd5",
+          "title": "CustomFieldsEntry",
+          "path": "/Root/Level1Group/CustomFieldsEntry",
+          "order": 0
+        }
+      ],
+      "children": [
+        {
+          "uuid": "9b9f35e6-2060-421a-ac4f-133b909f4a05",
+          "name": "Level2Group",
+          "path": "/Root/Level1Group/Level2Group",
+          "order": [
+            0,
+            0,
+            0
+          ],
+          "notes": null,
+          "icon_id": null,
+          "custom_icon_uuid": null,
+          "tags": null,
+          "times": {
+            "creation": "2026-03-25 03:23:35",
+            "last_modification": "2026-03-25 03:23:35",
+            "last_access": "2026-03-25 03:23:35",
+            "expiry": null,
+            "location_changed": "2026-03-25 03:23:35",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "unknown_xml": [],
+          "entries": [
+            {
+              "uuid": "b5b2779c-e6fc-4620-b18e-8b5ed9debb5d",
+              "title": "StandardEntry",
+              "path": "/Root/Level1Group/Level2Group/StandardEntry",
+              "order": 0
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "uuid": "9b9f35e6-2060-421a-ac4f-133b909f4a05",
+      "name": "Level2Group",
+      "path": "/Root/Level1Group/Level2Group",
+      "order": [
+        0,
+        0,
+        0
+      ],
+      "notes": null,
+      "icon_id": null,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [
+        {
+          "uuid": "b5b2779c-e6fc-4620-b18e-8b5ed9debb5d",
+          "title": "StandardEntry",
+          "path": "/Root/Level1Group/Level2Group/StandardEntry",
+          "order": 0
+        }
+      ],
+      "children": []
+    }
+  ],
+  "entries": [
+    {
+      "uuid": "d38d98bc-0d50-4913-84ea-1e02bc508554",
+      "title": "AttachmentEntry",
+      "path": "/Root/AttachmentEntry",
+      "parent_group_uuid": "b88ce528-79b4-45ef-873c-f93f70d66831",
+      "parent_group_path": "/Root",
+      "order": [
+        0,
+        2
+      ],
+      "fields": {
+        "Password": {
+          "value": "attachpass",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "AttachmentEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "attachuser",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [
+        {
+          "name": "binary_data.bin",
+          "protected": false,
+          "size": 256,
+          "sha256": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"
+        },
+        {
+          "name": "test_file.txt",
+          "protected": false,
+          "size": 59,
+          "sha256": "de102408e7b7dc268efabf8aa90a1c8d22535fd299e4b59929fb383eddce56e4"
+        }
+      ],
+      "autotype": null,
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "0eef8112-2657-4866-a387-faf2653b4a20",
+      "title": "AutoTypeEntry",
+      "path": "/Root/AutoTypeEntry",
+      "parent_group_uuid": "b88ce528-79b4-45ef-873c-f93f70d66831",
+      "parent_group_path": "/Root",
+      "order": [
+        0,
+        0
+      ],
+      "fields": {
+        "Password": {
+          "value": "autotypepass",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "AutoTypeEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "autotypeuser",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": "{USERNAME}{TAB}{PASSWORD}{ENTER}",
+        "data_transfer_obfuscation": false,
+        "associations": [
+          {
+            "window": "Login - *",
+            "sequence": "{USERNAME}{TAB}{PASSWORD}{ENTER}"
+          },
+          {
+            "window": "MyApp*",
+            "sequence": "{PASSWORD}{ENTER}"
+          }
+        ]
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "24a689c8-434f-4ae4-84ae-479948f2680a",
+      "title": "HistoryEntry",
+      "path": "/Root/HistoryEntry",
+      "parent_group_uuid": "b88ce528-79b4-45ef-873c-f93f70d66831",
+      "parent_group_path": "/Root",
+      "order": [
+        0,
+        4
+      ],
+      "fields": {
+        "Password": {
+          "value": "currentpass",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "HistoryEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "histuser",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": null,
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": [
+        {
+          "uuid": "24a689c8-434f-4ae4-84ae-479948f2680a",
+          "title": "HistoryEntry",
+          "fields": {
+            "Password": {
+              "value": "oldpass",
+              "protected": true,
+              "standard": true
+            },
+            "Title": {
+              "value": "HistoryEntry",
+              "protected": false,
+              "standard": true
+            },
+            "UserName": {
+              "value": "histuser",
+              "protected": false,
+              "standard": true
+            }
+          },
+          "tags": [],
+          "times": {
+            "creation": "2026-03-25 03:23:35",
+            "last_modification": "2026-03-25 03:23:35",
+            "last_access": "2026-03-25 03:23:35",
+            "expiry": null,
+            "location_changed": "2026-03-25 03:23:35",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "attachments": [],
+          "autotype": null,
+          "custom_icon": null,
+          "unknown_xml": []
+        }
+      ]
+    },
+    {
+      "uuid": "d593124c-c419-4d3c-beca-2529480cefd5",
+      "title": "CustomFieldsEntry",
+      "path": "/Root/Level1Group/CustomFieldsEntry",
+      "parent_group_uuid": "9179d605-5682-491e-82e1-420ae102758c",
+      "parent_group_path": "/Root/Level1Group",
+      "order": [
+        0,
+        0,
+        0
+      ],
+      "fields": {
+        "CustomField1": {
+          "value": "custom_value_1",
+          "protected": false,
+          "standard": false
+        },
+        "Password": {
+          "value": "custompass",
+          "protected": true,
+          "standard": true
+        },
+        "SecretField": {
+          "value": "secret_custom",
+          "protected": true,
+          "standard": false
+        },
+        "Title": {
+          "value": "CustomFieldsEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "customuser",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": null,
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "b5b2779c-e6fc-4620-b18e-8b5ed9debb5d",
+      "title": "StandardEntry",
+      "path": "/Root/Level1Group/Level2Group/StandardEntry",
+      "parent_group_uuid": "9b9f35e6-2060-421a-ac4f-133b909f4a05",
+      "parent_group_path": "/Root/Level1Group/Level2Group",
+      "order": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "fields": {
+        "Notes": {
+          "value": "This is a test entry with all standard fields.",
+          "protected": false,
+          "standard": true
+        },
+        "Password": {
+          "value": "s3cret!P@ss",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "StandardEntry",
+          "protected": false,
+          "standard": true
+        },
+        "URL": {
+          "value": "https://example.com",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "user@example.com",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": null,
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "afff60af-5b25-41fc-874e-6b712fef6245",
+      "title": "TOTPEntry",
+      "path": "/Root/TOTPEntry",
+      "parent_group_uuid": "b88ce528-79b4-45ef-873c-f93f70d66831",
+      "parent_group_path": "/Root",
+      "order": [
+        0,
+        3
+      ],
+      "fields": {
+        "Password": {
+          "value": "totppass",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "TOTPEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "totpuser",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {
+        "KPXC_BROWSER_ENTRY": {
+          "kind": "binary",
+          "value": null,
+          "protected": false,
+          "size": 3,
+          "sha256": "b71ff395264e955dc5c1d449b3ece6f91e22cf430d8e64b744564ae8f3354319",
+          "last_modification_time": null
+        },
+        "otp": {
+          "kind": "string",
+          "value": "otpauth://totp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
+          "protected": false,
+          "size": 78,
+          "sha256": null,
+          "last_modification_time": null
+        }
+      },
+      "attachments": [],
+      "autotype": null,
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "97271f74-2c51-4273-8d83-b4b44c0ee76c",
+      "title": "TaggedEntry",
+      "path": "/Root/TaggedEntry",
+      "parent_group_uuid": "b88ce528-79b4-45ef-873c-f93f70d66831",
+      "parent_group_path": "/Root",
+      "order": [
+        0,
+        1
+      ],
+      "fields": {
+        "Password": {
+          "value": "taggedpass",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "TaggedEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "taggeduser",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [
+        "2fa",
+        "important",
+        "work"
+      ],
+      "times": {
+        "creation": "2026-03-25 03:23:35",
+        "last_modification": "2026-03-25 03:23:35",
+        "last_access": "2026-03-25 03:23:35",
+        "expiry": null,
+        "location_changed": "2026-03-25 03:23:35",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": null,
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    }
+  ],
+  "deleted_objects": {},
+  "unsupported": {
+    "unknown_xml_direct_test_construction": "The XmlNode type is not publicly nameable by keepassxc integration tests; fixture parsing can still expose stored unknown XML.",
+    "unknown_xml_outer_attributes": "Current keepass-rs XmlNode preserves element name and inner XML, but not outer element attributes.",
+    "unreferenced_custom_icon_pool": "The current decrypted model exposes group/entry custom icon UUIDs and entry custom icon bytes, but not a database-wide unreferenced custom icon pool."
+  },
+  "not_observed": {
+    "public_custom_data": "DatabaseConfig public custom data details are not exposed through the current keepassxc maintainer API."
+  }
+}

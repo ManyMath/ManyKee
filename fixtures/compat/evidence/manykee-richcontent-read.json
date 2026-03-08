@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-richcontent-read",
+  "fixture_id": "starter-richcontent",
+  "lane": "many_kee_read",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "partial",
+  "snapshot_path": "fixtures/compat/snapshots/manykee-richcontent-read.semantic.json",
+  "snapshot_sha256": "94efc40c7c741f36dc66b502329b75c62f94138eb4200bd8b74a29784d606574",
+  "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json",
+  "claims": [
+    {
+      "feature_id": "group_tree",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "uuids",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "standard_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "custom_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "protected_flags",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "tags",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "timestamps",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "attachments_by_hash",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "history",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "deleted_objects",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "autotype_metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "custom_icons",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "custom_data",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "unknown_xml",
+      "status": "partial",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    },
+    {
+      "feature_id": "public_custom_data",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json"
+    }
+  ],
+  "known_gaps": [
+    "unknown_xml"
+  ],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "Generated from the existing rich-content fixture using the manifest credential_ref.",
+    "Snapshot hash is SHA-256 over the committed semantic JSON artifact."
+  ]
+}

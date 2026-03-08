@@ -1,11 +1,13 @@
 //! Controlled public API on top of keepass-rs fork with ManyKee extensions.
 
+pub mod compat_evidence;
 pub mod database;
 pub mod entry;
 pub mod error;
 pub mod group;
 pub mod merge;
 pub mod recycle_bin;
+pub mod semantic_snapshot;
 pub mod serialization;
 #[cfg(feature = "yubikey")]
 pub mod yubikey;
@@ -97,7 +99,7 @@ pub fn extract_challenge(db_bytes: &[u8]) -> Result<Vec<u8>, KeePassXcError> {
     }
 
     Err(KeePassXcError::Parse(
-        "KDF parameters header entry not found — is this a KDBX4 file?".to_string(),
+        "KDF parameters header entry not found: is this a KDBX4 file?".to_string(),
     ))
 }
 
