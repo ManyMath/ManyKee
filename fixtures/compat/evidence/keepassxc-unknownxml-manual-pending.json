@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "evidence_id": "keepassxc-unknownxml-manual-pending",
+  "fixture_id": "keepassxc-unknownxml",
+  "lane": "keepass_xc",
+  "tool_name": "keepassxc-gui-or-plugin",
+  "tool_version": "2.7.12",
+  "status": "manual_pending",
+  "snapshot_path": null,
+  "snapshot_sha256": null,
+  "evidence_path": "fixtures/compat/evidence/keepassxc-unknownxml-manual-pending.json",
+  "claims": [
+    {
+      "feature_id": "unknown_xml",
+      "status": "manual_pending",
+      "fixture_id": "keepassxc-unknownxml",
+      "lane": "keepass_xc",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-unknownxml-manual-pending.json",
+      "notes": [
+        "Manual fixture capture pending; no KeePassXC support claim is made yet."
+      ]
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [],
+  "notes": [
+    "KeePassXC XML import skips unknown XML and does not prove unknown XML preservation.",
+    "Unknown XML remains manual_pending until a provenance-clear KeePassXC GUI/plugin-generated source is committed."
+  ]
+}

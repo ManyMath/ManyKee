@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "evidence_id": "keepassxc-manual-pending-cipher-kdf",
+  "fixture_id": "keepassxc-gui-argon2id-aes",
+  "lane": "keepass_xc",
+  "tool_name": "keepassxc-gui",
+  "tool_version": "2.7.12",
+  "status": "manual_pending",
+  "snapshot_path": null,
+  "snapshot_sha256": null,
+  "evidence_path": "fixtures/compat/evidence/keepassxc-manual-pending-cipher-kdf.json",
+  "claims": [
+    {
+      "feature_id": "cipher_aes256",
+      "status": "manual_pending",
+      "fixture_id": "keepassxc-gui-argon2id-aes",
+      "lane": "keepass_xc",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-manual-pending-cipher-kdf.json",
+      "notes": [
+        "Manual fixture capture pending; no KeePassXC support claim is made yet."
+      ]
+    },
+    {
+      "feature_id": "kdf_argon2id",
+      "status": "manual_pending",
+      "fixture_id": "keepassxc-gui-argon2id-aes",
+      "lane": "keepass_xc",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-manual-pending-cipher-kdf.json",
+      "notes": [
+        "Manual fixture capture pending; no KeePassXC support claim is made yet."
+      ]
+    },
+    {
+      "feature_id": "cipher_chacha20",
+      "status": "manual_pending",
+      "fixture_id": "keepassxc-gui-argon2d-chacha20",
+      "lane": "keepass_xc",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-manual-pending-cipher-kdf.json",
+      "notes": [
+        "Manual fixture capture pending; no KeePassXC support claim is made yet."
+      ]
+    },
+    {
+      "feature_id": "kdf_argon2d",
+      "status": "manual_pending",
+      "fixture_id": "keepassxc-gui-argon2d-chacha20",
+      "lane": "keepass_xc",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-manual-pending-cipher-kdf.json",
+      "notes": [
+        "Manual fixture capture pending; no KeePassXC support claim is made yet."
+      ]
+    },
+    {
+      "feature_id": "cipher_twofish",
+      "status": "manual_pending",
+      "fixture_id": "keepassxc-gui-argon2id-twofish",
+      "lane": "keepass_xc",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-manual-pending-cipher-kdf.json",
+      "notes": [
+        "Manual fixture capture pending; no KeePassXC support claim is made yet."
+      ]
+    },
+    {
+      "feature_id": "kdf_argon2id",
+      "status": "manual_pending",
+      "fixture_id": "keepassxc-gui-argon2id-twofish",
+      "lane": "keepass_xc",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-manual-pending-cipher-kdf.json",
+      "notes": [
+        "Manual fixture capture pending; no KeePassXC support claim is made yet."
+      ]
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [],
+  "notes": [
+    "KeePassXC CLI 2.7.12 does not provide reliable fixture generation for all GUI cipher/KDF variants.",
+    "These claims remain manual_pending until provenance-clear GUI-created KDBX artifacts are committed under the manual fixture directory."
+  ]
+}

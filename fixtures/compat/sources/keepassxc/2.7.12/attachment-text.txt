@@ -1,0 +1,2 @@
+ManyKee KeePassXC attachment text fixture.
+Line two proves newline preservation.

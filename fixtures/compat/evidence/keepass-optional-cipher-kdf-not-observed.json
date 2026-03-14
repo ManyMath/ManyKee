@@ -1,0 +1,391 @@
+{
+"schema_version": 1,
+"evidence_id": "keepass-optional-cipher-kdf-not-observed",
+"fixture_id": "-official-fixture-corpus",
+"lane": "keepass_optional",
+"tool_name": "KeePass/KPScript",
+"tool_version": "KeePass 2.61 optional",
+"status": "not_observed",
+"snapshot_path": null,
+"snapshot_sha256": null,
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"claims": [
+{
+"feature_id": "credential_password_only",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "cipher_aes256",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "kdf_aes",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "metadata",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "group_tree",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "standard_fields",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "credential_key_file_only",
+"status": "not_observed",
+"fixture_id": "keepassxc-keyfile-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "cipher_aes256",
+"status": "not_observed",
+"fixture_id": "keepassxc-keyfile-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "kdf_aes",
+"status": "not_observed",
+"fixture_id": "keepassxc-keyfile-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "metadata",
+"status": "not_observed",
+"fixture_id": "keepassxc-keyfile-basic",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "credential_password_key_file",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-keyfile",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "cipher_aes256",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-keyfile",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "kdf_aes",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-keyfile",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "metadata",
+"status": "not_observed",
+"fixture_id": "keepassxc-password-keyfile",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "metadata",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "group_tree",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "standard_fields",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "custom_fields",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "protected_flags",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "tags",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "totp",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "autotype_metadata",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "custom_data",
+"status": "not_observed",
+"fixture_id": "keepassxc-richcontent",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "attachments_by_hash",
+"status": "not_observed",
+"fixture_id": "keepassxc-attachments",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "standard_fields",
+"status": "not_observed",
+"fixture_id": "keepassxc-attachments",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "group_tree",
+"status": "not_observed",
+"fixture_id": "keepassxc-attachments",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "history",
+"status": "not_observed",
+"fixture_id": "keepassxc-history-recycle-deleted",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "deleted_objects",
+"status": "not_observed",
+"fixture_id": "keepassxc-history-recycle-deleted",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "group_tree",
+"status": "not_observed",
+"fixture_id": "keepassxc-history-recycle-deleted",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "standard_fields",
+"status": "not_observed",
+"fixture_id": "keepassxc-history-recycle-deleted",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "cipher_aes256",
+"status": "not_observed",
+"fixture_id": "keepassxc-gui-argon2id-aes",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "kdf_argon2id",
+"status": "not_observed",
+"fixture_id": "keepassxc-gui-argon2id-aes",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "cipher_chacha20",
+"status": "not_observed",
+"fixture_id": "keepassxc-gui-argon2d-chacha20",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "kdf_argon2d",
+"status": "not_observed",
+"fixture_id": "keepassxc-gui-argon2d-chacha20",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "cipher_twofish",
+"status": "not_observed",
+"fixture_id": "keepassxc-gui-argon2id-twofish",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "kdf_argon2id",
+"status": "not_observed",
+"fixture_id": "keepassxc-gui-argon2id-twofish",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+},
+{
+"feature_id": "unknown_xml",
+"status": "not_observed",
+"fixture_id": "keepassxc-unknownxml",
+"lane": "keepass_optional",
+"evidence_path": "fixtures/compat/evidence/keepass-optional-cipher-kdf-not-observed.json",
+"notes": [
+"KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+]
+}
+],
+"known_gaps": [],
+"non_goals": [],
+"notes": [
+"KeePass 2.61/KPScript evidence is optional and remains not_observed until a local runtime setup is validated.",
+"This lane is separate from KeePassXC evidence and is not required by scripts or corpus tests.",
+"No required optional-tool automation is added by this evidence record."
+]
+}

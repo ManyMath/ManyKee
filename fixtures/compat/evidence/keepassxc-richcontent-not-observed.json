@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "evidence_id": "keepassxc-richcontent-not-observed",
+  "fixture_id": "starter-richcontent",
+  "lane": "keepass_xc",
+  "tool_name": "keepassxc-cli",
+  "tool_version": "2.7.12",
+  "status": "not_observed",
+  "snapshot_path": null,
+  "snapshot_sha256": null,
+  "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json",
+  "claims": [
+    {
+      "feature_id": "group_tree",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "uuids",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "standard_fields",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "custom_fields",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "protected_flags",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "tags",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "metadata",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "timestamps",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "attachments_by_hash",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "history",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "deleted_objects",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "autotype_metadata",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "custom_icons",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "custom_data",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "unknown_xml",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "public_custom_data",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    },
+    {
+      "feature_id": "broad_official_fixture_corpus",
+      "status": "not_observed",
+      "evidence_path": "fixtures/compat/evidence/keepassxc-richcontent-not-observed.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "Official-created rich-content fixture behavior is not observed in starter evidence.",
+    "Broad official corpus generation and required official-tool execution remain deferred to and later parity gates."
+  ]
+}
