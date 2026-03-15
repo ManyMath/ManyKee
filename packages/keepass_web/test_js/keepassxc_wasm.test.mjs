@@ -5,7 +5,7 @@
  * Uses initSync() with raw .wasm bytes since Node.js lacks fetch/Response.
  */
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -165,3 +165,92 @@ describe('keepassxc-wasm JS module', () => {
     }).toThrow();
   });
 });
+
+//: Cross-surface smoke for the official KeePassXC 2.7.12
+// fixtures via the WASM JS glue. Canonical password matches
+// `rust/keepassxc/tests/bidirectional_parity.rs::FIXTURE_PASSWORD`.
+const OFFICIAL_FIXTURE_DIR = resolve(
+  __dirname,
+  '../../../fixtures/compat/official/keepassxc/2.7.12'
+);
+const OFFICIAL_FIXTURE_PASSWORD = 'manykee-fixture-password';
+const wasmPkgJs = resolve(__dirname, '../web/pkg/keepassxc_wasm.js');
+const wasmPkgBg = resolve(__dirname, '../web/pkg/keepassxc_wasm_bg.wasm');
+const officialBasic = resolve(OFFICIAL_FIXTURE_DIR, 'keepassxc-password-basic.kdbx');
+const officialRichcontent = resolve(OFFICIAL_FIXTURE_DIR, 'keepassxc-richcontent.kdbx');
+
+const wasmPkgPresent = existsSync(wasmPkgJs) && existsSync(wasmPkgBg);
+const officialBasicPresent = existsSync(officialBasic);
+const officialRichcontentPresent = existsSync(officialRichcontent);
+
+const requireOfficial = process.env.MANYKEE_REQUIRE_OFFICIAL_TOOLS === '1';
+const officialSkipReason = !wasmPkgPresent
+  ? `skipped: WASM pkg missing under ${dirname(wasmPkgJs)}: run \`wasm-pack build rust/keepassxc-wasm --target web --out-dir ../../packages/keepass_web/web/pkg\``
+  : !officialBasicPresent
+    ? `skipped: official fixture missing at ${officialBasic}`
+    : null;
+
+if (requireOfficial && officialSkipReason !== null) {
+  throw new Error(`MANYKEE_REQUIRE_OFFICIAL_TOOLS=1 but ${officialSkipReason}`);
+}
+
+const officialDescribe = officialSkipReason === null ? describe : describe.skip;
+
+officialDescribe('keepassxc-wasm official KeePassXC 2.7.12 fixtures', () => {
+  let officialWasm;
+
+  beforeAll(async () => {
+    const wasmModule = await import(wasmPkgJs);
+    const wasmBytes = readFileSync(wasmPkgBg);
+    wasmModule.initSync({ module: wasmBytes });
+    officialWasm = wasmModule;
+  });
+
+  test('keepassxc-password-basic.kdbx opens and lists entries', () => {
+    const db = readFileSync(officialBasic);
+    const openResult = officialWasm.open_db(
+      new Uint8Array(db),
+      OFFICIAL_FIXTURE_PASSWORD,
+      undefined
+    );
+    const handle = JSON.parse(openResult).handle;
+    try {
+      const entries = JSON.parse(officialWasm.list_entries(handle, ''));
+      const groups = JSON.parse(officialWasm.list_groups(handle, ''));
+      expect(Array.isArray(entries)).toBe(true);
+      expect(Array.isArray(groups)).toBe(true);
+      expect(entries.length + groups.length).toBeGreaterThan(0);
+    } finally {
+      officialWasm.close_db(handle);
+    }
+  });
+
+  (officialRichcontentPresent ? test : test.skip)(
+    'keepassxc-richcontent.kdbx opens and lists entries',
+    () => {
+      const db = readFileSync(officialRichcontent);
+      const openResult = officialWasm.open_db(
+        new Uint8Array(db),
+        OFFICIAL_FIXTURE_PASSWORD,
+        undefined
+      );
+      const handle = JSON.parse(openResult).handle;
+      try {
+        const entries = JSON.parse(officialWasm.list_entries(handle, ''));
+        const groups = JSON.parse(officialWasm.list_groups(handle, ''));
+        expect(Array.isArray(entries)).toBe(true);
+        expect(Array.isArray(groups)).toBe(true);
+        expect(entries.length + groups.length).toBeGreaterThan(0);
+      } finally {
+        officialWasm.close_db(handle);
+      }
+    }
+  );
+});
+
+if (officialSkipReason !== null) {
+  // Surface the skip reason in test output so maintainers know why the
+  // official-fixture suite was bypassed.
+  // eslint-disable-next-line no-console
+  console.warn(`[official-fixture-suite] ${officialSkipReason}`);
+}

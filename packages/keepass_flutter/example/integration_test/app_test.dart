@@ -45,6 +45,26 @@ String _fixturePath(String name) {
   );
 }
 
+const String _officialFixtureSubdir =
+    'fixtures/compat/official/keepassxc/2.7.12';
+
+String? _officialFixturePath(String name) {
+  Directory? current = Directory.current.absolute;
+  while (current != null) {
+    final candidate = File('${current.path}/$_officialFixtureSubdir/$name');
+    if (candidate.existsSync()) {
+      return candidate.path;
+    }
+    final parent = current.parent;
+    if (parent.path == current.path) {
+      current = null;
+    } else {
+      current = parent;
+    }
+  }
+  return null;
+}
+
 Future<File> _stageNativeLibrary() async {
   final sourcePath = _firstExisting(<String>[
     '../../keepass_cli/libkeepassxc_ffi.so',
@@ -600,6 +620,56 @@ void main() {
           break;
         }
       }
+    });
+  });
+
+  group(' official fixture smoke', () {
+    // Canonical fixture password provenance: `FIXTURE_PASSWORD` in
+    // `rust/keepassxc/tests/bidirectional_parity.rs`.
+    const fixturePassword = 'manykee-fixture-password';
+    const fixtureName = 'keepassxc-password-basic.kdbx';
+    const requireEnvVar = 'MANYKEE_REQUIRE_OFFICIAL_TOOLS';
+
+    testWidgets('keepassxc-password-basic.kdbx unlocks', (tester) async {
+      final required = Platform.environment[requireEnvVar] == '1';
+      final sourcePath = _officialFixturePath(fixtureName);
+      if (sourcePath == null) {
+        final reason = 'skipped: fixture $fixtureName not found under '
+            '$_officialFixtureSubdir/ (searched upward from '
+            '${Directory.current.path})';
+        if (required) {
+          fail('$requireEnvVar=1 but $reason');
+        }
+        markTestSkipped(reason);
+        return;
+      }
+
+      final tempDir =
+          await Directory.systemTemp.createTemp('manykee-official-');
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final tempPath = '${tempDir.path}/$fixtureName';
+      await File(sourcePath).copy(tempPath);
+
+      // Note: like the other `unlockVault`-based tests in this file, this
+      // case assumes no real YubiKey is attached to the host. The unlock
+      // screen auto-selects YubiKey mode whenever `listYubiKeys()` returns a
+      // non-empty list, which forces `openFromPathWithYubiKey` and breaks
+      // password-only unlock. CI hosts have no YubiKey hardware and pass
+      // cleanly; local runs on a YubiKey-equipped workstation will fail the
+      // same way the existing 'unlocks vault with correct password' case
+      // does in that environment.
+      await unlockVault(
+        tester,
+        fixtureName: fixtureName,
+        fixturePath: tempPath,
+        password: fixturePassword,
+      );
+
+      expect(find.byTooltip('Lock Vault'), findsOneWidget);
     });
   });
 }

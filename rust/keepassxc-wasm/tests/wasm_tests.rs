@@ -20,6 +20,16 @@ const TEST_DB_WITH_CR: &[u8] =
 const TEST_DB_RICHCONTENT: &[u8] =
     include_bytes!("../../keepassxc/tests/resources/test_db_kdbx4_richcontent.kdbx");
 
+// official KeePassXC 2.7.12 fixtures (cross-surface smoke). Canonical password
+// is defined in `rust/keepassxc/tests/bidirectional_parity.rs::FIXTURE_PASSWORD`.
+const OFFICIAL_DB_PASSWORD_BASIC: &[u8] = include_bytes!(
+    "../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-password-basic.kdbx"
+);
+const OFFICIAL_DB_RICHCONTENT: &[u8] = include_bytes!(
+    "../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-richcontent.kdbx"
+);
+const OFFICIAL_FIXTURE_PASSWORD: &str = "manykee-fixture-password";
+
 const PASSWORD: &str = "demopass";
 const RICHCONTENT_PASSWORD: &str = "testpass123";
 const AES_ROOT_UUID: &str = "778cffa9-0930-4b0b-8135-a52834fd1dba";
@@ -368,6 +378,35 @@ fn test_entry_not_found() {
     let handle = open_handle(TEST_DB_AES, PASSWORD);
     let result = read_entry_fields(handle, "00000000-0000-0000-0000-000000000000");
     assert!(result.is_err(), "should fail for non-existent entry UUID");
+    close_db(handle).unwrap();
+}
+
+//: Cross-surface smoke for the official KeePassXC 2.7.12 fixtures.
+// These tests run under `wasm-pack test --chrome --headless rust/keepassxc-wasm`
+// (CI exercises this; locally requires a headless Chrome binary on PATH).
+#[wasm_bindgen_test]
+fn test_official_keepassxc_password_basic_opens() {
+    install_panic_hook();
+    let handle = open_handle(OFFICIAL_DB_PASSWORD_BASIC, OFFICIAL_FIXTURE_PASSWORD);
+    let entries = list_entries_json(handle, "");
+    let groups = list_groups_json(handle, "");
+    assert!(
+        !entries.is_empty() || !groups.is_empty(),
+        "official keepassxc-password-basic.kdbx should expose at least one entry or group at root"
+    );
+    close_db(handle).unwrap();
+}
+
+#[wasm_bindgen_test]
+fn test_official_keepassxc_richcontent_opens() {
+    install_panic_hook();
+    let handle = open_handle(OFFICIAL_DB_RICHCONTENT, OFFICIAL_FIXTURE_PASSWORD);
+    let entries = list_entries_json(handle, "");
+    let groups = list_groups_json(handle, "");
+    assert!(
+        !entries.is_empty() || !groups.is_empty(),
+        "official keepassxc-richcontent.kdbx should expose at least one entry or group at root"
+    );
     close_db(handle).unwrap();
 }
 
