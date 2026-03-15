@@ -1,8 +1,17 @@
 name: keepass
-description: Dart SDK for KeePass KDBX databases powered by Rust
+description: Dart SDK for KeePass KDBX databases, backed by a Rust core via dart:ffi.
 version: 0.1.0
-publish_to: none
+repository: https://github.com/ManyMath/ManyKee
+homepage: https://github.com/ManyMath/ManyKee/tree/main/packages/keepass
+issue_tracker: https://github.com/ManyMath/ManyKee/issues
 resolution: workspace
+
+topics:
+  - keepass
+  - kdbx
+  - password
+  - ffi
+  - security
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

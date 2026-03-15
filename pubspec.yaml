@@ -4,6 +4,7 @@ environment:
   sdk: ">=3.5.0 <4.0.0"
 workspace:
   - packages/keepass
+  - packages/keepass/example
   - packages/keepass_cli
   - packages/keepass_flutter
   - packages/keepass_web
