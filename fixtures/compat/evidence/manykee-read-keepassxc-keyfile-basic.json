@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-read-keepassxc-keyfile-basic",
+  "fixture_id": "keepassxc-keyfile-basic",
+  "lane": "many_kee_read",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "supported",
+  "snapshot_path": "fixtures/compat/snapshots/keepassxc-keyfile-basic-manykee-read.semantic.json",
+  "snapshot_sha256": "98d1db084fbcf2c5132410bb763468a36f9d53da2f25817fd7808496fb907860",
+  "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-keyfile-basic.json",
+  "claims": [
+    {
+      "feature_id": "credential_key_file_only",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-keyfile-basic.json"
+    },
+    {
+      "feature_id": "cipher_aes256",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-keyfile-basic.json"
+    },
+    {
+      "feature_id": "kdf_aes",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-keyfile-basic.json"
+    },
+    {
+      "feature_id": "metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-keyfile-basic.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "ManyKee opened the committed KeePassXC-created fixture with the manifest credential.",
+    "Snapshot hash is SHA-256 over this recorder's semantic JSON output."
+  ]
+}

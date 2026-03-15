@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-read-keepassxc-richcontent",
+  "fixture_id": "keepassxc-richcontent",
+  "lane": "many_kee_read",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "supported",
+  "snapshot_path": "fixtures/compat/snapshots/keepassxc-richcontent-manykee-read.semantic.json",
+  "snapshot_sha256": "197a6a93206153a1b4ed8bd5796ee980427bc961cad772b78f97f08ebfc18aa5",
+  "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json",
+  "claims": [
+    {
+      "feature_id": "metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "group_tree",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "standard_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "custom_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "protected_flags",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "tags",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "totp",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "autotype_metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    },
+    {
+      "feature_id": "custom_data",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-richcontent.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "ManyKee opened the committed KeePassXC-created fixture with the manifest credential.",
+    "Snapshot hash is SHA-256 over this recorder's semantic JSON output."
+  ]
+}

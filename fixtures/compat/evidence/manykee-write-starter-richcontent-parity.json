@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-write-starter-richcontent-parity",
+  "fixture_id": "starter-richcontent",
+  "lane": "many_kee_write",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "supported",
+  "snapshot_path": "fixtures/compat/snapshots/starter-richcontent-bidirectional-write.semantic.json",
+  "snapshot_sha256": "32f4629f1d9716da55554010171c33ba466b2c9a99fabed36f427544d1e0529a",
+  "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json",
+  "claims": [
+    {
+      "feature_id": "group_tree",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "uuids",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "standard_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "custom_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "protected_flags",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "tags",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "attachments_by_hash",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "history",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "autotype_metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    },
+    {
+      "feature_id": "custom_data",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "Generated from the existing starter-richcontent fixture after a ManyKee save/reopen parity pass.",
+    "KeePassXC inspection for this ManyKee-written database is covered by the bidirectional parity test."
+  ]
+}

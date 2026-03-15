@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-write-keepassxc-attachments",
+  "fixture_id": "keepassxc-attachments",
+  "lane": "many_kee_write",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "supported",
+  "snapshot_path": "fixtures/compat/snapshots/keepassxc-attachments-manykee-write.semantic.json",
+  "snapshot_sha256": "e9557550b2482c3bf8510b6fb00eb9e8492365e5caf21efe8805e6a1bbc4c817",
+  "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-attachments.json",
+  "claims": [
+    {
+      "feature_id": "attachments_by_hash",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-attachments.json"
+    },
+    {
+      "feature_id": "standard_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-attachments.json"
+    },
+    {
+      "feature_id": "group_tree",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-attachments.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "ManyKee write evidence is lane-separated from KeePassXC source evidence.",
+    "Snapshot hash is SHA-256 over this recorder's semantic JSON output.",
+    "ManyKee saved the fixture to a temporary KDBX and reopened it successfully."
+  ]
+}

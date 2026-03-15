@@ -1,0 +1,814 @@
+{
+  "schema_version": 1,
+  "source_fixture_id": "keepassxc-richcontent",
+  "evidence_lane": "manykee_write",
+  "metadata": {
+    "generator": "ManyKee synthetic KeePassXC XML import source",
+    "database_name": "ManyKee Official Rich Content Fixture",
+    "database_name_changed": "2026-04-15 21:28:27",
+    "database_description": "Synthetic rich-content source imported by KeePassXC CLI 2.7.12.",
+    "database_description_changed": "2026-04-15 21:28:27",
+    "default_username": "fixture-default-user",
+    "default_username_changed": "2026-04-15 21:28:27",
+    "maintenance_history_days": 365,
+    "color": null,
+    "master_key_changed": "2026-04-15 21:28:27",
+    "master_key_change_rec": -1,
+    "master_key_change_force": -1,
+    "memory_protection": {
+      "protect_title": false,
+      "protect_username": false,
+      "protect_password": true,
+      "protect_url": false,
+      "protect_notes": false
+    },
+    "recyclebin_enabled": true,
+    "recyclebin_uuid": "00000000-0000-0000-0000-000000000000",
+    "recyclebin_changed": "2026-04-15 21:28:27",
+    "entry_templates_group": "00000000-0000-0000-0000-000000000000",
+    "entry_templates_group_changed": "2026-04-15 21:28:27",
+    "last_selected_group": "00000000-0000-0000-0000-000000000000",
+    "last_top_visible_group": "00000000-0000-0000-0000-000000000000",
+    "history_max_items": 10,
+    "history_max_size": 6291456,
+    "settings_changed": "2026-04-15 21:28:27",
+    "custom_data": {
+      "KPXC_RANDOM_SLUG": {
+        "kind": "binary",
+        "value": null,
+        "protected": false,
+        "size": 102,
+        "sha256": "ff94dcf146cd16b7d9380a598ed9efac289851555dd833de34979289a74cf953",
+        "last_modification_time": "2026-04-15 21:28:27"
+      },
+      "_LAST_MODIFIED": {
+        "kind": "string",
+        "value": "Wed Apr 15 21:28:27 2026 GMT",
+        "protected": false,
+        "size": 28,
+        "sha256": null,
+        "last_modification_time": null
+      },
+      "manykee-meta-key": {
+        "kind": "string",
+        "value": "manykee-meta-value",
+        "protected": false,
+        "size": 18,
+        "sha256": null,
+        "last_modification_time": "2026-04-15 21:28:27"
+      }
+    },
+    "unknown_xml": []
+  },
+  "root_group": {
+    "uuid": "00000000-0000-0000-0000-000000000001",
+    "name": "Root",
+    "path": "/Root",
+    "order": [
+      0
+    ],
+    "notes": "Synthetic XML import root group.",
+    "icon_id": 48,
+    "custom_icon_uuid": null,
+    "tags": null,
+    "times": {
+      "creation": "2026-04-15 00:00:00",
+      "last_modification": "2026-04-15 00:00:00",
+      "last_access": "2026-04-15 00:00:00",
+      "expiry": "2026-04-15 00:00:00",
+      "location_changed": "2026-04-15 00:00:00",
+      "expires": false,
+      "usage_count": 0
+    },
+    "custom_data": {},
+    "unknown_xml": [],
+    "entries": [],
+    "children": [
+      {
+        "uuid": "00000000-0000-0000-0000-000000000002",
+        "name": "Fixtures",
+        "path": "/Root/Fixtures",
+        "order": [
+          0,
+          0
+        ],
+        "notes": "Top-level synthetic official fixture group.",
+        "icon_id": 48,
+        "custom_icon_uuid": null,
+        "tags": "official;richcontent",
+        "times": {
+          "creation": "2026-04-15 00:00:00",
+          "last_modification": "2026-04-15 00:00:00",
+          "last_access": "2026-04-15 00:00:00",
+          "expiry": "2026-04-15 00:00:00",
+          "location_changed": "2026-04-15 00:00:00",
+          "expires": false,
+          "usage_count": 0
+        },
+        "custom_data": {
+          "_LAST_MODIFIED": {
+            "kind": "string",
+            "value": "Wed Apr 15 21:28:27 2026 GMT",
+            "protected": false,
+            "size": 28,
+            "sha256": null,
+            "last_modification_time": null
+          },
+          "manykee-group-key": {
+            "kind": "string",
+            "value": "manykee-group-value",
+            "protected": false,
+            "size": 19,
+            "sha256": null,
+            "last_modification_time": null
+          }
+        },
+        "unknown_xml": [],
+        "entries": [],
+        "children": [
+          {
+            "uuid": "00000000-0000-0000-0000-000000000003",
+            "name": "Nested",
+            "path": "/Root/Fixtures/Nested",
+            "order": [
+              0,
+              0,
+              0
+            ],
+            "notes": "Nested group imported from XML.",
+            "icon_id": 48,
+            "custom_icon_uuid": null,
+            "tags": null,
+            "times": {
+              "creation": "2026-04-15 00:00:00",
+              "last_modification": "2026-04-15 00:00:00",
+              "last_access": "2026-04-15 00:00:00",
+              "expiry": "2026-04-15 00:00:00",
+              "location_changed": "2026-04-15 00:00:00",
+              "expires": false,
+              "usage_count": 0
+            },
+            "custom_data": {},
+            "unknown_xml": [],
+            "entries": [
+              {
+                "uuid": "00000000-0000-0000-0000-000000000004",
+                "title": "StandardEntry",
+                "path": "/Root/Fixtures/Nested/StandardEntry",
+                "order": 0
+              },
+              {
+                "uuid": "00000000-0000-0000-0000-000000000005",
+                "title": "CustomFieldsEntry",
+                "path": "/Root/Fixtures/Nested/CustomFieldsEntry",
+                "order": 1
+              },
+              {
+                "uuid": "00000000-0000-0000-0000-000000000006",
+                "title": "ProtectedEntry",
+                "path": "/Root/Fixtures/Nested/ProtectedEntry",
+                "order": 2
+              },
+              {
+                "uuid": "00000000-0000-0000-0000-000000000007",
+                "title": "TOTPEntry",
+                "path": "/Root/Fixtures/Nested/TOTPEntry",
+                "order": 3
+              },
+              {
+                "uuid": "00000000-0000-0000-0000-000000000008",
+                "title": "AutoTypeEntry",
+                "path": "/Root/Fixtures/Nested/AutoTypeEntry",
+                "order": 4
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "groups": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000001",
+      "name": "Root",
+      "path": "/Root",
+      "order": [
+        0
+      ],
+      "notes": "Synthetic XML import root group.",
+      "icon_id": 48,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [],
+      "children": [
+        {
+          "uuid": "00000000-0000-0000-0000-000000000002",
+          "name": "Fixtures",
+          "path": "/Root/Fixtures",
+          "order": [
+            0,
+            0
+          ],
+          "notes": "Top-level synthetic official fixture group.",
+          "icon_id": 48,
+          "custom_icon_uuid": null,
+          "tags": "official;richcontent",
+          "times": {
+            "creation": "2026-04-15 00:00:00",
+            "last_modification": "2026-04-15 00:00:00",
+            "last_access": "2026-04-15 00:00:00",
+            "expiry": "2026-04-15 00:00:00",
+            "location_changed": "2026-04-15 00:00:00",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {
+            "_LAST_MODIFIED": {
+              "kind": "string",
+              "value": "Wed Apr 15 21:28:27 2026 GMT",
+              "protected": false,
+              "size": 28,
+              "sha256": null,
+              "last_modification_time": null
+            },
+            "manykee-group-key": {
+              "kind": "string",
+              "value": "manykee-group-value",
+              "protected": false,
+              "size": 19,
+              "sha256": null,
+              "last_modification_time": null
+            }
+          },
+          "unknown_xml": [],
+          "entries": [],
+          "children": [
+            {
+              "uuid": "00000000-0000-0000-0000-000000000003",
+              "name": "Nested",
+              "path": "/Root/Fixtures/Nested",
+              "order": [
+                0,
+                0,
+                0
+              ],
+              "notes": "Nested group imported from XML.",
+              "icon_id": 48,
+              "custom_icon_uuid": null,
+              "tags": null,
+              "times": {
+                "creation": "2026-04-15 00:00:00",
+                "last_modification": "2026-04-15 00:00:00",
+                "last_access": "2026-04-15 00:00:00",
+                "expiry": "2026-04-15 00:00:00",
+                "location_changed": "2026-04-15 00:00:00",
+                "expires": false,
+                "usage_count": 0
+              },
+              "custom_data": {},
+              "unknown_xml": [],
+              "entries": [
+                {
+                  "uuid": "00000000-0000-0000-0000-000000000004",
+                  "title": "StandardEntry",
+                  "path": "/Root/Fixtures/Nested/StandardEntry",
+                  "order": 0
+                },
+                {
+                  "uuid": "00000000-0000-0000-0000-000000000005",
+                  "title": "CustomFieldsEntry",
+                  "path": "/Root/Fixtures/Nested/CustomFieldsEntry",
+                  "order": 1
+                },
+                {
+                  "uuid": "00000000-0000-0000-0000-000000000006",
+                  "title": "ProtectedEntry",
+                  "path": "/Root/Fixtures/Nested/ProtectedEntry",
+                  "order": 2
+                },
+                {
+                  "uuid": "00000000-0000-0000-0000-000000000007",
+                  "title": "TOTPEntry",
+                  "path": "/Root/Fixtures/Nested/TOTPEntry",
+                  "order": 3
+                },
+                {
+                  "uuid": "00000000-0000-0000-0000-000000000008",
+                  "title": "AutoTypeEntry",
+                  "path": "/Root/Fixtures/Nested/AutoTypeEntry",
+                  "order": 4
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000002",
+      "name": "Fixtures",
+      "path": "/Root/Fixtures",
+      "order": [
+        0,
+        0
+      ],
+      "notes": "Top-level synthetic official fixture group.",
+      "icon_id": 48,
+      "custom_icon_uuid": null,
+      "tags": "official;richcontent",
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {
+        "_LAST_MODIFIED": {
+          "kind": "string",
+          "value": "Wed Apr 15 21:28:27 2026 GMT",
+          "protected": false,
+          "size": 28,
+          "sha256": null,
+          "last_modification_time": null
+        },
+        "manykee-group-key": {
+          "kind": "string",
+          "value": "manykee-group-value",
+          "protected": false,
+          "size": 19,
+          "sha256": null,
+          "last_modification_time": null
+        }
+      },
+      "unknown_xml": [],
+      "entries": [],
+      "children": [
+        {
+          "uuid": "00000000-0000-0000-0000-000000000003",
+          "name": "Nested",
+          "path": "/Root/Fixtures/Nested",
+          "order": [
+            0,
+            0,
+            0
+          ],
+          "notes": "Nested group imported from XML.",
+          "icon_id": 48,
+          "custom_icon_uuid": null,
+          "tags": null,
+          "times": {
+            "creation": "2026-04-15 00:00:00",
+            "last_modification": "2026-04-15 00:00:00",
+            "last_access": "2026-04-15 00:00:00",
+            "expiry": "2026-04-15 00:00:00",
+            "location_changed": "2026-04-15 00:00:00",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "unknown_xml": [],
+          "entries": [
+            {
+              "uuid": "00000000-0000-0000-0000-000000000004",
+              "title": "StandardEntry",
+              "path": "/Root/Fixtures/Nested/StandardEntry",
+              "order": 0
+            },
+            {
+              "uuid": "00000000-0000-0000-0000-000000000005",
+              "title": "CustomFieldsEntry",
+              "path": "/Root/Fixtures/Nested/CustomFieldsEntry",
+              "order": 1
+            },
+            {
+              "uuid": "00000000-0000-0000-0000-000000000006",
+              "title": "ProtectedEntry",
+              "path": "/Root/Fixtures/Nested/ProtectedEntry",
+              "order": 2
+            },
+            {
+              "uuid": "00000000-0000-0000-0000-000000000007",
+              "title": "TOTPEntry",
+              "path": "/Root/Fixtures/Nested/TOTPEntry",
+              "order": 3
+            },
+            {
+              "uuid": "00000000-0000-0000-0000-000000000008",
+              "title": "AutoTypeEntry",
+              "path": "/Root/Fixtures/Nested/AutoTypeEntry",
+              "order": 4
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000003",
+      "name": "Nested",
+      "path": "/Root/Fixtures/Nested",
+      "order": [
+        0,
+        0,
+        0
+      ],
+      "notes": "Nested group imported from XML.",
+      "icon_id": 48,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [
+        {
+          "uuid": "00000000-0000-0000-0000-000000000004",
+          "title": "StandardEntry",
+          "path": "/Root/Fixtures/Nested/StandardEntry",
+          "order": 0
+        },
+        {
+          "uuid": "00000000-0000-0000-0000-000000000005",
+          "title": "CustomFieldsEntry",
+          "path": "/Root/Fixtures/Nested/CustomFieldsEntry",
+          "order": 1
+        },
+        {
+          "uuid": "00000000-0000-0000-0000-000000000006",
+          "title": "ProtectedEntry",
+          "path": "/Root/Fixtures/Nested/ProtectedEntry",
+          "order": 2
+        },
+        {
+          "uuid": "00000000-0000-0000-0000-000000000007",
+          "title": "TOTPEntry",
+          "path": "/Root/Fixtures/Nested/TOTPEntry",
+          "order": 3
+        },
+        {
+          "uuid": "00000000-0000-0000-0000-000000000008",
+          "title": "AutoTypeEntry",
+          "path": "/Root/Fixtures/Nested/AutoTypeEntry",
+          "order": 4
+        }
+      ],
+      "children": []
+    }
+  ],
+  "entries": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000008",
+      "title": "AutoTypeEntry",
+      "path": "/Root/Fixtures/Nested/AutoTypeEntry",
+      "parent_group_uuid": "00000000-0000-0000-0000-000000000003",
+      "parent_group_path": "/Root/Fixtures/Nested",
+      "order": [
+        0,
+        0,
+        0,
+        4
+      ],
+      "fields": {
+        "Password": {
+          "value": "autotype-password",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "AutoTypeEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "autotype-user",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [
+        "autotype"
+      ],
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": "{USERNAME}{TAB}{PASSWORD}{ENTER}",
+        "data_transfer_obfuscation": false,
+        "associations": [
+          {
+            "window": "manykee-richcontent",
+            "sequence": "{USERNAME}{TAB}{PASSWORD}"
+          }
+        ]
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000005",
+      "title": "CustomFieldsEntry",
+      "path": "/Root/Fixtures/Nested/CustomFieldsEntry",
+      "parent_group_uuid": "00000000-0000-0000-0000-000000000003",
+      "parent_group_path": "/Root/Fixtures/Nested",
+      "order": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "fields": {
+        "Password": {
+          "value": "custom-password",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "CustomFieldsEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "custom-user",
+          "protected": false,
+          "standard": true
+        },
+        "manykee-custom-field": {
+          "value": "custom-field-value",
+          "protected": false,
+          "standard": false
+        }
+      },
+      "tags": [
+        "custom",
+        "fields"
+      ],
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {
+        "_LAST_MODIFIED": {
+          "kind": "string",
+          "value": "Wed Apr 15 21:28:27 2026 GMT",
+          "protected": false,
+          "size": 28,
+          "sha256": null,
+          "last_modification_time": null
+        },
+        "manykee-entry-key": {
+          "kind": "string",
+          "value": "manykee-entry-value",
+          "protected": false,
+          "size": 19,
+          "sha256": null,
+          "last_modification_time": null
+        }
+      },
+      "attachments": [],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": null,
+        "data_transfer_obfuscation": false,
+        "associations": []
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000006",
+      "title": "ProtectedEntry",
+      "path": "/Root/Fixtures/Nested/ProtectedEntry",
+      "parent_group_uuid": "00000000-0000-0000-0000-000000000003",
+      "parent_group_path": "/Root/Fixtures/Nested",
+      "order": [
+        0,
+        0,
+        0,
+        2
+      ],
+      "fields": {
+        "Password": {
+          "value": "manykee-rich-protected-value",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "ProtectedEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "protected-user",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [
+        "protected"
+      ],
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": null,
+        "data_transfer_obfuscation": false,
+        "associations": []
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000004",
+      "title": "StandardEntry",
+      "path": "/Root/Fixtures/Nested/StandardEntry",
+      "parent_group_uuid": "00000000-0000-0000-0000-000000000003",
+      "parent_group_path": "/Root/Fixtures/Nested",
+      "order": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "fields": {
+        "Notes": {
+          "value": "Standard fields imported through KeePassXC XML.",
+          "protected": false,
+          "standard": true
+        },
+        "Password": {
+          "value": "standard-password",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "StandardEntry",
+          "protected": false,
+          "standard": true
+        },
+        "URL": {
+          "value": "https://manykee.test/rich/standard",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "standard-user",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [
+        "official",
+        "standard"
+      ],
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": null,
+        "data_transfer_obfuscation": false,
+        "associations": []
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000007",
+      "title": "TOTPEntry",
+      "path": "/Root/Fixtures/Nested/TOTPEntry",
+      "parent_group_uuid": "00000000-0000-0000-0000-000000000003",
+      "parent_group_path": "/Root/Fixtures/Nested",
+      "order": [
+        0,
+        0,
+        0,
+        3
+      ],
+      "fields": {
+        "Password": {
+          "value": "totp-password",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "TOTPEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "totp-user",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [
+        "customdata",
+        "totp"
+      ],
+      "times": {
+        "creation": "2026-04-15 00:00:00",
+        "last_modification": "2026-04-15 00:00:00",
+        "last_access": "2026-04-15 00:00:00",
+        "expiry": "2026-04-15 00:00:00",
+        "location_changed": "2026-04-15 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {
+        "_LAST_MODIFIED": {
+          "kind": "string",
+          "value": "Wed Apr 15 21:28:27 2026 GMT",
+          "protected": false,
+          "size": 28,
+          "sha256": null,
+          "last_modification_time": null
+        },
+        "otp": {
+          "kind": "string",
+          "value": "otpauth://totp/ManyKee:fixture?secret=JBSWY3DPEHPK3PXP&issuer=ManyKee",
+          "protected": false,
+          "size": 69,
+          "sha256": null,
+          "last_modification_time": null
+        }
+      },
+      "attachments": [],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": null,
+        "data_transfer_obfuscation": false,
+        "associations": []
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": []
+    }
+  ],
+  "deleted_objects": {},
+  "unsupported": {
+    "unknown_xml_direct_test_construction": "The XmlNode type is not publicly nameable by keepassxc integration tests; fixture parsing can still expose stored unknown XML.",
+    "unknown_xml_outer_attributes": "Current keepass-rs XmlNode preserves element name and inner XML, but not outer element attributes.",
+    "unreferenced_custom_icon_pool": "The current decrypted model exposes group/entry custom icon UUIDs and entry custom icon bytes, but not a database-wide unreferenced custom icon pool."
+  },
+  "not_observed": {
+    "public_custom_data": "DatabaseConfig public custom data details are not exposed through the current keepassxc maintainer API."
+  }
+}

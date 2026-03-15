@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-read-keepassxc-history-recycle-deleted",
+  "fixture_id": "keepassxc-history-recycle-deleted",
+  "lane": "many_kee_read",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "supported",
+  "snapshot_path": "fixtures/compat/snapshots/keepassxc-history-recycle-deleted-manykee-read.semantic.json",
+  "snapshot_sha256": "ec724a73aff87a5fc750ead8ffb8fab3d738968f19166cd913103009a145b2d5",
+  "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-history-recycle-deleted.json",
+  "claims": [
+    {
+      "feature_id": "history",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-history-recycle-deleted.json"
+    },
+    {
+      "feature_id": "deleted_objects",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-history-recycle-deleted.json"
+    },
+    {
+      "feature_id": "group_tree",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-history-recycle-deleted.json"
+    },
+    {
+      "feature_id": "standard_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-read-keepassxc-history-recycle-deleted.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "ManyKee opened the committed KeePassXC-created fixture with the manifest credential.",
+    "Snapshot hash is SHA-256 over this recorder's semantic JSON output."
+  ]
+}

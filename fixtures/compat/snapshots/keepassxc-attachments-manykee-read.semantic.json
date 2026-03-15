@@ -1,0 +1,438 @@
+{
+  "schema_version": 1,
+  "source_fixture_id": "keepassxc-attachments",
+  "evidence_lane": "manykee_read",
+  "metadata": {
+    "generator": "ManyKee synthetic KeePassXC XML import source",
+    "database_name": "keepassxc-attachments",
+    "database_name_changed": "2026-04-16 02:30:06",
+    "database_description": "Synthetic attachment source imported by KeePassXC CLI 2.7.12.",
+    "database_description_changed": "2026-04-16 02:30:06",
+    "default_username": null,
+    "default_username_changed": "2026-04-16 02:30:06",
+    "maintenance_history_days": 365,
+    "color": null,
+    "master_key_changed": "2026-04-16 02:30:06",
+    "master_key_change_rec": -1,
+    "master_key_change_force": -1,
+    "memory_protection": {
+      "protect_title": false,
+      "protect_username": false,
+      "protect_password": true,
+      "protect_url": false,
+      "protect_notes": false
+    },
+    "recyclebin_enabled": true,
+    "recyclebin_uuid": "00000000-0000-0000-0000-000000000000",
+    "recyclebin_changed": "2026-04-16 02:30:06",
+    "entry_templates_group": "00000000-0000-0000-0000-000000000000",
+    "entry_templates_group_changed": "2026-04-16 02:30:06",
+    "last_selected_group": "00000000-0000-0000-0000-000000000000",
+    "last_top_visible_group": "00000000-0000-0000-0000-000000000000",
+    "history_max_items": 10,
+    "history_max_size": 6291456,
+    "settings_changed": "2026-04-16 02:30:06",
+    "custom_data": {
+      "KPXC_RANDOM_SLUG": {
+        "kind": "string",
+        "value": "f002e6d42e3779f3de7a033b74527fc869843830ff2f610e83e475954dca3badb626024c5b7d8ba59bdc5376640b9ed3bc6efba7c6d1174a961420721d6d7f613c55192ac5934d591a450d7c0c363ef4f803fb7a558260a98a777cac1001a245e567b4d64f6365637894d7acd52991470f6aad5985e3a8433c8c400a695c65402840e9aaa8c2c0b5cf70621b058b76c48cfe82daf3c5555cf96cba17312ee6575ca9c273f18298130142f2591e39597c50525ff7a86045acb76d0c39cd0d9229e9bfeb2142e9e10e89c4d55abbf141e40338848b8826a3c2be051ca794ad8aac995d50a9c1b26657e0503dedf441d7cec09581c5629461148a805a1e4d5e68f9aad6f21ed0538bb4d9dd7b056801352ce438721728ecac05277e1f10ecd4d6e7f16c3572a5d69a40ef632e73b07e070eb9817d06340c149ac5e947d2c34d316f4e87d88217cb88af0e5824d9aab2dc3bc0fc08163e2a621f7cbced35bac2080cc45006459f71770407a3225455eb86806ea6fe879df4efb556c5ee18a44fc86b93c1c42ecf9ed11924a2cf008a3c1e835b10c3961c77c4df67047557d9",
+        "protected": false,
+        "size": 826,
+        "sha256": null,
+        "last_modification_time": null
+      },
+      "_LAST_MODIFIED": {
+        "kind": "string",
+        "value": "Thu Apr 16 02:30:06 2026 GMT",
+        "protected": false,
+        "size": 28,
+        "sha256": null,
+        "last_modification_time": null
+      }
+    },
+    "unknown_xml": []
+  },
+  "root_group": {
+    "uuid": "00000000-0000-0000-0000-000000000040",
+    "name": "Root",
+    "path": "/Root",
+    "order": [
+      0
+    ],
+    "notes": null,
+    "icon_id": 48,
+    "custom_icon_uuid": null,
+    "tags": null,
+    "times": {
+      "creation": "2026-04-16 00:00:00",
+      "last_modification": "2026-04-16 00:00:00",
+      "last_access": "2026-04-16 00:00:00",
+      "expiry": "2026-04-16 00:00:00",
+      "location_changed": "2026-04-16 00:00:00",
+      "expires": false,
+      "usage_count": 0
+    },
+    "custom_data": {},
+    "unknown_xml": [],
+    "entries": [],
+    "children": [
+      {
+        "uuid": "00000000-0000-0000-0000-000000000041",
+        "name": "Attachments",
+        "path": "/Root/Attachments",
+        "order": [
+          0,
+          0
+        ],
+        "notes": null,
+        "icon_id": 48,
+        "custom_icon_uuid": null,
+        "tags": null,
+        "times": {
+          "creation": "2026-04-16 00:00:00",
+          "last_modification": "2026-04-16 00:00:00",
+          "last_access": "2026-04-16 00:00:00",
+          "expiry": "2026-04-16 00:00:00",
+          "location_changed": "2026-04-16 00:00:00",
+          "expires": false,
+          "usage_count": 0
+        },
+        "custom_data": {
+          "_LAST_MODIFIED": {
+            "kind": "string",
+            "value": "Thu Apr 16 02:30:06 2026 GMT",
+            "protected": false,
+            "size": 28,
+            "sha256": null,
+            "last_modification_time": null
+          },
+          "manykee-attachments-kdbx4-marker": {
+            "kind": "string",
+            "value": "present",
+            "protected": false,
+            "size": 7,
+            "sha256": null,
+            "last_modification_time": null
+          }
+        },
+        "unknown_xml": [],
+        "entries": [
+          {
+            "uuid": "00000000-0000-0000-0000-000000000042",
+            "title": "AttachmentEntry",
+            "path": "/Root/Attachments/AttachmentEntry",
+            "order": 0
+          }
+        ],
+        "children": []
+      }
+    ]
+  },
+  "groups": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000040",
+      "name": "Root",
+      "path": "/Root",
+      "order": [
+        0
+      ],
+      "notes": null,
+      "icon_id": 48,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-04-16 00:00:00",
+        "last_modification": "2026-04-16 00:00:00",
+        "last_access": "2026-04-16 00:00:00",
+        "expiry": "2026-04-16 00:00:00",
+        "location_changed": "2026-04-16 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [],
+      "children": [
+        {
+          "uuid": "00000000-0000-0000-0000-000000000041",
+          "name": "Attachments",
+          "path": "/Root/Attachments",
+          "order": [
+            0,
+            0
+          ],
+          "notes": null,
+          "icon_id": 48,
+          "custom_icon_uuid": null,
+          "tags": null,
+          "times": {
+            "creation": "2026-04-16 00:00:00",
+            "last_modification": "2026-04-16 00:00:00",
+            "last_access": "2026-04-16 00:00:00",
+            "expiry": "2026-04-16 00:00:00",
+            "location_changed": "2026-04-16 00:00:00",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {
+            "_LAST_MODIFIED": {
+              "kind": "string",
+              "value": "Thu Apr 16 02:30:06 2026 GMT",
+              "protected": false,
+              "size": 28,
+              "sha256": null,
+              "last_modification_time": null
+            },
+            "manykee-attachments-kdbx4-marker": {
+              "kind": "string",
+              "value": "present",
+              "protected": false,
+              "size": 7,
+              "sha256": null,
+              "last_modification_time": null
+            }
+          },
+          "unknown_xml": [],
+          "entries": [
+            {
+              "uuid": "00000000-0000-0000-0000-000000000042",
+              "title": "AttachmentEntry",
+              "path": "/Root/Attachments/AttachmentEntry",
+              "order": 0
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000041",
+      "name": "Attachments",
+      "path": "/Root/Attachments",
+      "order": [
+        0,
+        0
+      ],
+      "notes": null,
+      "icon_id": 48,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-04-16 00:00:00",
+        "last_modification": "2026-04-16 00:00:00",
+        "last_access": "2026-04-16 00:00:00",
+        "expiry": "2026-04-16 00:00:00",
+        "location_changed": "2026-04-16 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {
+        "_LAST_MODIFIED": {
+          "kind": "string",
+          "value": "Thu Apr 16 02:30:06 2026 GMT",
+          "protected": false,
+          "size": 28,
+          "sha256": null,
+          "last_modification_time": null
+        },
+        "manykee-attachments-kdbx4-marker": {
+          "kind": "string",
+          "value": "present",
+          "protected": false,
+          "size": 7,
+          "sha256": null,
+          "last_modification_time": null
+        }
+      },
+      "unknown_xml": [],
+      "entries": [
+        {
+          "uuid": "00000000-0000-0000-0000-000000000042",
+          "title": "AttachmentEntry",
+          "path": "/Root/Attachments/AttachmentEntry",
+          "order": 0
+        }
+      ],
+      "children": []
+    }
+  ],
+  "entries": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000042",
+      "title": "AttachmentEntry",
+      "path": "/Root/Attachments/AttachmentEntry",
+      "parent_group_uuid": "00000000-0000-0000-0000-000000000041",
+      "parent_group_path": "/Root/Attachments",
+      "order": [
+        0,
+        0,
+        0
+      ],
+      "fields": {
+        "Notes": {
+          "value": "Synthetic entry containing text and binary attachments.",
+          "protected": false,
+          "standard": true
+        },
+        "Password": {
+          "value": "manykee-entry-password",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "AttachmentEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "attachment-user",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-04-16 00:00:00",
+        "last_modification": "2026-04-16 02:30:06",
+        "last_access": "2026-04-16 02:30:06",
+        "expiry": "2026-04-16 00:00:00",
+        "location_changed": "2026-04-16 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [
+        {
+          "name": "sample.bin",
+          "protected": true,
+          "size": 14,
+          "sha256": "b5bd73bbfbab7fbc19cc4417d3a175c232909005150ff9bd24b58298978fbc9e"
+        },
+        {
+          "name": "sample.txt",
+          "protected": true,
+          "size": 81,
+          "sha256": "7339c5e4f739a34176b613641d84a6b550aae291524b0eab2677550040d8f165"
+        }
+      ],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": null,
+        "data_transfer_obfuscation": false,
+        "associations": []
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": [
+        {
+          "uuid": "00000000-0000-0000-0000-000000000042",
+          "title": "AttachmentEntry",
+          "fields": {
+            "Notes": {
+              "value": "Synthetic entry containing text and binary attachments.",
+              "protected": false,
+              "standard": true
+            },
+            "Password": {
+              "value": "manykee-entry-password",
+              "protected": true,
+              "standard": true
+            },
+            "Title": {
+              "value": "AttachmentEntry",
+              "protected": false,
+              "standard": true
+            },
+            "UserName": {
+              "value": "attachment-user",
+              "protected": false,
+              "standard": true
+            }
+          },
+          "tags": [],
+          "times": {
+            "creation": "2026-04-16 00:00:00",
+            "last_modification": "2026-04-16 00:00:00",
+            "last_access": "2026-04-16 00:00:00",
+            "expiry": "2026-04-16 00:00:00",
+            "location_changed": "2026-04-16 00:00:00",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "attachments": [],
+          "autotype": {
+            "enabled": true,
+            "default_sequence": null,
+            "data_transfer_obfuscation": false,
+            "associations": []
+          },
+          "custom_icon": null,
+          "unknown_xml": []
+        },
+        {
+          "uuid": "00000000-0000-0000-0000-000000000042",
+          "title": "AttachmentEntry",
+          "fields": {
+            "Notes": {
+              "value": "Synthetic entry containing text and binary attachments.",
+              "protected": false,
+              "standard": true
+            },
+            "Password": {
+              "value": "manykee-entry-password",
+              "protected": true,
+              "standard": true
+            },
+            "Title": {
+              "value": "AttachmentEntry",
+              "protected": false,
+              "standard": true
+            },
+            "UserName": {
+              "value": "attachment-user",
+              "protected": false,
+              "standard": true
+            }
+          },
+          "tags": [],
+          "times": {
+            "creation": "2026-04-16 00:00:00",
+            "last_modification": "2026-04-16 02:30:06",
+            "last_access": "2026-04-16 02:30:06",
+            "expiry": "2026-04-16 00:00:00",
+            "location_changed": "2026-04-16 00:00:00",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "attachments": [
+            {
+              "name": "sample.txt",
+              "protected": true,
+              "size": 81,
+              "sha256": "7339c5e4f739a34176b613641d84a6b550aae291524b0eab2677550040d8f165"
+            }
+          ],
+          "autotype": {
+            "enabled": true,
+            "default_sequence": null,
+            "data_transfer_obfuscation": false,
+            "associations": []
+          },
+          "custom_icon": null,
+          "unknown_xml": []
+        }
+      ]
+    }
+  ],
+  "deleted_objects": {},
+  "unsupported": {
+    "unknown_xml_direct_test_construction": "The XmlNode type is not publicly nameable by keepassxc integration tests; fixture parsing can still expose stored unknown XML.",
+    "unknown_xml_outer_attributes": "Current keepass-rs XmlNode preserves element name and inner XML, but not outer element attributes.",
+    "unreferenced_custom_icon_pool": "The current decrypted model exposes group/entry custom icon UUIDs and entry custom icon bytes, but not a database-wide unreferenced custom icon pool."
+  },
+  "not_observed": {
+    "public_custom_data": "DatabaseConfig public custom data details are not exposed through the current keepassxc maintainer API."
+  }
+}

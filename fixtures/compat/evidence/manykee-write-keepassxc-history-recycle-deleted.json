@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-write-keepassxc-history-recycle-deleted",
+  "fixture_id": "keepassxc-history-recycle-deleted",
+  "lane": "many_kee_write",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "supported",
+  "snapshot_path": "fixtures/compat/snapshots/keepassxc-history-recycle-deleted-manykee-write.semantic.json",
+  "snapshot_sha256": "5c2f672763c306273af63bfe975ccdd2ba0df8cbbad3da5aa8b5fa644a74602f",
+  "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-history-recycle-deleted.json",
+  "claims": [
+    {
+      "feature_id": "history",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-history-recycle-deleted.json"
+    },
+    {
+      "feature_id": "deleted_objects",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-history-recycle-deleted.json"
+    },
+    {
+      "feature_id": "group_tree",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-history-recycle-deleted.json"
+    },
+    {
+      "feature_id": "standard_fields",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-history-recycle-deleted.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "ManyKee write evidence is lane-separated from KeePassXC source evidence.",
+    "Snapshot hash is SHA-256 over this recorder's semantic JSON output.",
+    "ManyKee saved the fixture to a temporary KDBX and reopened it successfully."
+  ]
+}

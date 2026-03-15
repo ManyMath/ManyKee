@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "evidence_id": "manykee-write-keepassxc-keyfile-basic",
+  "fixture_id": "keepassxc-keyfile-basic",
+  "lane": "many_kee_write",
+  "tool_name": "manykee",
+  "tool_version": "0.1.0",
+  "status": "supported",
+  "snapshot_path": "fixtures/compat/snapshots/keepassxc-keyfile-basic-manykee-write.semantic.json",
+  "snapshot_sha256": "3e392f7e4774878b1472e2f901ae752d40fb5fe4630daa291ac405b6a36a5a2d",
+  "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-keyfile-basic.json",
+  "claims": [
+    {
+      "feature_id": "credential_key_file_only",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-keyfile-basic.json"
+    },
+    {
+      "feature_id": "cipher_aes256",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-keyfile-basic.json"
+    },
+    {
+      "feature_id": "kdf_aes",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-keyfile-basic.json"
+    },
+    {
+      "feature_id": "metadata",
+      "status": "supported",
+      "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-keyfile-basic.json"
+    }
+  ],
+  "known_gaps": [],
+  "non_goals": [
+    "byte_identical_output"
+  ],
+  "notes": [
+    "ManyKee write evidence is lane-separated from KeePassXC source evidence.",
+    "Snapshot hash is SHA-256 over this recorder's semantic JSON output.",
+    "ManyKee saved the fixture to a temporary KDBX and reopened it successfully."
+  ]
+}

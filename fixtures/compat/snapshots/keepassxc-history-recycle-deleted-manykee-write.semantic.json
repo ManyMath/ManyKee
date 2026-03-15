@@ -1,0 +1,315 @@
+{
+  "schema_version": 1,
+  "source_fixture_id": "keepassxc-history-recycle-deleted",
+  "evidence_lane": "manykee_write",
+  "metadata": {
+    "generator": "KeePassXC",
+    "database_name": null,
+    "database_name_changed": "2026-04-15 21:34:34",
+    "database_description": null,
+    "database_description_changed": "2026-04-15 21:34:34",
+    "default_username": null,
+    "default_username_changed": "2026-04-15 21:34:34",
+    "maintenance_history_days": 365,
+    "color": null,
+    "master_key_changed": "2026-04-15 21:34:34",
+    "master_key_change_rec": -1,
+    "master_key_change_force": -1,
+    "memory_protection": {
+      "protect_title": false,
+      "protect_username": false,
+      "protect_password": true,
+      "protect_url": false,
+      "protect_notes": false
+    },
+    "recyclebin_enabled": true,
+    "recyclebin_uuid": "ff7034a9-cfd5-4151-96ec-6cbf1e222f2c",
+    "recyclebin_changed": "2026-04-15 21:34:34",
+    "entry_templates_group": "00000000-0000-0000-0000-000000000000",
+    "entry_templates_group_changed": "2026-04-15 21:34:34",
+    "last_selected_group": "00000000-0000-0000-0000-000000000000",
+    "last_top_visible_group": "00000000-0000-0000-0000-000000000000",
+    "history_max_items": 10,
+    "history_max_size": 6291456,
+    "settings_changed": "2026-04-15 21:34:34",
+    "custom_data": {
+      "KPXC_RANDOM_SLUG": {
+        "kind": "binary",
+        "value": null,
+        "protected": false,
+        "size": 576,
+        "sha256": "9107a07e6a82b7559f884bba32b59ac5b1bd673420e9dcdd91206ec355d21ba1",
+        "last_modification_time": null
+      },
+      "_LAST_MODIFIED": {
+        "kind": "string",
+        "value": "Wed Apr 15 21:34:34 2026 GMT",
+        "protected": false,
+        "size": 28,
+        "sha256": null,
+        "last_modification_time": null
+      }
+    },
+    "unknown_xml": []
+  },
+  "root_group": {
+    "uuid": "03b84340-c1ff-4861-8dc1-62fbedd456d2",
+    "name": "Passwords",
+    "path": "/Passwords",
+    "order": [
+      0
+    ],
+    "notes": null,
+    "icon_id": 48,
+    "custom_icon_uuid": null,
+    "tags": null,
+    "times": {
+      "creation": "2026-04-15 21:34:34",
+      "last_modification": "2026-04-15 21:34:34",
+      "last_access": "2026-04-15 21:34:34",
+      "expiry": "2026-04-15 21:34:34",
+      "location_changed": "2026-04-15 21:34:34",
+      "expires": false,
+      "usage_count": 0
+    },
+    "custom_data": {},
+    "unknown_xml": [],
+    "entries": [
+      {
+        "uuid": "7147efd1-3800-48e0-9ddf-a3ae5d660497",
+        "title": "HistoryEntry",
+        "path": "/Passwords/HistoryEntry",
+        "order": 0
+      }
+    ],
+    "children": [
+      {
+        "uuid": "ff7034a9-cfd5-4151-96ec-6cbf1e222f2c",
+        "name": "Recycle Bin",
+        "path": "/Passwords/Recycle Bin",
+        "order": [
+          0,
+          0
+        ],
+        "notes": null,
+        "icon_id": 43,
+        "custom_icon_uuid": null,
+        "tags": null,
+        "times": {
+          "creation": "2026-04-15 21:34:34",
+          "last_modification": "2026-04-15 21:34:34",
+          "last_access": "2026-04-15 21:34:34",
+          "expiry": "2026-04-15 21:34:34",
+          "location_changed": "2026-04-15 21:34:34",
+          "expires": false,
+          "usage_count": 0
+        },
+        "custom_data": {},
+        "unknown_xml": [],
+        "entries": [],
+        "children": []
+      }
+    ]
+  },
+  "groups": [
+    {
+      "uuid": "03b84340-c1ff-4861-8dc1-62fbedd456d2",
+      "name": "Passwords",
+      "path": "/Passwords",
+      "order": [
+        0
+      ],
+      "notes": null,
+      "icon_id": 48,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-04-15 21:34:34",
+        "last_modification": "2026-04-15 21:34:34",
+        "last_access": "2026-04-15 21:34:34",
+        "expiry": "2026-04-15 21:34:34",
+        "location_changed": "2026-04-15 21:34:34",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [
+        {
+          "uuid": "7147efd1-3800-48e0-9ddf-a3ae5d660497",
+          "title": "HistoryEntry",
+          "path": "/Passwords/HistoryEntry",
+          "order": 0
+        }
+      ],
+      "children": [
+        {
+          "uuid": "ff7034a9-cfd5-4151-96ec-6cbf1e222f2c",
+          "name": "Recycle Bin",
+          "path": "/Passwords/Recycle Bin",
+          "order": [
+            0,
+            0
+          ],
+          "notes": null,
+          "icon_id": 43,
+          "custom_icon_uuid": null,
+          "tags": null,
+          "times": {
+            "creation": "2026-04-15 21:34:34",
+            "last_modification": "2026-04-15 21:34:34",
+            "last_access": "2026-04-15 21:34:34",
+            "expiry": "2026-04-15 21:34:34",
+            "location_changed": "2026-04-15 21:34:34",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "unknown_xml": [],
+          "entries": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "uuid": "ff7034a9-cfd5-4151-96ec-6cbf1e222f2c",
+      "name": "Recycle Bin",
+      "path": "/Passwords/Recycle Bin",
+      "order": [
+        0,
+        0
+      ],
+      "notes": null,
+      "icon_id": 43,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-04-15 21:34:34",
+        "last_modification": "2026-04-15 21:34:34",
+        "last_access": "2026-04-15 21:34:34",
+        "expiry": "2026-04-15 21:34:34",
+        "location_changed": "2026-04-15 21:34:34",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "unknown_xml": [],
+      "entries": [],
+      "children": []
+    }
+  ],
+  "entries": [
+    {
+      "uuid": "7147efd1-3800-48e0-9ddf-a3ae5d660497",
+      "title": "HistoryEntry",
+      "path": "/Passwords/HistoryEntry",
+      "parent_group_uuid": "03b84340-c1ff-4861-8dc1-62fbedd456d2",
+      "parent_group_path": "/Passwords",
+      "order": [
+        0,
+        0
+      ],
+      "fields": {
+        "Notes": {
+          "value": "Edited history note.",
+          "protected": false,
+          "standard": true
+        },
+        "Password": {
+          "value": "manykee-entry-password-edited",
+          "protected": true,
+          "standard": true
+        },
+        "Title": {
+          "value": "HistoryEntry",
+          "protected": false,
+          "standard": true
+        },
+        "UserName": {
+          "value": "history-user-edited",
+          "protected": false,
+          "standard": true
+        }
+      },
+      "tags": [],
+      "times": {
+        "creation": "2026-04-15 21:34:34",
+        "last_modification": "2026-04-15 21:34:34",
+        "last_access": "2026-04-15 21:34:34",
+        "expiry": "2026-04-15 21:34:34",
+        "location_changed": "2026-04-15 21:34:34",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {},
+      "attachments": [],
+      "autotype": {
+        "enabled": true,
+        "default_sequence": null,
+        "data_transfer_obfuscation": false,
+        "associations": []
+      },
+      "custom_icon": null,
+      "unknown_xml": [],
+      "history": [
+        {
+          "uuid": "7147efd1-3800-48e0-9ddf-a3ae5d660497",
+          "title": "HistoryEntry",
+          "fields": {
+            "Notes": {
+              "value": "Initial history note.",
+              "protected": false,
+              "standard": true
+            },
+            "Password": {
+              "value": "manykee-entry-password",
+              "protected": true,
+              "standard": true
+            },
+            "Title": {
+              "value": "HistoryEntry",
+              "protected": false,
+              "standard": true
+            },
+            "UserName": {
+              "value": "history-user",
+              "protected": false,
+              "standard": true
+            }
+          },
+          "tags": [],
+          "times": {
+            "creation": "2026-04-15 21:34:34",
+            "last_modification": "2026-04-15 21:34:34",
+            "last_access": "2026-04-15 21:34:34",
+            "expiry": "2026-04-15 21:34:34",
+            "location_changed": "2026-04-15 21:34:34",
+            "expires": false,
+            "usage_count": 0
+          },
+          "custom_data": {},
+          "attachments": [],
+          "autotype": {
+            "enabled": true,
+            "default_sequence": null,
+            "data_transfer_obfuscation": false,
+            "associations": []
+          },
+          "custom_icon": null,
+          "unknown_xml": []
+        }
+      ]
+    }
+  ],
+  "deleted_objects": {
+    "bef24ec7-046a-4193-b4ad-ff7ac0ba57f4": "2026-04-15 21:34:34"
+  },
+  "unsupported": {
+    "unknown_xml_direct_test_construction": "The XmlNode type is not publicly nameable by keepassxc integration tests; fixture parsing can still expose stored unknown XML.",
+    "unknown_xml_outer_attributes": "Current keepass-rs XmlNode preserves element name and inner XML, but not outer element attributes.",
+    "unreferenced_custom_icon_pool": "The current decrypted model exposes group/entry custom icon UUIDs and entry custom icon bytes, but not a database-wide unreferenced custom icon pool."
+  },
+  "not_observed": {
+    "public_custom_data": "DatabaseConfig public custom data details are not exposed through the current keepassxc maintainer API."
+  }
+}

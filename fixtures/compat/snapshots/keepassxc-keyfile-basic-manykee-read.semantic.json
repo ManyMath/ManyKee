@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "source_fixture_id": "keepassxc-keyfile-basic",
+  "evidence_lane": "manykee_read",
+  "metadata": {
+    "generator": "ManyKee synthetic KeePassXC XML import source",
+    "database_name": "keepassxc-keyfile-basic",
+    "database_name_changed": "2026-04-16 02:11:10",
+    "database_description": "Synthetic keyfile-basic source imported by KeePassXC CLI 2.7.12.",
+    "database_description_changed": "2026-04-16 02:11:10",
+    "default_username": null,
+    "default_username_changed": "2026-04-16 02:11:10",
+    "maintenance_history_days": 365,
+    "color": null,
+    "master_key_changed": "2026-04-16 02:11:10",
+    "master_key_change_rec": -1,
+    "master_key_change_force": -1,
+    "memory_protection": {
+      "protect_title": false,
+      "protect_username": false,
+      "protect_password": true,
+      "protect_url": false,
+      "protect_notes": false
+    },
+    "recyclebin_enabled": true,
+    "recyclebin_uuid": "00000000-0000-0000-0000-000000000000",
+    "recyclebin_changed": "2026-04-16 02:11:10",
+    "entry_templates_group": "00000000-0000-0000-0000-000000000000",
+    "entry_templates_group_changed": "2026-04-16 02:11:10",
+    "last_selected_group": "00000000-0000-0000-0000-000000000000",
+    "last_top_visible_group": "00000000-0000-0000-0000-000000000000",
+    "history_max_items": 10,
+    "history_max_size": 6291456,
+    "settings_changed": "2026-04-16 02:11:10",
+    "custom_data": {
+      "KPXC_RANDOM_SLUG": {
+        "kind": "string",
+        "value": "3d52e25ff9f9d3b038f5b44e016b7395421a7dcc87c240ffb4d3943a32e0efc5db1b89f183d29093d20c21a827b251ef0077c5f5d0a642fcd92132ce14aae4f6e0e783f63489c093dffd5758c83b4c4657df4515cf3f3adb1fe3d982158a9d52931f2fa9d0a6e81df73378ff8d46bb53d0c6c75cbe529475679d8b7e01f7eeb5820e6e9123d7960485c6dab89a37aa4d03d61dd63514a94f7cb604bb003937ba9ffbfeafd0e0ed75c44003adbc268b197baf7f537bfd528bbe3f5cef0dabd7a9eb21e619906cb58f23c152cef3ea44c503b8e009023d32cdfa2e3d9c500fef75e52c31fb08bad7d9d58ac04a0cd0266777e78aed3eff680a1eb9848ada6161a13752fa04cd2d144e09940f36f7340e979fcd16a140d409d04e0d31a181183238e23b33804d59a0e47739d0472ca74913a7f874ff6bc3ac89d698549b27bcfe8cab228c571196d75b4af4c6b86a739f8d01d930",
+        "protected": false,
+        "size": 678,
+        "sha256": null,
+        "last_modification_time": null
+      },
+      "_LAST_MODIFIED": {
+        "kind": "string",
+        "value": "Thu Apr 16 02:11:10 2026 GMT",
+        "protected": false,
+        "size": 28,
+        "sha256": null,
+        "last_modification_time": null
+      }
+    },
+    "unknown_xml": []
+  },
+  "root_group": {
+    "uuid": "00000000-0000-0000-0000-000000000020",
+    "name": "Root",
+    "path": "/Root",
+    "order": [
+      0
+    ],
+    "notes": null,
+    "icon_id": 48,
+    "custom_icon_uuid": null,
+    "tags": null,
+    "times": {
+      "creation": "2026-04-16 00:00:00",
+      "last_modification": "2026-04-16 00:00:00",
+      "last_access": "2026-04-16 00:00:00",
+      "expiry": "2026-04-16 00:00:00",
+      "location_changed": "2026-04-16 00:00:00",
+      "expires": false,
+      "usage_count": 0
+    },
+    "custom_data": {
+      "_LAST_MODIFIED": {
+        "kind": "string",
+        "value": "Thu Apr 16 02:11:10 2026 GMT",
+        "protected": false,
+        "size": 28,
+        "sha256": null,
+        "last_modification_time": null
+      },
+      "manykee-keyfile-kdbx4-marker": {
+        "kind": "string",
+        "value": "present",
+        "protected": false,
+        "size": 7,
+        "sha256": null,
+        "last_modification_time": null
+      }
+    },
+    "unknown_xml": [],
+    "entries": [],
+    "children": []
+  },
+  "groups": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000020",
+      "name": "Root",
+      "path": "/Root",
+      "order": [
+        0
+      ],
+      "notes": null,
+      "icon_id": 48,
+      "custom_icon_uuid": null,
+      "tags": null,
+      "times": {
+        "creation": "2026-04-16 00:00:00",
+        "last_modification": "2026-04-16 00:00:00",
+        "last_access": "2026-04-16 00:00:00",
+        "expiry": "2026-04-16 00:00:00",
+        "location_changed": "2026-04-16 00:00:00",
+        "expires": false,
+        "usage_count": 0
+      },
+      "custom_data": {
+        "_LAST_MODIFIED": {
+          "kind": "string",
+          "value": "Thu Apr 16 02:11:10 2026 GMT",
+          "protected": false,
+          "size": 28,
+          "sha256": null,
+          "last_modification_time": null
+        },
+        "manykee-keyfile-kdbx4-marker": {
+          "kind": "string",
+          "value": "present",
+          "protected": false,
+          "size": 7,
+          "sha256": null,
+          "last_modification_time": null
+        }
+      },
+      "unknown_xml": [],
+      "entries": [],
+      "children": []
+    }
+  ],
+  "entries": [],
+  "deleted_objects": {},
+  "unsupported": {
+    "unknown_xml_direct_test_construction": "The XmlNode type is not publicly nameable by keepassxc integration tests; fixture parsing can still expose stored unknown XML.",
+    "unknown_xml_outer_attributes": "Current keepass-rs XmlNode preserves element name and inner XML, but not outer element attributes.",
+    "unreferenced_custom_icon_pool": "The current decrypted model exposes group/entry custom icon UUIDs and entry custom icon bytes, but not a database-wide unreferenced custom icon pool."
+  },
+  "not_observed": {
+    "public_custom_data": "DatabaseConfig public custom data details are not exposed through the current keepassxc maintainer API."
+  }
+}
