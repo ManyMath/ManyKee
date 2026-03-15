@@ -9,13 +9,18 @@
 //! DATA-08 -- Meta section fields survive round-trip
 //! DATA-10 -- Entry and group UUIDs identical before and after round-trip
 
+mod common;
+
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::fs::File;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::Once;
 
+use common::official_tools::{
+    discover_keepassxc, mode_from_env, run_keepassxc_with_stdin_lines, OfficialTool,
+    RedactedOutput, REQUIRED_KEEPASSXC_VERSION,
+};
 use keepass::config::DatabaseConfig;
 use keepass::db::{
     fields, Attachment, AutoType, AutoTypeAssociation, CustomDataItem, CustomDataValue, Database,
@@ -26,40 +31,71 @@ use keepassxc::EntryExt;
 use tempfile::TempDir;
 use uuid::Uuid;
 
-fn keepassxc_cli_ls(db_path: &Path, password: &str) -> std::process::Output {
-    let mut child = Command::new("keepassxc-cli")
-        .args(["ls", db_path.to_str().unwrap()])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("keepassxc-cli must be installed (apt install keepassxc)");
+#[test]
+fn official_tool_calls_use_shared_helper_policy() {
+    let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/roundtrip.rs");
+    let source = std::fs::read_to_string(source_path).expect("failed to read test source");
+    let direct_command = ["Command::new(", "\"keepassxc-cli\"", ")"].concat();
+    let direct_stdio = ["Stdio", "::", "piped"].concat();
+    let shared_module = ["mod ", "common;"].concat();
+    let shared_runner = ["run_keepassxc", "_with_stdin_lines"].concat();
 
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(format!("{}\n", password).as_bytes())
-        .unwrap();
-    child.wait_with_output().unwrap()
+    assert!(
+        source.contains(&shared_module),
+        "Round-trip tests must import shared test helpers"
+    );
+    assert!(
+        source.contains(&shared_runner),
+        "Round-trip tests must use shared official-tool runner"
+    );
+    assert!(
+        !source.contains(&direct_command),
+        "Round-trip tests must not spawn keepassxc-cli directly"
+    );
+    assert!(
+        !source.contains(&direct_stdio),
+        "Round-trip tests must not manage official-tool stdio directly"
+    );
 }
 
-fn keepassxc_cli_show(db_path: &Path, password: &str, entry: &str) -> std::process::Output {
-    let mut child = Command::new("keepassxc-cli")
-        .args(["show", db_path.to_str().unwrap(), entry])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("keepassxc-cli must be installed");
+fn keepassxc_tool_or_skip() -> Option<OfficialTool> {
+    match discover_keepassxc(mode_from_env()) {
+        Ok(Some(tool)) => {
+            debug_assert_eq!(tool.version, REQUIRED_KEEPASSXC_VERSION);
+            Some(tool)
+        }
+        Ok(None) => {
+            eprintln!(
+                "SKIP: keepassxc-cli 2.7.12 not available; set MANYKEE_REQUIRE_OFFICIAL_TOOLS=1 to fail instead"
+            );
+            None
+        }
+        Err(err) => panic!("{err}"),
+    }
+}
 
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(format!("{}\n", password).as_bytes())
-        .unwrap();
-    child.wait_with_output().unwrap()
+fn keepassxc_cli_ls(db_path: &Path, password: &str) -> Option<RedactedOutput> {
+    let tool = keepassxc_tool_or_skip()?;
+    let args = vec![OsString::from("ls"), db_path.as_os_str().to_os_string()];
+
+    Some(
+        run_keepassxc_with_stdin_lines(&tool, &args, &[password], &[password])
+            .unwrap_or_else(|err| panic!("{err}")),
+    )
+}
+
+fn keepassxc_cli_show(db_path: &Path, password: &str, entry: &str) -> Option<RedactedOutput> {
+    let tool = keepassxc_tool_or_skip()?;
+    let args = vec![
+        OsString::from("show"),
+        db_path.as_os_str().to_os_string(),
+        OsString::from(entry),
+    ];
+
+    Some(
+        run_keepassxc_with_stdin_lines(&tool, &args, &[password], &[password])
+            .unwrap_or_else(|err| panic!("{err}")),
+    )
 }
 
 /// Open a fixture, save to tempfile, reopen. Returns (tmpdir, original_db, saved_db).
@@ -332,12 +368,13 @@ fn create_richcontent_fixture_inner(path: &Path) {
     save_db(&db, path, RICHCONTENT_PASSWORD);
 
     // Verify KeePassXC can open it
-    let output = keepassxc_cli_ls(path, RICHCONTENT_PASSWORD);
-    assert!(
-        output.status.success(),
-        "KeePassXC cannot open the rich content fixture!\nstderr: {}",
-        String::from_utf8_lossy(&output.stderr),
-    );
+    if let Some(output) = keepassxc_cli_ls(path, RICHCONTENT_PASSWORD) {
+        assert!(
+            output.status.success(),
+            "KeePassXC cannot open the rich content fixture!\nstderr: {}",
+            output.stderr,
+        );
+    }
 }
 
 #[test]
@@ -405,13 +442,13 @@ fn test_roundtrip_no_modification() {
 
         // KeePassXC can open the saved file
         let tmp_path = _tmp.path().join("roundtrip.kdbx");
-        let output = keepassxc_cli_ls(&tmp_path, password);
-        assert!(
-            output.status.success(),
-            "KeePassXC cannot open round-tripped {} .\nstderr: {}",
-            name,
-            String::from_utf8_lossy(&output.stderr),
-        );
+        if let Some(output) = keepassxc_cli_ls(&tmp_path, password) {
+            assert!(
+                output.status.success(),
+                "KeePassXC cannot open round-tripped {} .\nstderr: {}",
+                name, output.stderr,
+            );
+        }
     }
 }
 
@@ -715,25 +752,28 @@ fn test_modify_and_keepassxc_open() {
     save_db(&db, &saved_path, password);
 
     // keepassxc-cli ls should succeed
-    let output = keepassxc_cli_ls(&saved_path, password);
+    let Some(output) = keepassxc_cli_ls(&saved_path, password) else {
+        return;
+    };
     assert!(
         output.status.success(),
         "keepassxc-cli cannot open modified database.\nstderr: {}",
-        String::from_utf8_lossy(&output.stderr),
+        output.stderr,
     );
 
     // keepassxc-cli show should find the new entry
-    let show_output = keepassxc_cli_show(&saved_path, password, "ManyKee Added Entry");
-    let stdout = String::from_utf8_lossy(&show_output.stdout);
+    let Some(show_output) = keepassxc_cli_show(&saved_path, password, "ManyKee Added Entry") else {
+        return;
+    };
     assert!(
         show_output.status.success(),
         "keepassxc-cli show failed for added entry.\nstderr: {}",
-        String::from_utf8_lossy(&show_output.stderr),
+        show_output.stderr,
     );
     assert!(
-        stdout.contains("testuser"),
+        show_output.stdout.contains("testuser"),
         "Expected 'testuser' in show output.\nstdout: {}",
-        stdout,
+        show_output.stdout,
     );
 }
 
@@ -798,12 +838,13 @@ fn test_delete_and_keepassxc_open() {
     save_db(&db, &saved_path, password);
 
     // KeePassXC should open without error
-    let output = keepassxc_cli_ls(&saved_path, password);
-    assert!(
-        output.status.success(),
-        "keepassxc-cli cannot open database after delete.\nstderr: {}",
-        String::from_utf8_lossy(&output.stderr),
-    );
+    if let Some(output) = keepassxc_cli_ls(&saved_path, password) {
+        assert!(
+            output.status.success(),
+            "keepassxc-cli cannot open database after delete.\nstderr: {}",
+            output.stderr,
+        );
+    }
 
     // Reopen and verify deleted_objects contains the UUID
     let db_reopened = Database::open(

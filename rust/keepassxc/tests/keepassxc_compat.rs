@@ -5,55 +5,92 @@
 //! open, list, and show entries from them.
 //!
 //! Requirements covered:
-//! — Fresh random MainSeed and EncryptionIV on every save
-//! — Valid HMAC block stream and header HMAC
-//! — Protected values encrypted with inner random stream
+//!: Fresh random MainSeed and EncryptionIV on every save
+//!: Valid HMAC block stream and header HMAC
+//!: Protected values encrypted with inner random stream
 
+mod common;
+
+use std::ffi::OsString;
 use std::fs::File;
-use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
 
+use common::official_tools::{
+    discover_keepassxc, mode_from_env, run_keepassxc_with_stdin_lines, OfficialTool,
+    RedactedOutput, REQUIRED_KEEPASSXC_VERSION,
+};
 use keepass::db::{fields, Database, Entry, Group};
 use keepass::DatabaseKey;
 use tempfile::TempDir;
 
-/// Run `keepassxc-cli ls <db_path>` and return the process output.
-fn keepassxc_cli_ls(db_path: &Path, password: &str) -> std::process::Output {
-    let mut child = Command::new("keepassxc-cli")
-        .args(["ls", db_path.to_str().unwrap()])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("keepassxc-cli must be installed (apt install keepassxc)");
+#[test]
+fn official_tool_calls_use_shared_helper_policy() {
+    let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/keepassxc_compat.rs");
+    let source = std::fs::read_to_string(source_path).expect("failed to read test source");
+    let direct_command = ["Command::new(", "\"keepassxc-cli\"", ")"].concat();
+    let direct_stdio = ["Stdio", "::", "piped"].concat();
+    let shared_module = ["mod ", "common;"].concat();
+    let shared_runner = ["run_keepassxc", "_with_stdin_lines"].concat();
 
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(format!("{}\n", password).as_bytes())
-        .unwrap();
-    child.wait_with_output().unwrap()
+    assert!(
+        source.contains(&shared_module),
+        "KeePassXC compatibility tests must import shared test helpers"
+    );
+    assert!(
+        source.contains(&shared_runner),
+        "KeePassXC compatibility tests must use shared official-tool runner"
+    );
+    assert!(
+        !source.contains(&direct_command),
+        "KeePassXC compatibility tests must not spawn keepassxc-cli directly"
+    );
+    assert!(
+        !source.contains(&direct_stdio),
+        "KeePassXC compatibility tests must not manage official-tool stdio directly"
+    );
 }
 
-/// Run `keepassxc-cli show <db_path> <entry>` and return the process output.
-fn keepassxc_cli_show(db_path: &Path, password: &str, entry: &str) -> std::process::Output {
-    let mut child = Command::new("keepassxc-cli")
-        .args(["show", db_path.to_str().unwrap(), entry])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("keepassxc-cli must be installed");
+fn keepassxc_tool_or_skip() -> Option<OfficialTool> {
+    match discover_keepassxc(mode_from_env()) {
+        Ok(Some(tool)) => {
+            debug_assert_eq!(tool.version, REQUIRED_KEEPASSXC_VERSION);
+            Some(tool)
+        }
+        Ok(None) => {
+            eprintln!(
+                "SKIP: keepassxc-cli 2.7.12 not available; set MANYKEE_REQUIRE_OFFICIAL_TOOLS=1 to fail instead"
+            );
+            None
+        }
+        Err(err) => panic!("{err}"),
+    }
+}
 
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(format!("{}\n", password).as_bytes())
-        .unwrap();
-    child.wait_with_output().unwrap()
+/// Run `keepassxc-cli ls <db_path>` and return redacted process output.
+fn keepassxc_cli_ls(db_path: &Path, password: &str) -> Option<RedactedOutput> {
+    let tool = keepassxc_tool_or_skip()?;
+    let args = vec![OsString::from("ls"), db_path.as_os_str().to_os_string()];
+
+    Some(
+        run_keepassxc_with_stdin_lines(&tool, &args, &[password], &[password])
+            .unwrap_or_else(|err| panic!("{err}")),
+    )
+}
+
+/// Run `keepassxc-cli show <db_path> <entry>` and return redacted process output.
+fn keepassxc_cli_show(db_path: &Path, password: &str, entry: &str) -> Option<RedactedOutput> {
+    let tool = keepassxc_tool_or_skip()?;
+    let args = vec![
+        OsString::from("show"),
+        db_path.as_os_str().to_os_string(),
+        OsString::from(entry),
+    ];
+
+    Some(
+        run_keepassxc_with_stdin_lines(&tool, &args, &[password], &[password])
+            .unwrap_or_else(|err| panic!("{err}")),
+    )
 }
 
 /// Create a simple test database with one group and one entry.
@@ -89,23 +126,23 @@ fn write_db_keepassxc_can_ls() {
     let db = create_test_db();
     save_db(&db, &db_path, password);
 
-    let output = keepassxc_cli_ls(&db_path, password);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let Some(output) = keepassxc_cli_ls(&db_path, password) else {
+        return;
+    };
 
     assert!(
         output.status.success(),
         "keepassxc-cli ls failed (exit={:?}).\nstdout: {}\nstderr: {}",
         output.status.code(),
-        stdout,
-        stderr,
+        output.stdout,
+        output.stderr,
     );
 
     // The listing should contain our group or entry name
     assert!(
-        stdout.contains("TestGroup") || stdout.contains("TestEntry"),
+        output.stdout.contains("TestGroup") || output.stdout.contains("TestEntry"),
         "Expected TestGroup or TestEntry in keepassxc-cli ls output.\nstdout: {}",
-        stdout,
+        output.stdout,
     );
 }
 
@@ -119,22 +156,22 @@ fn write_db_keepassxc_show_entry_fields() {
     let db = create_test_db();
     save_db(&db, &db_path, password);
 
-    let output = keepassxc_cli_show(&db_path, password, "TestGroup/TestEntry");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let Some(output) = keepassxc_cli_show(&db_path, password, "TestGroup/TestEntry") else {
+        return;
+    };
 
     assert!(
         output.status.success(),
         "keepassxc-cli show failed (exit={:?}).\nstdout: {}\nstderr: {}",
         output.status.code(),
-        stdout,
-        stderr,
+        output.stdout,
+        output.stderr,
     );
 
     assert!(
-        stdout.contains("testuser"),
+        output.stdout.contains("testuser"),
         "Expected 'testuser' in keepassxc-cli show output.\nstdout: {}",
-        stdout,
+        output.stdout,
     );
 }
 
@@ -187,11 +224,13 @@ fn roundtrip_preserves_entries() {
     );
 
     // Verify keepassxc-cli can also open the re-saved file
-    let output = keepassxc_cli_ls(&resaved_path, password);
+    let Some(output) = keepassxc_cli_ls(&resaved_path, password) else {
+        return;
+    };
     assert!(
         output.status.success(),
         "keepassxc-cli cannot open re-saved database.\nstderr: {}",
-        String::from_utf8_lossy(&output.stderr),
+        output.stderr,
     );
 }
 
@@ -228,7 +267,7 @@ fn fresh_random_material_per_save() {
 
     assert_ne!(
         bytes1, bytes2,
-        "Two saves of the same database produced identical bytes — \
+        "Two saves of the same database produced identical bytes: \
  MainSeed/IV are not being regenerated ( violation)"
     );
 
@@ -263,11 +302,13 @@ fn chacha20_roundtrip_keepassxc_compat() {
     save_db(&db, &resaved, password);
 
     // keepassxc-cli must accept the re-saved ChaCha20 database
-    let output = keepassxc_cli_ls(&resaved, password);
+    let Some(output) = keepassxc_cli_ls(&resaved, password) else {
+        return;
+    };
     assert!(
         output.status.success(),
         "keepassxc-cli cannot open ChaCha20 re-saved database.\nstderr: {}",
-        String::from_utf8_lossy(&output.stderr),
+        output.stderr,
     );
 
     // Also verify keepass-rs can re-open it

@@ -3,15 +3,22 @@
 //! All fixtures are programmatic -- no external KDBX files needed.
 //! Tests use round-trip (save+reopen) to establish proper timestamps.
 
-use std::io::{Cursor, Write};
-use std::process::{Command, Stdio};
+mod common;
+
+use std::ffi::OsString;
+use std::io::Cursor;
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
+use common::official_tools::{
+    discover_keepassxc, mode_from_env, run_keepassxc_with_stdin_lines, OfficialTool,
+    RedactedOutput, REQUIRED_KEEPASSXC_VERSION,
+};
 use keepass::config::DatabaseConfig;
 use keepass::db::{fields, Database, Entry, Group, Times};
 use keepass::DatabaseKey;
-use keepassxc::merge::merge;
+use keepassxc::merge::{merge, ConflictResolution, MergeWarning};
 use keepassxc::EntryExt;
 use uuid::Uuid;
 
@@ -445,50 +452,269 @@ fn test_merge_result_counts() {
     );
 }
 
-/// Merged output saved to file and opened by KeePassXC CLI without errors.
+/// Same-timestamp conflict: destination wins, MergeResult exposes conflict + warning.
 #[test]
-#[ignore] // Requires keepassxc-cli to be installed
-fn test_merged_output_opens_in_keepassxc() {
+fn test_merge_same_timestamp_tiebreak_destination_wins() {
+    let base = create_base_db();
+    let entry1_uuid = base.root.entries[0].uuid;
+
+    let mut db_a = clone_db(&base);
+    let mut db_b = clone_db(&base);
+
+    // Pick a single shared timestamp for both sides.
+    let shared_timestamp = Times::now();
+
+    // Both sides edit the same entry to different values, at the same timestamp.
+    let entry_a = db_a.root.entry_by_uuid_mut(entry1_uuid).unwrap();
+    entry_a.set_unprotected(fields::TITLE, "Destination Title");
+    entry_a.times.last_modification = Some(shared_timestamp);
+
+    let entry_b = db_b.root.entry_by_uuid_mut(entry1_uuid).unwrap();
+    entry_b.set_unprotected(fields::TITLE, "Source Title");
+    entry_b.times.last_modification = Some(shared_timestamp);
+
+    let result = merge(&mut db_a, &db_b).expect("merge failed");
+
+    let merged_entry = db_a.root.find_entry_by_uuid(entry1_uuid).unwrap();
+    assert_eq!(
+        merged_entry.get(fields::TITLE),
+        Some("Destination Title"),
+        "Destination version must win on same-timestamp tiebreak"
+    );
+
+    // MergeResult must expose the conflict and its resolution.
+    let tiebreak_conflict = result
+        .conflicts
+        .iter()
+        .find(|c| c.resolution == ConflictResolution::SameTimestampSelfWins)
+        .expect("MergeResult.conflicts must include a SameTimestampSelfWins entry");
+    assert_eq!(
+        tiebreak_conflict.node_uuid, entry1_uuid,
+        "Conflict UUID must identify the diverged entry"
+    );
+
+    let has_tiebreak_warning = result
+        .warnings
+        .iter()
+        .any(|w| matches!(w, MergeWarning::SameTimestampTiebreak { node_uuid, .. } if *node_uuid == entry1_uuid));
+    assert!(
+        has_tiebreak_warning,
+        "MergeResult.warnings must include a SameTimestampTiebreak for {entry1_uuid}"
+    );
+}
+
+/// Soft-deleted entry stays in recycle bin (not resurrected) after merging an unchanged source.
+#[test]
+fn test_merge_soft_delete_preserved_across_merge() {
+    let mut base = Database::new(DatabaseConfig::default());
+    base.root.name = "Root".to_string();
+    base.meta.recyclebin_enabled = Some(true);
+
+    let mut entry = Entry::new();
+    entry.set_unprotected(fields::TITLE, "To Be Recycled");
+    let entry_uuid = entry.uuid;
+    base.root.entries.push(entry);
+    let base = round_trip(&base);
+
+    let mut db_a = clone_db(&base);
+    let db_b = clone_db(&base);
+
+    keepassxc::delete_entry(&mut db_a, entry_uuid, true).expect("soft delete failed");
+    let bin_uuid = db_a
+        .meta
+        .recyclebin_uuid
+        .expect("recycle bin must have been created by soft delete");
+
+    // Entry should live in the recycle bin before merge.
+    let bin = db_a
+        .root
+        .groups
+        .iter()
+        .find(|g| g.uuid == bin_uuid)
+        .expect("recycle bin group must exist");
+    assert!(
+        bin.entries.iter().any(|e| e.uuid == entry_uuid),
+        "Soft-deleted entry must be in the recycle bin"
+    );
+    assert!(
+        db_a.deleted_objects.contains_key(&entry_uuid),
+        "Soft delete must record the entry in deleted_objects"
+    );
+
+    merge(&mut db_a, &db_b).expect("merge failed");
+
+    // After merging a source that still has the entry in root, the destination's
+    // recycle-bin placement and deleted_objects tombstone must survive.
+    let bin_after = db_a
+        .root
+        .groups
+        .iter()
+        .find(|g| g.uuid == bin_uuid)
+        .expect("recycle bin group must still exist");
+    assert!(
+        bin_after.entries.iter().any(|e| e.uuid == entry_uuid),
+        "Soft-deleted entry must remain in the recycle bin after merge"
+    );
+    assert!(
+        !db_a.root.entries.iter().any(|e| e.uuid == entry_uuid),
+        "Soft-deleted entry must not be resurrected at the root after merge"
+    );
+    assert!(
+        db_a.deleted_objects.contains_key(&entry_uuid),
+        "deleted_objects tombstone must survive merge"
+    );
+}
+
+/// Source has a newer tombstone for an entry still present in destination:
+/// merge must remove the entry and propagate the tombstone.
+#[test]
+fn test_merge_propagates_source_deletion() {
+    let base = create_base_db();
+    let entry_uuid = base.root.entries[0].uuid;
+
+    let mut db_a = clone_db(&base);
+    let mut db_b = clone_db(&base);
+
+    // Give the source a deletion timestamp strictly newer than the destination
+    // entry's last_modification (round-trip establishes that timestamp in the past).
+    thread::sleep(Duration::from_secs(1));
+    let deletion_time = Times::now();
+    db_b.deleted_objects.insert(entry_uuid, Some(deletion_time));
+
+    let result = merge(&mut db_a, &db_b).expect("merge failed");
+
+    assert!(
+        db_a.root.find_entry_by_uuid(entry_uuid).is_none(),
+        "Entry must be removed when source has a newer deletion tombstone"
+    );
+    assert!(
+        db_a.deleted_objects.contains_key(&entry_uuid),
+        "Destination must adopt the source's deletion tombstone"
+    );
+    assert!(
+        result.entries_deleted >= 1,
+        "MergeResult.entries_deleted must count the propagated deletion, got {}",
+        result.entries_deleted
+    );
+}
+
+/// Merge result survives a full save/reopen cycle through ManyKee.
+#[test]
+fn test_merge_output_round_trips_through_manykee() {
+    let base = create_base_db();
+    let entry1_uuid = base.root.entries[0].uuid;
+
+    let mut db_a = clone_db(&base);
+    let mut db_b = clone_db(&base);
+
+    // Source adds a new entry and updates an existing one.
+    let mut new_entry = Entry::new();
+    new_entry.set_unprotected(fields::TITLE, "Post-Merge Entry");
+    new_entry.set_unprotected(fields::USERNAME, "postmerge");
+    let new_uuid = new_entry.uuid;
+    db_b.root.entries.push(new_entry);
+
+    thread::sleep(Duration::from_secs(1));
+    let entry_b = db_b.root.entry_by_uuid_mut(entry1_uuid).unwrap();
+    set_field_and_commit(entry_b, fields::USERNAME, "source-user");
+
+    merge(&mut db_a, &db_b).expect("merge failed");
+
+    // Save the merged db, reopen it, and confirm both entries survived cleanly.
+    let reopened = round_trip(&db_a);
+    let reopened_new = reopened
+        .root
+        .find_entry_by_uuid(new_uuid)
+        .expect("new entry must survive save/reopen");
+    assert_eq!(
+        reopened_new.get(fields::TITLE),
+        Some("Post-Merge Entry"),
+        "New entry title must survive save/reopen after merge"
+    );
+    let reopened_existing = reopened
+        .root
+        .find_entry_by_uuid(entry1_uuid)
+        .expect("existing entry must survive save/reopen");
+    assert_eq!(
+        reopened_existing.get(fields::USERNAME),
+        Some("source-user"),
+        "Source-side edit must survive save/reopen after merge"
+    );
+
+    // History retention must also survive the save/reopen.
+    let history = reopened_existing
+        .history
+        .as_ref()
+        .expect("history must survive save/reopen");
+    assert!(
+        !history.get_entries().is_empty(),
+        "History must retain at least one prior version after save/reopen"
+    );
+}
+
+/// Merged output opens cleanly through keepassxc-cli when the 2.7.12 tool is
+/// available. Gated on MANYKEE_REQUIRE_OFFICIAL_TOOLS: skips otherwise, matching
+/// the rest of the keepassxc integration test suite.
+#[test]
+fn test_merge_output_opens_in_keepassxc() {
+    let Some(tool) = keepassxc_tool_or_skip() else {
+        return;
+    };
+
     let base = create_base_db();
     let mut db_a = clone_db(&base);
     let mut db_b = clone_db(&base);
 
-    // Add an entry to source
     let mut new_entry = Entry::new();
     new_entry.set_unprotected(fields::TITLE, "Merged Entry");
+    new_entry.set_unprotected(fields::USERNAME, "mergeduser");
     db_b.root.entries.push(new_entry);
 
     merge(&mut db_a, &db_b).expect("merge failed");
 
-    // Save merged result to tempfile
     let dir = tempfile::tempdir().expect("tempdir failed");
     let path = dir.path().join("merged.kdbx");
     let mut file = std::fs::File::create(&path).expect("create failed");
-    let key = make_key();
-    db_a.save(&mut file, key).expect("save failed");
+    db_a.save(&mut file, make_key()).expect("save failed");
     drop(file);
 
-    // Verify with keepassxc-cli
-    let mut child = Command::new("keepassxc-cli")
-        .args(["ls", path.to_str().unwrap()])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("keepassxc-cli must be installed");
-
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(format!("{}\n", TEST_PASSWORD).as_bytes())
-        .unwrap();
-
-    let output = child.wait_with_output().unwrap();
+    let output = keepassxc_cli_ls(&tool, &path, TEST_PASSWORD);
     assert!(
         output.status.success(),
-        "keepassxc-cli failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        "keepassxc-cli ls must succeed on merged output:\nstdout: {}\nstderr: {}",
+        output.stdout,
+        output.stderr
     );
+    assert!(
+        output.stdout.contains("Merged Entry"),
+        "keepassxc-cli ls must surface the merged entry, got:\n{}",
+        output.stdout
+    );
+}
+
+fn keepassxc_tool_or_skip() -> Option<OfficialTool> {
+    match discover_keepassxc(mode_from_env()) {
+        Ok(Some(tool)) => {
+            debug_assert_eq!(tool.version, REQUIRED_KEEPASSXC_VERSION);
+            Some(tool)
+        }
+        Ok(None) => {
+            eprintln!(
+                "SKIP: keepassxc-cli 2.7.12 not available; set MANYKEE_REQUIRE_OFFICIAL_TOOLS=1 to fail instead"
+            );
+            None
+        }
+        Err(err) => panic!("{err}"),
+    }
+}
+
+fn keepassxc_cli_ls(tool: &OfficialTool, db_path: &Path, password: &str) -> RedactedOutput {
+    let args = vec![
+        OsString::from("ls"),
+        OsString::from("-R"),
+        OsString::from("-f"),
+        db_path.as_os_str().to_os_string(),
+    ];
+    run_keepassxc_with_stdin_lines(tool, &args, &[password], &[password])
+        .unwrap_or_else(|err| panic!("{err}"))
 }
