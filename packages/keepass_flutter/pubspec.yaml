@@ -1,8 +1,17 @@
 name: keepass_flutter
-description: Flutter plugin providing KeePass KDBX support via Rust FFI
+description: Flutter plugin for KeePass KDBX databases; bundles a Rust core via cargokit and re-exports package:keepass.
 version: 0.1.0
-publish_to: none
+repository: https://github.com/ManyMath/ManyKee
+homepage: https://github.com/ManyMath/ManyKee/tree/main/packages/keepass_flutter
+issue_tracker: https://github.com/ManyMath/ManyKee/issues
 resolution: workspace
+
+topics:
+  - keepass
+  - kdbx
+  - password
+  - ffi
+  - flutter
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -11,11 +20,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  file_picker: ^10.3.10
-  keepass:
-    path: ../keepass
-  keepass_ui:
-    path: ../keepass_ui
+  keepass: ^0.1.0
 
 dev_dependencies:
   flutter_test:

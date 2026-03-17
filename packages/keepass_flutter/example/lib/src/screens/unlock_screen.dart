@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:keepass_flutter/keepass_flutter.dart';
 import 'package:keepass_ui/keepass_ui.dart' show Spacing;
 
+import '../state/native_vault_state.dart';
+
 /// Native unlock screen with file picker, key file disclosure, and rich errors.
 class NativeUnlockScreen extends StatefulWidget {
   final NativeVaultState vaultState;

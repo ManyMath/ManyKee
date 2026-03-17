@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:keepass_flutter/keepass_flutter.dart';
+import 'package:keepass_flutter_example/src/state/native_vault_state.dart';
 
 void main() {
   test('mutations mark dirty and save clears it after persisting to disk',
