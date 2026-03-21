@@ -88,7 +88,26 @@ impl<'a> Entry {
     /// uncommitted changes.
     ///
     /// Returns whether or not a new history entry was added.
+    ///
+    /// This does not enforce any `HistoryMaxItems` / `HistoryMaxSize` limit;
+    /// use [`Entry::update_history_with_limits`] to honor a database's
+    /// [`Meta`][crate::db::Meta] settings.
     pub fn update_history(&mut self) -> bool {
+        self.update_history_with_limits(None, None)
+    }
+
+    /// Like [`Entry::update_history`], but honors `HistoryMaxItems` /
+    /// `HistoryMaxSize` (see [`Meta::history_max_items`][crate::db::Meta::history_max_items] /
+    /// [`Meta::history_max_size`][crate::db::Meta::history_max_size]).
+    ///
+    /// Following the KeePass convention, a `history_max_items` of `Some(0)`
+    /// disables history tracking: the entry's own state is still committed
+    /// (the last-modification timestamp advances and existing history is
+    /// discarded), but no snapshot is recorded. A negative or `None` limit
+    /// means "unlimited".
+    ///
+    /// Returns whether or not a new history entry was added.
+    pub fn update_history_with_limits(&mut self, history_max_items: Option<isize>, history_max_size: Option<isize>) -> bool {
         if self.history.is_none() {
             self.history = Some(History::default());
         }
@@ -99,14 +118,29 @@ impl<'a> Entry {
 
         self.times.last_modification = Some(Times::now());
 
+        if history_max_items == Some(0) {
+            self.history.as_mut().unwrap().entries.clear();
+            return false;
+        }
+
         let mut new_history_entry = self.clone();
         new_history_entry.history.take().unwrap();
 
-        // TODO should we validate that the history is enabled?
-        // TODO should we validate the maximum size of the history?
-        self.history.as_mut().unwrap().add_entry(new_history_entry);
+        let history = self.history.as_mut().unwrap();
+        history.add_entry(new_history_entry);
+        history.trim(history_max_items, history_max_size);
 
         true
+    }
+
+    /// A rough estimate, in bytes, of the storage this entry occupies: the
+    /// sum of its field values and attachment payloads. This does not match
+    /// the entry's serialized XML size exactly, but tracks its order of
+    /// magnitude closely enough to enforce [`Meta::history_max_size`][crate::db::Meta::history_max_size].
+    pub(crate) fn approximate_size(&self) -> u64 {
+        let fields_size: u64 = self.fields.values().map(|v| v.get().len() as u64).sum();
+        let attachments_size: u64 = self.attachments.values().map(|a| a.data.get().len() as u64).sum();
+        fields_size + attachments_size
     }
 
     /// Determines if the entry was modified since the last
@@ -229,6 +263,47 @@ mod entry_tests {
         );
 
         assert_eq!(entry.get_raw_otp_value(), Some(otp));
+    }
+
+    #[test]
+    fn update_history_with_limits_enforces_max_items() {
+        let mut entry = Entry::new();
+
+        for i in 0..5 {
+            entry.set_unprotected(fields::TITLE, format!("title {i}"));
+            assert!(entry.update_history_with_limits(Some(2), None));
+        }
+
+        assert_eq!(entry.history.as_ref().unwrap().entries.len(), 2);
+    }
+
+    #[test]
+    fn update_history_with_limits_zero_disables_history() {
+        let mut entry = Entry::new();
+        entry.set_unprotected(fields::TITLE, "first");
+        assert!(entry.update_history());
+        assert_eq!(entry.history.as_ref().unwrap().entries.len(), 1);
+
+        entry.set_unprotected(fields::TITLE, "second");
+        assert!(!entry.update_history_with_limits(Some(0), None));
+        assert!(entry.history.as_ref().unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn update_history_with_limits_enforces_max_size() {
+        let mut entry = Entry::new();
+
+        entry.set_unprotected(fields::TITLE, "a".repeat(100));
+        assert!(entry.update_history_with_limits(None, Some(50)));
+
+        entry.set_unprotected(fields::TITLE, "b".repeat(100));
+        assert!(entry.update_history_with_limits(None, Some(50)));
+
+        // The newest entry alone exceeds the limit, so it is kept on its
+        // own and older entries are dropped.
+        let history = entry.history.as_ref().unwrap();
+        assert_eq!(history.entries.len(), 1);
+        assert_eq!(history.entries[0].get_title().unwrap(), "b".repeat(100));
     }
 
     #[cfg(feature = "serialization")]
