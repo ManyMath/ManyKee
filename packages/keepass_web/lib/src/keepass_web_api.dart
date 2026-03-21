@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:keepass/src/keepass_api.dart';
+import 'package:keepass/keepass.dart';
 
 import 'worker_bridge.dart';
 

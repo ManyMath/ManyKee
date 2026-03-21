@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:keepass_ui/keepass_ui.dart';
 import 'package:keepass_web/keepass_web.dart';
 
+import 'web_file_storage_provider.dart';
+
 /// Web-specific VaultState that uses [KeePassWebApi] (WASM worker).
 class WebVaultState extends VaultState {
   final KeePassWebApi _api = KeePassWebApi();

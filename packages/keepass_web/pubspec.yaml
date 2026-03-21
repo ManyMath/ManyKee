@@ -1,15 +1,23 @@
 name: keepass_web
-description: KeePass KDBX database SDK for web via WASM Worker bridge.
+description: KeePass KDBX SDK for the web; implements package:keepass APIs over a WASM Worker bridge.
 version: 0.1.0
-publish_to: none
+repository: https://github.com/ManyMath/ManyKee
+homepage: https://github.com/ManyMath/ManyKee/tree/main/packages/keepass_web
+issue_tracker: https://github.com/ManyMath/ManyKee/issues
 resolution: workspace
 
+topics:
+  - keepass
+  - kdbx
+  - password
+  - wasm
+  - web
+
 environment:
-  sdk: ">=3.5.0 <4.0.0"
+  sdk: ">=3.6.0 <4.0.0"
 
 dependencies:
-  keepass:
-    path: ../keepass
+  keepass: ^0.1.0
   web: ^1.1.0
 
 dev_dependencies:
