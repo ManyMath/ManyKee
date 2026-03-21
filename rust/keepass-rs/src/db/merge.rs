@@ -418,7 +418,12 @@ impl Database {
 
             new_entry_parent_group.entries.push(new_entry.clone());
 
-            // TODO should we update the time info for the entry?
+            // The entry's times (creation, last modification, location
+            // changed, ...) are carried over unchanged from the source
+            // database: this is the entry's first appearance in the
+            // destination, so the source's own times are the authoritative
+            // record of when it was created/modified/moved. This mirrors
+            // how newly-created groups are handled just below.
             log.events.push(MergeEvent {
                 event_type: MergeEventType::EntryCreated,
                 node_uuid: new_entry.uuid,
