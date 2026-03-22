@@ -178,6 +178,43 @@ fn test_merge_loser_stored_in_history() {
     );
 }
 
+/// If the winning side of a merge itself has uncommitted changes (field
+/// edits made without calling `update_history`), that state must be
+/// captured into history rather than silently dropped once the merged
+/// history replaces it.
+#[test]
+fn test_merge_winner_uncommitted_changes_preserved_in_history() {
+    let base = create_base_db();
+    let entry1_uuid = base.root.entries[0].uuid;
+
+    let mut db_a = clone_db(&base);
+    let db_b = clone_db(&base);
+
+    // db_a will be the merge winner: give it a committed edit so its
+    // last_modification is newer than db_b's, then make a further,
+    // uncommitted edit on top of it.
+    let entry_a = db_a.root.entry_by_uuid_mut(entry1_uuid).unwrap();
+    set_field_and_commit(entry_a, fields::TITLE, "Committed A");
+    entry_a.set_unprotected(fields::USERNAME, "UncommittedA");
+
+    merge(&mut db_a, &db_b).expect("merge failed");
+
+    let merged_entry = db_a.root.find_entry_by_uuid(entry1_uuid).unwrap();
+
+    // The live entry keeps the uncommitted edit.
+    assert_eq!(merged_entry.get(fields::USERNAME), Some("UncommittedA"));
+
+    let history = merged_entry.history.as_ref().expect("history should exist");
+    let has_uncommitted_snapshot = history
+        .get_entries()
+        .iter()
+        .any(|e| e.get(fields::TITLE) == Some("Committed A") && e.get(fields::USERNAME) == Some("UncommittedA"));
+    assert!(
+        has_uncommitted_snapshot,
+        "the winner's uncommitted state should have been captured into history, not dropped"
+    );
+}
+
 /// Deleted entry (in DeletedObjects) does not reappear after merge.
 #[test]
 fn test_merge_deleted_entry_stays_deleted() {

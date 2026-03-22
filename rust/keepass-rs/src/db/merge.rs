@@ -786,6 +786,39 @@ impl Entry {
         };
         let mut response = self.clone();
 
+        // `self` is whichever side of the merge is authoritative for this
+        // entry (see the caller, `Entry::merge`): its live field values
+        // become `response`. If it has changes that were never committed to
+        // its own history, that snapshot would otherwise be lost once its
+        // history is replaced by the merged one below, so stash it just
+        // like we already do for `other`. Unlike `other`'s stash (which
+        // lands in `source_history` and is merely warned about on a
+        // timestamp collision), a collision on this side would land twice
+        // in `destination_history` and hard-error in `merge_with` below, so
+        // the snapshot is committed with a timestamp guaranteed to be
+        // strictly newer than the existing top of history, rather than
+        // reusing `response`'s stale `last_modification` (which is prone to
+        // colliding with it) or the current wall-clock time alone (which,
+        // at KDBX's one-second resolution, could still collide if the last
+        // real commit happened within the same second).
+        if self.has_uncommitted_changes() {
+            log.warnings.push(format!(
+                "Entry {} from destination database has uncommitted changes.",
+                self.uuid
+            ));
+            let previous_latest = destination_history.entries.first().and_then(|e| e.times.last_modification);
+            let mut commit_time = Times::now();
+            if let Some(previous_latest) = previous_latest {
+                if commit_time <= previous_latest {
+                    commit_time = previous_latest + chrono::Duration::seconds(1);
+                }
+            }
+            let mut committed_snapshot = response.clone();
+            committed_snapshot.times.last_modification = Some(commit_time);
+            response.times.last_modification = Some(commit_time);
+            destination_history.add_entry(committed_snapshot);
+        }
+
         if other.has_uncommitted_changes() {
             log.warnings.push(format!(
                 "Entry {} from source database has uncommitted changes.",
@@ -793,9 +826,6 @@ impl Entry {
             ));
             source_history.add_entry(other.clone());
         }
-
-        // TODO we should probably check for uncommitted changes in the destination
-        // database here too for consistency.
 
         let history_merge_log = destination_history.merge_with(&source_history)?;
         response.history = Some(destination_history);
