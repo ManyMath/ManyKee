@@ -872,7 +872,11 @@ impl History {
             }
 
             let entry_modification_time = entry.times.last_modification.unwrap();
-            // FIXME should we also handle equal modification times??
+            // Equal consecutive timestamps are intentionally treated as
+            // still ordered (this checks for a non-increasing/descending
+            // sequence, not a strictly decreasing one): KDBX timestamps are
+            // second-precision, so two edits within the same second are
+            // indistinguishable and legitimately share a modification time.
             if last_modification_time.unwrap() < entry_modification_time {
                 return false;
             }
