@@ -1707,9 +1707,10 @@ mod merge_tests {
 
         thread::sleep(time::Duration::from_secs(1));
         new_entry.times.location_changed = Some(Times::now());
-        // FIXME we should not have to update the history here. We should
-        // have a better compare function in the merge function instead.
-        new_entry.update_history();
+        // update_history() here would be a no-op: has_uncommitted_changes()
+        // ignores `times` when comparing against the last commit made just
+        // above via set_field_and_commit, and only `times.location_changed`
+        // changed since then.
         new_group.entries.push(new_entry.clone());
         source_db.root.groups.push(new_group);
 
