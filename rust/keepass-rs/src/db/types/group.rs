@@ -47,9 +47,12 @@ pub struct Group {
     /// Whether searching is enabled
     pub enable_searching: Option<bool>,
 
-    /// UUID for the last top visible entry
-    // TODO figure out what that is supposed to mean. According to the KeePass sourcecode, it has
-    // something to do with restoring selected items when re-opening a database.
+    /// UUID of the entry that was scrolled to the top of this group's entry
+    /// list, in whichever KeePass-compatible client last edited it. Purely
+    /// UI state (serialized as `<LastTopVisibleEntry>`, the group-level
+    /// counterpart to [`Meta::last_top_visible_group`][crate::db::Meta::last_top_visible_group]
+    /// at the database root) used to restore scroll position when the group
+    /// is reopened; it has no effect on the entries themselves.
     pub last_top_visible_entry: Option<Uuid>,
 
     /// KDBX 4.1: Tags for the group (semicolon-separated string)
