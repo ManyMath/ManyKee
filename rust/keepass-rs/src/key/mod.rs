@@ -21,6 +21,7 @@ fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
 
     let mut key_version: Option<String> = None;
     let mut key_value: Option<String> = None;
+    let mut key_hash: Option<String> = None;
 
     let mut reader = Reader::from_reader(xml);
     let mut buf = Vec::new();
@@ -30,6 +31,14 @@ fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
             Event::Eof => break,
 
             Event::Start(e) => {
+                if tag_stack == ["KeyFile", "Key"] && e.name().as_ref() == b"Data" {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"Hash" {
+                            key_hash = Some(String::from_utf8_lossy(&attr.value).into_owned());
+                        }
+                    }
+                }
+
                 tag_stack.push(String::from_utf8_lossy(e.name().as_ref()).to_string());
             }
 
@@ -60,8 +69,10 @@ fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
     let key_bytes = key_value.as_bytes().to_vec();
 
     if key_version == Some("2.0".to_string()) {
-        // TODO we should also validate the integrity of a v2 keyfile using the hash value
-
+        // XML keyfile v2.0 stores the key as hex in <Data>, optionally with
+        // a `Hash` attribute holding the first 4 bytes (as 8 uppercase hex
+        // characters) of SHA-256(key), so readers can detect a truncated or
+        // otherwise corrupted keyfile.
         let trimmed_key = key_value
             .trim()
             .replace(" ", "")
@@ -69,11 +80,20 @@ fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
             .replace("\t", "")
             .replace("\r", "");
 
-        return if let Ok(key) = hex::decode(&trimmed_key) {
-            Ok(key)
-        } else {
-            Ok(key_bytes)
+        let key = match hex::decode(&trimmed_key) {
+            Ok(key) => key,
+            Err(_) => return Ok(key_bytes),
         };
+
+        if let Some(expected_hash) = key_hash {
+            let actual_hash = calculate_sha256(&[&key]);
+            let actual_hash_prefix = hex::encode_upper(&actual_hash[..4]);
+            if !expected_hash.eq_ignore_ascii_case(&actual_hash_prefix) {
+                return Err(ParseXmlKeyFileError::HashMismatch);
+            }
+        }
+
+        return Ok(key);
     }
 
     // Check if the key is base64-encoded. If yes, return decoded bytes
@@ -89,6 +109,9 @@ pub enum ParseXmlKeyFileError {
     #[error("The XML keyfile is missing a key data element")]
     EmptyKey,
 
+    #[error("The XML keyfile's key data does not match its integrity hash; the file may be corrupted")]
+    HashMismatch,
+
     #[error(transparent)]
     Encoding(#[from] EncodingError),
 
@@ -98,13 +121,18 @@ pub enum ParseXmlKeyFileError {
 
 fn parse_keyfile(buffer: &[u8]) -> Result<KeyElement, DatabaseKeyError> {
     // try to parse the buffer as XML, if successful, use that data instead of full file
-    if let Ok(v) = parse_xml_keyfile(buffer) {
-        Ok(v)
-    } else if buffer.len() == 32 {
-        // legacy binary key format
-        Ok(buffer.to_vec())
-    } else {
-        Ok(calculate_sha256(&[buffer]).as_slice().to_vec())
+    match parse_xml_keyfile(buffer) {
+        Ok(v) => Ok(v),
+        // This was recognized as a v2 XML keyfile, but its key data didn't
+        // match its own integrity hash: it's corrupted, not merely
+        // non-XML, so report it rather than silently falling back to
+        // treating the raw bytes as a different, unrelated key.
+        Err(ParseXmlKeyFileError::HashMismatch) => Err(DatabaseKeyError::InvalidKeyFile),
+        Err(_) if buffer.len() == 32 => {
+            // legacy binary key format
+            Ok(buffer.to_vec())
+        }
+        Err(_) => Ok(calculate_sha256(&[buffer]).as_slice().to_vec()),
     }
 }
 
@@ -326,5 +354,31 @@ mod key_tests {
         .is_err());
 
         Ok(())
+    }
+
+    #[test]
+    fn test_v2_keyfile_hash_mismatch_is_rejected() {
+        // Same as the valid v2 fixture above, but with the last hex digit
+        // of the key data flipped, so it no longer matches `Hash`.
+        let xml_keyfile_v2 = r###"
+ <?xml version="1.0" encoding="utf-8"?>
+ <KeyFile>
+ <Meta>
+ <Version>2.0</Version>
+ </Meta>
+ <Key>
+ <Data Hash="A65F0C2D">
+ 36057B1C 35037FD9 62257893 C0A22403
+ EE3F8FBB 504D9981 08B821CB 00D28F88
+ </Data>
+ </Key>
+ </KeyFile>
+ "###;
+
+        let result = DatabaseKey::new()
+            .with_keyfile(&mut xml_keyfile_v2.trim().as_bytes())
+            .expect("reading the keyfile bytes should succeed")
+            .get_key_elements();
+        assert!(result.is_err(), "a keyfile whose data doesn't match its Hash should be rejected");
     }
 }
