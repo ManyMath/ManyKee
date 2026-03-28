@@ -423,6 +423,35 @@ mod file_read_tests {
     }
 
     #[test]
+    fn open_kdbx3_fuzzing() -> Result<(), DatabaseOpenError> {
+        // Regression test for a panic on truncated/malformed kdbx3 files:
+        // `&payload[0..header.stream_start.len()]` used to index past the
+        // end of the decrypted payload when the file was cut short.
+        use std::io::Read;
+        let path = Path::new("tests/resources/test_db_with_password.kdbx");
+        let file_len = path.metadata()?.len() as usize;
+
+        let mut file_as_vec = Vec::new();
+        File::open(path)?.read_to_end(&mut file_as_vec)?;
+
+        for one_len in 0..=file_len {
+            let current_slice = &file_as_vec[..one_len];
+            let res = Database::parse(current_slice, DatabaseKey::new().with_password("demopass"));
+            match res {
+                Ok(db) => {
+                    assert_eq!(db.root.name, "sample");
+                }
+                Err(_) => {
+                    // we don't care about the error, only that it didn't panic
+                    continue;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn open_kdbx4_fuzzing() -> Result<(), DatabaseOpenError> {
         use std::io::Read;
         let path = Path::new("tests/resources/test_db_few_rounds.kdbx");
