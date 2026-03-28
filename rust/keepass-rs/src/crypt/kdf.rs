@@ -24,7 +24,7 @@ impl Kdf for AesKdf {
         &self,
         composite_key: &GenericArray<u8, U32>,
     ) -> Result<GenericArray<u8, U32>, CryptographyError> {
-        let cipher = Aes256::new(&GenericArray::clone_from_slice(&self.seed));
+        let cipher = Aes256::new_from_slice(&self.seed)?;
         let mut block1 = GenericArray::clone_from_slice(&composite_key[..16]);
         let mut block2 = GenericArray::clone_from_slice(&composite_key[16..]);
         for _ in 0..self.rounds {
@@ -77,5 +77,38 @@ impl Kdf for Argon2Kdf {
         let key = argon2::hash_raw(composite_key, &self.salt, &config)?;
 
         Ok(*GenericArray::from_slice(&key))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aes_kdf_rejects_wrong_length_seed() {
+        // The seed comes straight from the untrusted header's KDF variant
+        // dictionary; it must not panic when its length isn't exactly 32
+        // bytes (AES-256's key size).
+        for len in [0, 16, 31, 33, 64] {
+            let kdf = AesKdf {
+                seed: vec![0u8; len],
+                rounds: 1,
+            };
+            let composite_key = GenericArray::default();
+            assert!(
+                kdf.transform_key(&composite_key).is_err(),
+                "expected error for seed length {len}"
+            );
+        }
+    }
+
+    #[test]
+    fn aes_kdf_accepts_correct_length_seed() {
+        let kdf = AesKdf {
+            seed: vec![0u8; 32],
+            rounds: 1,
+        };
+        let composite_key = GenericArray::default();
+        assert!(kdf.transform_key(&composite_key).is_ok());
     }
 }
