@@ -1,6 +1,7 @@
 use base64::{engine::general_purpose as base64_engine, Engine as _};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize, Serializer};
+use std::convert::TryInto;
 
 /// In KDBX4, timestamps are stored as seconds, Base64 encoded, since 0001-01-01 00:00:00.
 /// This function returns the epoch baseline used by KDBX for date serialization.
@@ -68,10 +69,16 @@ impl<'de> Deserialize<'de> for Timestamp {
                     .decode(t)
                     .map_err(serde::de::Error::custom)?;
 
-                // Cast the decoded base64 Vec into the array expected by i64::from_le_bytes
-                let mut a: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
-                #[allow(clippy::indexing_slicing)] // v is guaranteed to be at least 8 bytes long
-                a.copy_from_slice(&v[0..8]);
+                // A KDBX4 Base64 timestamp is an 8-byte little-endian i64 of
+                // seconds since the epoch baseline. Reject anything else
+                // instead of panicking (too short) or silently truncating
+                // (too long) on a crafted/corrupted file.
+                let a: [u8; 8] = v.as_slice().try_into().map_err(|_| {
+                    serde::de::Error::custom(format!(
+                        "invalid Base64 timestamp: expected 8 bytes, got {}",
+                        v.len()
+                    ))
+                })?;
                 let ndt = get_epoch_baseline() + chrono::Duration::seconds(i64::from_le_bytes(a));
 
                 Ok(Timestamp::new_base64(ndt))
@@ -175,6 +182,22 @@ mod tests {
             TimestampMode::Base64 => (),
             _ => panic!("From<NaiveDateTime> should default to Base64 mode"),
         }
+    }
+
+    #[test]
+    fn test_deserialize_timestamp_base64_too_short_errors() {
+        // 4 bytes decoded, not 8 - must error, not panic.
+        let ts_str = base64_engine::STANDARD.encode([1, 2, 3, 4]);
+        let result: Result<Timestamp, _> = quick_xml::de::from_str(&format!("{}", ts_str));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_deserialize_timestamp_base64_too_long_errors() {
+        // 12 bytes decoded, not 8 - must error instead of silently truncating.
+        let ts_str = base64_engine::STANDARD.encode([1u8; 12]);
+        let result: Result<Timestamp, _> = quick_xml::de::from_str(&format!("{}", ts_str));
+        assert!(result.is_err());
     }
 
     #[test]
