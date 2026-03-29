@@ -97,7 +97,8 @@ mod tests {
             let composite_key = GenericArray::default();
             assert!(
                 kdf.transform_key(&composite_key).is_err(),
-                "expected error for seed length {len}"
+                "expected error for seed length {}",
+                len
             );
         }
     }
