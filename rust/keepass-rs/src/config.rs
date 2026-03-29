@@ -210,6 +210,55 @@ const KDF_VERSION: &str = "V";
 const KDF_SEED: &str = "S";
 const KDF_ROUNDS: &str = "R";
 
+// Upper bounds on KDF cost parameters read from an untrusted header. Opening
+// a file runs the KDF *before* the password/HMAC is checked, so without
+// these an attacker-crafted header can make `Database::open` hang or OOM the
+// process with no valid credentials at all. Values below are chosen to be
+// far beyond any legitimate configuration (which trades off against unlock
+// latency, so real-world values are orders of magnitude smaller) while
+// keeping worst-case cost bounded to seconds and a few GiB on commodity
+// hardware.
+pub(crate) const MAX_AES_KDF_ROUNDS: u64 = 200_000_000;
+pub(crate) const MAX_ARGON2_MEMORY_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+pub(crate) const MAX_ARGON2_ITERATIONS: u64 = 1_000;
+pub(crate) const MAX_ARGON2_PARALLELISM: u32 = 128;
+
+pub(crate) fn validate_aes_kdf_rounds(rounds: u64) -> Result<(), KdfConfigError> {
+    if rounds > MAX_AES_KDF_ROUNDS {
+        return Err(KdfConfigError::KdfParameterOutOfBounds {
+            name: "AES-KDF rounds",
+            value: rounds,
+            max: MAX_AES_KDF_ROUNDS,
+        });
+    }
+    Ok(())
+}
+
+fn validate_argon2_params(memory: u64, iterations: u64, parallelism: u32) -> Result<(), KdfConfigError> {
+    if memory > MAX_ARGON2_MEMORY_BYTES {
+        return Err(KdfConfigError::KdfParameterOutOfBounds {
+            name: "Argon2 memory (bytes)",
+            value: memory,
+            max: MAX_ARGON2_MEMORY_BYTES,
+        });
+    }
+    if iterations > MAX_ARGON2_ITERATIONS {
+        return Err(KdfConfigError::KdfParameterOutOfBounds {
+            name: "Argon2 iterations",
+            value: iterations,
+            max: MAX_ARGON2_ITERATIONS,
+        });
+    }
+    if parallelism > MAX_ARGON2_PARALLELISM {
+        return Err(KdfConfigError::KdfParameterOutOfBounds {
+            name: "Argon2 parallelism",
+            value: parallelism as u64,
+            max: MAX_ARGON2_PARALLELISM as u64,
+        });
+    }
+    Ok(())
+}
+
 /// Choices for Key Derivation Functions (KDFs)
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -368,6 +417,8 @@ impl TryFrom<VariantDictionary> for (KdfConfig, Vec<u8>) {
                 _ => return Err(KdfConfigError::InvalidKDFVersion { version }),
             };
 
+            validate_argon2_params(memory, iterations, parallelism)?;
+
             Ok((
                 KdfConfig::Argon2id {
                     memory,
@@ -390,6 +441,8 @@ impl TryFrom<VariantDictionary> for (KdfConfig, Vec<u8>) {
                 _ => return Err(KdfConfigError::InvalidKDFVersion { version }),
             };
 
+            validate_argon2_params(memory, iterations, parallelism)?;
+
             Ok((
                 KdfConfig::Argon2 {
                     memory,
@@ -402,6 +455,8 @@ impl TryFrom<VariantDictionary> for (KdfConfig, Vec<u8>) {
         } else if uuid == &KDF_AES_KDBX4 || uuid == &KDF_AES_KDBX3 {
             let rounds: u64 = *vd.get(KDF_ROUNDS)?;
             let seed: Vec<u8> = vd.get::<Vec<u8>>(KDF_SEED)?.clone();
+
+            validate_aes_kdf_rounds(rounds)?;
 
             Ok((KdfConfig::Aes { rounds }, seed))
         } else {
@@ -418,6 +473,9 @@ pub enum KdfConfigError {
 
     #[error("Invalid KDF UUID: {:?}", uuid)]
     InvalidKDFUUID { uuid: Vec<u8> },
+
+    #[error("KDF parameter '{name}' out of bounds: {value} exceeds maximum of {max}")]
+    KdfParameterOutOfBounds { name: &'static str, value: u64, max: u64 },
 
     #[error(transparent)]
     VariantDictionary(#[from] VariantDictionaryError),
@@ -466,4 +524,93 @@ pub enum CompressionConfigError {
     /// The identifier for the compression algorithm specified in the database is invalid
     #[error("Invalid compression algorithm: {}", cid)]
     InvalidCompressionSuite { cid: u32 },
+}
+
+#[cfg(test)]
+mod kdf_bounds_tests {
+    use std::collections::HashMap;
+
+    use crate::format::variant_dictionary::VariantDictionaryValue;
+
+    use super::*;
+
+    fn entry(v: impl Into<VariantDictionaryValue>) -> VariantDictionaryValue {
+        v.into()
+    }
+
+    fn argon2id_variant_dictionary(memory: u64, iterations: u64, parallelism: u32) -> VariantDictionary {
+        let mut data = HashMap::new();
+        data.insert(KDF_ID.to_string(), entry(KDF_ARGON2ID.to_vec()));
+        data.insert(KDF_MEMORY.to_string(), entry(memory));
+        data.insert(KDF_SALT.to_string(), entry(vec![0u8; 32]));
+        data.insert(KDF_ITERATIONS.to_string(), entry(iterations));
+        data.insert(KDF_PARALLELISM.to_string(), entry(parallelism));
+        data.insert(KDF_VERSION.to_string(), entry(0x13u32));
+        VariantDictionary { data }
+    }
+
+    fn aes_variant_dictionary(rounds: u64) -> VariantDictionary {
+        let mut data = HashMap::new();
+        data.insert(KDF_ID.to_string(), entry(KDF_AES_KDBX4.to_vec()));
+        data.insert(KDF_ROUNDS.to_string(), entry(rounds));
+        data.insert(KDF_SEED.to_string(), entry(vec![0u8; 32]));
+        VariantDictionary { data }
+    }
+
+    #[test]
+    fn aes_kdf_rejects_excessive_rounds() {
+        let vd = aes_variant_dictionary(MAX_AES_KDF_ROUNDS + 1);
+        assert!(matches!(
+            <(KdfConfig, Vec<u8>)>::try_from(vd),
+            Err(KdfConfigError::KdfParameterOutOfBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn aes_kdf_accepts_max_rounds() {
+        let vd = aes_variant_dictionary(MAX_AES_KDF_ROUNDS);
+        assert!(<(KdfConfig, Vec<u8>)>::try_from(vd).is_ok());
+    }
+
+    #[test]
+    fn aes_kdf_rejects_u64_max_rounds() {
+        let vd = aes_variant_dictionary(u64::MAX);
+        assert!(matches!(
+            <(KdfConfig, Vec<u8>)>::try_from(vd),
+            Err(KdfConfigError::KdfParameterOutOfBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn argon2_rejects_excessive_memory() {
+        let vd = argon2id_variant_dictionary(MAX_ARGON2_MEMORY_BYTES + 1, 1, 1);
+        assert!(matches!(
+            <(KdfConfig, Vec<u8>)>::try_from(vd),
+            Err(KdfConfigError::KdfParameterOutOfBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn argon2_rejects_excessive_iterations() {
+        let vd = argon2id_variant_dictionary(1024, MAX_ARGON2_ITERATIONS + 1, 1);
+        assert!(matches!(
+            <(KdfConfig, Vec<u8>)>::try_from(vd),
+            Err(KdfConfigError::KdfParameterOutOfBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn argon2_rejects_excessive_parallelism() {
+        let vd = argon2id_variant_dictionary(1024, 1, MAX_ARGON2_PARALLELISM + 1);
+        assert!(matches!(
+            <(KdfConfig, Vec<u8>)>::try_from(vd),
+            Err(KdfConfigError::KdfParameterOutOfBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn argon2_accepts_in_bounds_params() {
+        let vd = argon2id_variant_dictionary(1024 * 1024, 2, 4);
+        assert!(<(KdfConfig, Vec<u8>)>::try_from(vd).is_ok());
+    }
 }

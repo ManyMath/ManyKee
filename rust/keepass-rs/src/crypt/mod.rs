@@ -76,4 +76,7 @@ pub enum CryptographyError {
 
     #[error(transparent)]
     Argon2(#[from] argon2::Error),
+
+    #[error("KDF parameter out of range: {0}")]
+    InvalidKdfParameter(&'static str),
 }

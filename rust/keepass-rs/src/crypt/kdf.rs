@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use aes::Aes256;
 use cipher::{
     generic_array::{typenum::U32, GenericArray},
@@ -6,6 +8,7 @@ use cipher::{
 use sha2::{Digest, Sha256};
 
 use super::CryptographyError;
+use crate::config::MAX_ARGON2_MEMORY_BYTES;
 
 pub(crate) trait Kdf {
     fn transform_key(
@@ -62,14 +65,25 @@ impl Kdf for Argon2Kdf {
             argon2::ThreadMode::Parallel
         };
 
+        if self.memory > MAX_ARGON2_MEMORY_BYTES {
+            return Err(CryptographyError::InvalidKdfParameter("Argon2 memory"));
+        }
+        let mem_cost: u32 = (self.memory / 1024)
+            .try_into()
+            .map_err(|_| CryptographyError::InvalidKdfParameter("Argon2 memory"))?;
+        let time_cost: u32 = self
+            .iterations
+            .try_into()
+            .map_err(|_| CryptographyError::InvalidKdfParameter("Argon2 iterations"))?;
+
         let config = argon2::Config {
             thread_mode,
             ad: &[],
             hash_length: 32,
             lanes: self.parallelism,
-            mem_cost: (self.memory / 1024) as u32,
+            mem_cost,
             secret: &[],
-            time_cost: self.iterations as u32,
+            time_cost,
             variant: self.variant,
             version: self.version,
         };
@@ -111,5 +125,36 @@ mod tests {
         };
         let composite_key = GenericArray::default();
         assert!(kdf.transform_key(&composite_key).is_ok());
+    }
+
+    #[test]
+    fn argon2_kdf_rejects_excessive_memory_instead_of_silently_truncating() {
+        // `memory` is bytes from the untrusted header; converting to Argon2's
+        // KiB `mem_cost: u32` must error on overflow rather than silently
+        // wrapping to an arbitrary, much smaller cost.
+        let kdf = Argon2Kdf {
+            memory: u64::MAX,
+            salt: vec![0u8; 32],
+            iterations: 1,
+            parallelism: 1,
+            version: argon2::Version::Version13,
+            variant: argon2::Variant::Argon2id,
+        };
+        let composite_key = GenericArray::default();
+        assert!(kdf.transform_key(&composite_key).is_err());
+    }
+
+    #[test]
+    fn argon2_kdf_rejects_excessive_iterations() {
+        let kdf = Argon2Kdf {
+            memory: 1024 * 1024,
+            salt: vec![0u8; 32],
+            iterations: u64::MAX,
+            parallelism: 1,
+            version: argon2::Version::Version13,
+            variant: argon2::Variant::Argon2id,
+        };
+        let composite_key = GenericArray::default();
+        assert!(kdf.transform_key(&composite_key).is_err());
     }
 }

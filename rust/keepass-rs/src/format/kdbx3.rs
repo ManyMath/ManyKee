@@ -132,6 +132,8 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
     let stream_start = get_or_err(stream_start, "Stream start bytes")?;
     let inner_cipher = get_or_err(inner_cipher, "Inner cipher ID")?;
 
+    crate::config::validate_aes_kdf_rounds(transform_rounds)?;
+
     // KDF type is always AES for KDBX3
     let kdf_config = KdfConfig::Aes {
         rounds: transform_rounds,
@@ -164,6 +166,9 @@ pub enum Kdbx3OuterHeaderError {
 
     #[error(transparent)]
     Compression(#[from] crate::config::CompressionConfigError),
+
+    #[error(transparent)]
+    KdfConfig(#[from] crate::config::KdfConfigError),
 
     #[error("Encountered invalid outer header entry with type {0}")]
     InvalidOuterHeaderEntry(u8),
