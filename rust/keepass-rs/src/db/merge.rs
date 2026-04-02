@@ -909,7 +909,13 @@ impl History {
         }
 
         for history_entry in &other.entries {
-            let modification_time = history_entry.times.last_modification.unwrap();
+            let modification_time = history_entry.times.last_modification.unwrap_or_else(|| {
+                log.warnings.push(format!(
+                    "Source history entry {} did not have a last modification timestamp",
+                    history_entry.uuid
+                ));
+                Times::epoch()
+            });
             let existing_history_entry = new_history_entries.get(&modification_time);
             if let Some(existing_history_entry) = existing_history_entry {
                 if existing_history_entry.has_diverged_from(history_entry) {
@@ -941,7 +947,7 @@ mod merge_tests {
     use std::{thread, time};
     use uuid::{uuid, Uuid};
 
-    use crate::db::{fields, Entry, Group, Times};
+    use crate::db::{fields, Entry, Group, History, Times};
     use crate::Database;
 
     fn get_all_groups(parent: &Group) -> Vec<&Group> {
@@ -2038,5 +2044,20 @@ mod merge_tests {
             modified_group.times.location_changed,
             Some(new_location_changed_timestamp),
         );
+    }
+
+    #[test]
+    fn test_history_merge_with_missing_source_timestamp_does_not_panic() {
+        let mut other_entry = Entry::new();
+        other_entry.uuid = ENTRY1_ID;
+        other_entry.times.last_modification = None;
+        let other_history = History {
+            entries: vec![other_entry],
+        };
+
+        let mut destination = History::default();
+        let merge_log = destination.merge_with(&other_history).unwrap();
+        assert_eq!(merge_log.warnings.len(), 1);
+        assert_eq!(destination.entries.len(), 1);
     }
 }
