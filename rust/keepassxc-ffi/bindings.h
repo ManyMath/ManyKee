@@ -26,6 +26,8 @@
 
 #define KPXC_ERR_PARSE -9
 
+#define KPXC_ERR_PANIC -10
+
  const char *kpxc_last_error(void) ;
 
  void kpxc_string_free(char *ptr) ;

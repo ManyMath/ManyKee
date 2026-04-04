@@ -8,7 +8,7 @@ use keepassxc::{open_bytes, save_atomic, save_bytes, Database, DatabaseKey};
 
 use crate::error::{
     check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error, KPXC_ERR_IO,
-    KPXC_ERR_NULL_PTR, KPXC_OK,
+    KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
 };
 
 /// Opaque handle wrapping a keepassxc Database.
@@ -19,27 +19,29 @@ pub extern "C" fn kpxc_database_open(
     path: *const c_char,
     password: *const c_char,
 ) -> *mut KpxcDatabase {
-    clear_last_error();
-    let path_str = cstr_to_str!(path, std::ptr::null_mut());
-    let password_str = cstr_to_str!(password, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        let path_str = cstr_to_str!(path, std::ptr::null_mut());
+        let password_str = cstr_to_str!(password, std::ptr::null_mut());
 
-    let mut file = match File::open(path_str) {
-        Ok(f) => f,
-        Err(e) => {
-            set_last_error(&format!("Failed to open file: {}", e));
-            return std::ptr::null_mut();
-        }
-    };
+        let mut file = match File::open(path_str) {
+            Ok(f) => f,
+            Err(e) => {
+                set_last_error(&format!("Failed to open file: {}", e));
+                return std::ptr::null_mut();
+            }
+        };
 
-    let key = DatabaseKey::new().with_password(password_str);
-    match Database::open(&mut file, key) {
-        Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
-        Err(e) => {
-            let kpxc_err = keepassxc::KeePassXcError::Open(e);
-            set_error_from_kpxc(&kpxc_err);
-            std::ptr::null_mut()
+        let key = DatabaseKey::new().with_password(password_str);
+        match Database::open(&mut file, key) {
+            Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
+            Err(e) => {
+                let kpxc_err = keepassxc::KeePassXcError::Open(e);
+                set_error_from_kpxc(&kpxc_err);
+                std::ptr::null_mut()
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -48,19 +50,21 @@ pub extern "C" fn kpxc_database_open_bytes(
     len: usize,
     password: *const c_char,
 ) -> *mut KpxcDatabase {
-    clear_last_error();
-    check_null!(bytes, std::ptr::null_mut());
-    let password_str = cstr_to_str!(password, std::ptr::null_mut());
-    let data = unsafe { std::slice::from_raw_parts(bytes, len) };
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(bytes, std::ptr::null_mut());
+        let password_str = cstr_to_str!(password, std::ptr::null_mut());
+        let data = unsafe { std::slice::from_raw_parts(bytes, len) };
 
-    let key = DatabaseKey::new().with_password(password_str);
-    match open_bytes(data, key) {
-        Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
-        Err(e) => {
-            set_error_from_kpxc(&e);
-            std::ptr::null_mut()
+        let key = DatabaseKey::new().with_password(password_str);
+        match open_bytes(data, key) {
+            Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
+            Err(e) => {
+                set_error_from_kpxc(&e);
+                std::ptr::null_mut()
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -69,44 +73,46 @@ pub extern "C" fn kpxc_database_open_with_keyfile(
     password: *const c_char,
     keyfile_path: *const c_char,
 ) -> *mut KpxcDatabase {
-    clear_last_error();
-    let path_str = cstr_to_str!(path, std::ptr::null_mut());
-    let password_str = cstr_to_str!(password, std::ptr::null_mut());
-    let keyfile_str = cstr_to_str!(keyfile_path, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        let path_str = cstr_to_str!(path, std::ptr::null_mut());
+        let password_str = cstr_to_str!(password, std::ptr::null_mut());
+        let keyfile_str = cstr_to_str!(keyfile_path, std::ptr::null_mut());
 
-    let mut file = match File::open(path_str) {
-        Ok(f) => f,
-        Err(e) => {
-            set_last_error(&format!("Failed to open database file: {}", e));
-            return std::ptr::null_mut();
-        }
-    };
+        let mut file = match File::open(path_str) {
+            Ok(f) => f,
+            Err(e) => {
+                set_last_error(&format!("Failed to open database file: {}", e));
+                return std::ptr::null_mut();
+            }
+        };
 
-    let mut keyfile = match File::open(keyfile_str) {
-        Ok(f) => f,
-        Err(e) => {
-            set_last_error(&format!("Failed to open key file: {}", e));
-            return std::ptr::null_mut();
-        }
-    };
+        let mut keyfile = match File::open(keyfile_str) {
+            Ok(f) => f,
+            Err(e) => {
+                set_last_error(&format!("Failed to open key file: {}", e));
+                return std::ptr::null_mut();
+            }
+        };
 
-    let key = DatabaseKey::new().with_password(password_str);
-    let key = match key.with_keyfile(&mut keyfile) {
-        Ok(k) => k,
-        Err(e) => {
-            set_last_error(&format!("Failed to read key file: {}", e));
-            return std::ptr::null_mut();
-        }
-    };
+        let key = DatabaseKey::new().with_password(password_str);
+        let key = match key.with_keyfile(&mut keyfile) {
+            Ok(k) => k,
+            Err(e) => {
+                set_last_error(&format!("Failed to read key file: {}", e));
+                return std::ptr::null_mut();
+            }
+        };
 
-    match Database::open(&mut file, key) {
-        Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
-        Err(e) => {
-            let kpxc_err = keepassxc::KeePassXcError::Open(e);
-            set_error_from_kpxc(&kpxc_err);
-            std::ptr::null_mut()
+        match Database::open(&mut file, key) {
+            Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
+            Err(e) => {
+                let kpxc_err = keepassxc::KeePassXcError::Open(e);
+                set_error_from_kpxc(&kpxc_err);
+                std::ptr::null_mut()
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -117,32 +123,34 @@ pub extern "C" fn kpxc_database_open_bytes_with_keyfile(
     keyfile_bytes: *const u8,
     keyfile_len: usize,
 ) -> *mut KpxcDatabase {
-    clear_last_error();
-    check_null!(bytes, std::ptr::null_mut());
-    check_null!(keyfile_bytes, std::ptr::null_mut());
-    let password_str = cstr_to_str!(password, std::ptr::null_mut());
-    let data = unsafe { std::slice::from_raw_parts(bytes, len) };
-    let kf_data = unsafe { std::slice::from_raw_parts(keyfile_bytes, keyfile_len) };
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(bytes, std::ptr::null_mut());
+        check_null!(keyfile_bytes, std::ptr::null_mut());
+        let password_str = cstr_to_str!(password, std::ptr::null_mut());
+        let data = unsafe { std::slice::from_raw_parts(bytes, len) };
+        let kf_data = unsafe { std::slice::from_raw_parts(keyfile_bytes, keyfile_len) };
 
-    let mut kf_cursor = std::io::Cursor::new(kf_data);
-    let key = match DatabaseKey::new()
-        .with_password(password_str)
-        .with_keyfile(&mut kf_cursor)
-    {
-        Ok(k) => k,
-        Err(e) => {
-            set_last_error(&format!("Failed to read key file: {}", e));
-            return std::ptr::null_mut();
-        }
-    };
+        let mut kf_cursor = std::io::Cursor::new(kf_data);
+        let key = match DatabaseKey::new()
+            .with_password(password_str)
+            .with_keyfile(&mut kf_cursor)
+        {
+            Ok(k) => k,
+            Err(e) => {
+                set_last_error(&format!("Failed to read key file: {}", e));
+                return std::ptr::null_mut();
+            }
+        };
 
-    match open_bytes(data, key) {
-        Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
-        Err(e) => {
-            set_error_from_kpxc(&e);
-            std::ptr::null_mut()
+        match open_bytes(data, key) {
+            Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
+            Err(e) => {
+                set_error_from_kpxc(&e);
+                std::ptr::null_mut()
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -151,18 +159,20 @@ pub extern "C" fn kpxc_database_save(
     path: *const c_char,
     password: *const c_char,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let path_str = cstr_to_str!(path, KPXC_ERR_NULL_PTR);
-    let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let path_str = cstr_to_str!(path, KPXC_ERR_NULL_PTR);
+        let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
 
-    let db = unsafe { &*db };
-    let key = DatabaseKey::new().with_password(password_str);
+        let db = unsafe { &*db };
+        let key = DatabaseKey::new().with_password(password_str);
 
-    match save_atomic(&db.0, Path::new(path_str), key) {
-        Ok(()) => KPXC_OK,
-        Err(e) => set_error_from_kpxc(&e),
-    }
+        match save_atomic(&db.0, Path::new(path_str), key) {
+            Ok(()) => KPXC_OK,
+            Err(e) => set_error_from_kpxc(&e),
+        }
+    })
 }
 
 #[no_mangle]
@@ -172,27 +182,29 @@ pub extern "C" fn kpxc_database_save_bytes(
     out_ptr: *mut *mut u8,
     out_len: *mut usize,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    check_null!(out_ptr, KPXC_ERR_NULL_PTR);
-    check_null!(out_len, KPXC_ERR_NULL_PTR);
-    let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_null!(out_ptr, KPXC_ERR_NULL_PTR);
+        check_null!(out_len, KPXC_ERR_NULL_PTR);
+        let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
 
-    let db = unsafe { &*db };
-    let key = DatabaseKey::new().with_password(password_str);
+        let db = unsafe { &*db };
+        let key = DatabaseKey::new().with_password(password_str);
 
-    match save_bytes(&db.0, key) {
-        Ok(bytes) => {
-            let mut boxed_slice = bytes.into_boxed_slice();
-            unsafe {
-                *out_ptr = boxed_slice.as_mut_ptr();
-                *out_len = boxed_slice.len();
+        match save_bytes(&db.0, key) {
+            Ok(bytes) => {
+                let mut boxed_slice = bytes.into_boxed_slice();
+                unsafe {
+                    *out_ptr = boxed_slice.as_mut_ptr();
+                    *out_len = boxed_slice.len();
+                }
+                std::mem::forget(boxed_slice);
+                KPXC_OK
             }
-            std::mem::forget(boxed_slice);
-            KPXC_OK
+            Err(e) => set_error_from_kpxc(&e),
         }
-        Err(e) => set_error_from_kpxc(&e),
-    }
+    })
 }
 
 #[no_mangle]
@@ -202,36 +214,38 @@ pub extern "C" fn kpxc_database_save_with_keyfile(
     password: *const c_char,
     keyfile_path: *const c_char,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let path_str = cstr_to_str!(path, KPXC_ERR_NULL_PTR);
-    let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
-    let keyfile_str = cstr_to_str!(keyfile_path, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let path_str = cstr_to_str!(path, KPXC_ERR_NULL_PTR);
+        let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
+        let keyfile_str = cstr_to_str!(keyfile_path, KPXC_ERR_NULL_PTR);
 
-    let mut keyfile = match File::open(keyfile_str) {
-        Ok(file) => file,
-        Err(error) => {
-            set_last_error(&format!("Failed to open key file: {}", error));
-            return KPXC_ERR_IO;
+        let mut keyfile = match File::open(keyfile_str) {
+            Ok(file) => file,
+            Err(error) => {
+                set_last_error(&format!("Failed to open key file: {}", error));
+                return KPXC_ERR_IO;
+            }
+        };
+
+        let key = match DatabaseKey::new()
+            .with_password(password_str)
+            .with_keyfile(&mut keyfile)
+        {
+            Ok(key) => key,
+            Err(error) => {
+                set_last_error(&format!("Failed to read key file: {}", error));
+                return KPXC_ERR_IO;
+            }
+        };
+
+        let db = unsafe { &*db };
+        match save_atomic(&db.0, Path::new(path_str), key) {
+            Ok(()) => KPXC_OK,
+            Err(error) => set_error_from_kpxc(&error),
         }
-    };
-
-    let key = match DatabaseKey::new()
-        .with_password(password_str)
-        .with_keyfile(&mut keyfile)
-    {
-        Ok(key) => key,
-        Err(error) => {
-            set_last_error(&format!("Failed to read key file: {}", error));
-            return KPXC_ERR_IO;
-        }
-    };
-
-    let db = unsafe { &*db };
-    match save_atomic(&db.0, Path::new(path_str), key) {
-        Ok(()) => KPXC_OK,
-        Err(error) => set_error_from_kpxc(&error),
-    }
+    })
 }
 
 #[no_mangle]
@@ -243,73 +257,81 @@ pub extern "C" fn kpxc_database_save_bytes_with_keyfile(
     out_ptr: *mut *mut u8,
     out_len: *mut usize,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    check_null!(keyfile_bytes, KPXC_ERR_NULL_PTR);
-    check_null!(out_ptr, KPXC_ERR_NULL_PTR);
-    check_null!(out_len, KPXC_ERR_NULL_PTR);
-    let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_null!(keyfile_bytes, KPXC_ERR_NULL_PTR);
+        check_null!(out_ptr, KPXC_ERR_NULL_PTR);
+        check_null!(out_len, KPXC_ERR_NULL_PTR);
+        let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
 
-    let kf_data = unsafe { std::slice::from_raw_parts(keyfile_bytes, keyfile_len) };
-    let mut kf_cursor = std::io::Cursor::new(kf_data);
+        let kf_data = unsafe { std::slice::from_raw_parts(keyfile_bytes, keyfile_len) };
+        let mut kf_cursor = std::io::Cursor::new(kf_data);
 
-    let key = match DatabaseKey::new()
-        .with_password(password_str)
-        .with_keyfile(&mut kf_cursor)
-    {
-        Ok(key) => key,
-        Err(error) => {
-            set_last_error(&format!("Failed to read key file: {}", error));
-            return KPXC_ERR_IO;
-        }
-    };
-
-    let db = unsafe { &*db };
-    match save_bytes(&db.0, key) {
-        Ok(bytes) => {
-            let mut boxed_slice = bytes.into_boxed_slice();
-            unsafe {
-                *out_ptr = boxed_slice.as_mut_ptr();
-                *out_len = boxed_slice.len();
+        let key = match DatabaseKey::new()
+            .with_password(password_str)
+            .with_keyfile(&mut kf_cursor)
+        {
+            Ok(key) => key,
+            Err(error) => {
+                set_last_error(&format!("Failed to read key file: {}", error));
+                return KPXC_ERR_IO;
             }
-            std::mem::forget(boxed_slice);
-            KPXC_OK
+        };
+
+        let db = unsafe { &*db };
+        match save_bytes(&db.0, key) {
+            Ok(bytes) => {
+                let mut boxed_slice = bytes.into_boxed_slice();
+                unsafe {
+                    *out_ptr = boxed_slice.as_mut_ptr();
+                    *out_len = boxed_slice.len();
+                }
+                std::mem::forget(boxed_slice);
+                KPXC_OK
+            }
+            Err(e) => set_error_from_kpxc(&e),
         }
-        Err(e) => set_error_from_kpxc(&e),
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn kpxc_bytes_free(ptr: *mut u8, len: usize) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(ptr, len));
+    crate::error::catch_unwind((), move || {
+        if !ptr.is_null() {
+            unsafe {
+                let _ = Box::from_raw(std::slice::from_raw_parts_mut(ptr, len));
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn kpxc_database_free(db: *mut KpxcDatabase) {
-    if !db.is_null() {
-        unsafe {
-            drop(Box::from_raw(db));
+    crate::error::catch_unwind((), move || {
+        if !db.is_null() {
+            unsafe {
+                drop(Box::from_raw(db));
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn kpxc_database_root_uuid(db: *mut KpxcDatabase) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let db = unsafe { &*db };
-    let uuid_str = db.0.root.uuid.to_string();
-    match CString::new(uuid_str) {
-        Ok(cs) => cs.into_raw(),
-        Err(_) => {
-            set_last_error("Failed to create UUID string");
-            std::ptr::null_mut()
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let db = unsafe { &*db };
+        let uuid_str = db.0.root.uuid.to_string();
+        match CString::new(uuid_str) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => {
+                set_last_error("Failed to create UUID string");
+                std::ptr::null_mut()
+            }
         }
-    }
+    })
 }
 
 #[cfg(test)]

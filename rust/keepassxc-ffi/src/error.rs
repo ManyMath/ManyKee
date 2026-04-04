@@ -17,6 +17,7 @@ pub const KPXC_ERR_YUBIKEY: c_int = -6;
 pub const KPXC_ERR_NULL_PTR: c_int = -7;
 pub const KPXC_ERR_INVALID_UTF8: c_int = -8;
 pub const KPXC_ERR_PARSE: c_int = -9;
+pub const KPXC_ERR_PANIC: c_int = -10;
 
 thread_local! {
  static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
@@ -59,6 +60,28 @@ pub(crate) fn get_last_error() -> *const c_char {
     })
 }
 
+/// Runs `f` behind `catch_unwind`, so a panic anywhere in the FFI call graph
+/// (including in the `keepass-rs`/`keepassxc` core reached through it)
+/// becomes a `KPXC_ERR_PANIC`-shaped error return instead of unwinding
+/// across the `extern "C"` boundary, which is undefined behavior and in
+/// practice aborts the host process.
+pub(crate) fn catch_unwind<T>(default: T, f: impl FnOnce() -> T + std::panic::UnwindSafe) -> T {
+    match std::panic::catch_unwind(f) {
+        Ok(value) => value,
+        Err(payload) => {
+            let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            set_last_error(&format!("internal panic: {}", msg));
+            default
+        }
+    }
+}
+
 macro_rules! check_null {
     ($ptr:expr, $ret:expr) => {
         if $ptr.is_null() {
@@ -83,3 +106,28 @@ macro_rules! cstr_to_str {
 
 pub(crate) use check_null;
 pub(crate) use cstr_to_str;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn catch_unwind_converts_panic_into_default_and_sets_last_error() {
+        clear_last_error();
+        let result = catch_unwind(KPXC_ERR_PANIC, || -> c_int {
+            panic!("boom: {}", "crafted input");
+        });
+        assert_eq!(result, KPXC_ERR_PANIC);
+
+        let err = get_last_error();
+        assert!(!err.is_null());
+        let msg = unsafe { std::ffi::CStr::from_ptr(err) }.to_str().unwrap();
+        assert!(msg.contains("boom: crafted input"), "message was: {}", msg);
+    }
+
+    #[test]
+    fn catch_unwind_passes_through_ok_value() {
+        let result = catch_unwind(KPXC_ERR_PANIC, || KPXC_OK);
+        assert_eq!(result, KPXC_OK);
+    }
+}

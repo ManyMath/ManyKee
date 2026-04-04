@@ -7,7 +7,7 @@ use keepassxc::{delete_group, move_group, Group, GroupExt};
 use crate::database::KpxcDatabase;
 use crate::error::{
     check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
-    KPXC_ERR_INVALID_UTF8, KPXC_ERR_NOT_FOUND, KPXC_ERR_NULL_PTR, KPXC_OK,
+    KPXC_ERR_INVALID_UTF8, KPXC_ERR_NOT_FOUND, KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
 };
 
 use uuid::Uuid;
@@ -25,29 +25,31 @@ pub extern "C" fn kpxc_group_get_name(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &*db };
-    match db.0.root.find_group_by_uuid(uuid) {
-        Some(group) => match CString::new(group.name.clone()) {
-            Ok(cs) => cs.into_raw(),
-            Err(_) => {
-                set_last_error("Group name contains null byte");
+        let db = unsafe { &*db };
+        match db.0.root.find_group_by_uuid(uuid) {
+            Some(group) => match CString::new(group.name.clone()) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => {
+                    set_last_error("Group name contains null byte");
+                    std::ptr::null_mut()
+                }
+            },
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
                 std::ptr::null_mut()
             }
-        },
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            std::ptr::null_mut()
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -56,27 +58,29 @@ pub extern "C" fn kpxc_group_set_name(
     group_uuid: *const c_char,
     name: *const c_char,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
-    let name_str = cstr_to_str!(name, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
+        let name_str = cstr_to_str!(name, KPXC_ERR_NULL_PTR);
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(code) => return code,
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &mut *db };
-    match db.0.root.find_group_by_uuid_mut(uuid) {
-        Some(group) => {
-            group.name = name_str.to_string();
-            KPXC_OK
+        let db = unsafe { &mut *db };
+        match db.0.root.find_group_by_uuid_mut(uuid) {
+            Some(group) => {
+                group.name = name_str.to_string();
+                KPXC_OK
+            }
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
+                KPXC_ERR_NOT_FOUND
+            }
         }
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            KPXC_ERR_NOT_FOUND
-        }
-    }
+    })
 }
 
 #[no_mangle]
@@ -85,37 +89,39 @@ pub extern "C" fn kpxc_group_get_uuid(
     parent_uuid: *const c_char,
     index: usize,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(parent_uuid, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(parent_uuid, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &*db };
-    let group = match db.0.root.find_group_by_uuid(uuid) {
-        Some(g) => g,
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            return std::ptr::null_mut();
-        }
-    };
+        let db = unsafe { &*db };
+        let group = match db.0.root.find_group_by_uuid(uuid) {
+            Some(g) => g,
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
 
-    match group.groups.get(index) {
-        Some(child) => match CString::new(child.uuid.to_string()) {
-            Ok(cs) => cs.into_raw(),
-            Err(_) => {
-                set_last_error("Failed to create UUID string");
+        match group.groups.get(index) {
+            Some(child) => match CString::new(child.uuid.to_string()) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => {
+                    set_last_error("Failed to create UUID string");
+                    std::ptr::null_mut()
+                }
+            },
+            None => {
+                set_last_error(&format!("Group index {} out of bounds", index));
                 std::ptr::null_mut()
             }
-        },
-        None => {
-            set_last_error(&format!("Group index {} out of bounds", index));
-            std::ptr::null_mut()
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -123,23 +129,25 @@ pub extern "C" fn kpxc_group_entries_count(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(code) => return code,
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &*db };
-    match db.0.root.find_group_by_uuid(uuid) {
-        Some(group) => group.entries.len() as c_int,
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            KPXC_ERR_NOT_FOUND
+        let db = unsafe { &*db };
+        match db.0.root.find_group_by_uuid(uuid) {
+            Some(group) => group.entries.len() as c_int,
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
+                KPXC_ERR_NOT_FOUND
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -147,23 +155,25 @@ pub extern "C" fn kpxc_group_groups_count(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(code) => return code,
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &*db };
-    match db.0.root.find_group_by_uuid(uuid) {
-        Some(group) => group.groups.len() as c_int,
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            KPXC_ERR_NOT_FOUND
+        let db = unsafe { &*db };
+        match db.0.root.find_group_by_uuid(uuid) {
+            Some(group) => group.groups.len() as c_int,
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
+                KPXC_ERR_NOT_FOUND
+            }
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -172,36 +182,38 @@ pub extern "C" fn kpxc_group_create(
     parent_uuid: *const c_char,
     name: *const c_char,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(parent_uuid, std::ptr::null_mut());
-    let name_str = cstr_to_str!(name, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(parent_uuid, std::ptr::null_mut());
+        let name_str = cstr_to_str!(name, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &mut *db };
-    let parent = match db.0.root.find_group_by_uuid_mut(uuid) {
-        Some(g) => g,
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            return std::ptr::null_mut();
+        let db = unsafe { &mut *db };
+        let parent = match db.0.root.find_group_by_uuid_mut(uuid) {
+            Some(g) => g,
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
+
+        let group = Group::new(name_str);
+        let new_uuid = group.uuid;
+        parent.add_group(group);
+
+        match CString::new(new_uuid.to_string()) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => {
+                set_last_error("Failed to create UUID string");
+                std::ptr::null_mut()
+            }
         }
-    };
-
-    let group = Group::new(name_str);
-    let new_uuid = group.uuid;
-    parent.add_group(group);
-
-    match CString::new(new_uuid.to_string()) {
-        Ok(cs) => cs.into_raw(),
-        Err(_) => {
-            set_last_error("Failed to create UUID string");
-            std::ptr::null_mut()
-        }
-    }
+    })
 }
 
 #[no_mangle]
@@ -210,22 +222,24 @@ pub extern "C" fn kpxc_group_delete(
     group_uuid: *const c_char,
     permanent: c_int,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(code) => return code,
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &mut *db };
-    let soft = permanent == 0;
+        let db = unsafe { &mut *db };
+        let soft = permanent == 0;
 
-    match delete_group(&mut db.0, uuid, soft) {
-        Ok(()) => KPXC_OK,
-        Err(e) => set_error_from_kpxc(&e),
-    }
+        match delete_group(&mut db.0, uuid, soft) {
+            Ok(()) => KPXC_OK,
+            Err(e) => set_error_from_kpxc(&e),
+        }
+    })
 }
 
 #[no_mangle]
@@ -239,25 +253,27 @@ pub extern "C" fn kpxc_group_move(
     group_uuid: *const c_char,
     target_parent_uuid: *const c_char,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let group_uuid = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
-    let target_parent_uuid = cstr_to_str!(target_parent_uuid, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let group_uuid = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
+        let target_parent_uuid = cstr_to_str!(target_parent_uuid, KPXC_ERR_NULL_PTR);
 
-    let group_uuid = match parse_uuid(group_uuid) {
-        Ok(uuid) => uuid,
-        Err(code) => return code,
-    };
-    let target_parent_uuid = match parse_uuid(target_parent_uuid) {
-        Ok(uuid) => uuid,
-        Err(code) => return code,
-    };
+        let group_uuid = match parse_uuid(group_uuid) {
+            Ok(uuid) => uuid,
+            Err(code) => return code,
+        };
+        let target_parent_uuid = match parse_uuid(target_parent_uuid) {
+            Ok(uuid) => uuid,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &mut *db };
-    match move_group(&mut db.0.root, group_uuid, target_parent_uuid) {
-        Ok(()) => KPXC_OK,
-        Err(error) => set_error_from_kpxc(&error),
-    }
+        let db = unsafe { &mut *db };
+        match move_group(&mut db.0.root, group_uuid, target_parent_uuid) {
+            Ok(()) => KPXC_OK,
+            Err(error) => set_error_from_kpxc(&error),
+        }
+    })
 }
 
 #[cfg(test)]

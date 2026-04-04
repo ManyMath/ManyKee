@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::database::KpxcDatabase;
 use crate::error::{
     check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
-    KPXC_ERR_INVALID_UTF8, KPXC_ERR_NULL_PTR, KPXC_OK,
+    KPXC_ERR_INVALID_UTF8, KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
 };
 
 /// Parse a UUID string, setting last error on failure.
@@ -40,42 +40,44 @@ pub extern "C" fn kpxc_entry_get_field(
     entry_uuid: *const c_char,
     field_name: *const c_char,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
-    let field_str = cstr_to_str!(field_name, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
+        let field_str = cstr_to_str!(field_name, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &*db };
-    let entry = match db.0.root.find_entry_by_uuid(uuid) {
-        Some(e) => e,
-        None => {
-            set_last_error(&format!("Entry not found: {}", uuid));
-            return std::ptr::null_mut();
-        }
-    };
+        let db = unsafe { &*db };
+        let entry = match db.0.root.find_entry_by_uuid(uuid) {
+            Some(e) => e,
+            None => {
+                set_last_error(&format!("Entry not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
 
-    let payload = read_entry_fields(entry);
-    match field_from_payload(&payload, field_str) {
-        Some(value) => match CString::new(value) {
-            Ok(cs) => cs.into_raw(),
-            Err(_) => {
-                set_last_error("Field value contains null byte");
+        let payload = read_entry_fields(entry);
+        match field_from_payload(&payload, field_str) {
+            Some(value) => match CString::new(value) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => {
+                    set_last_error("Field value contains null byte");
+                    std::ptr::null_mut()
+                }
+            },
+            None => {
+                set_last_error(&format!(
+                    "Field '{}' not found on entry {}",
+                    field_str, uuid
+                ));
                 std::ptr::null_mut()
             }
-        },
-        None => {
-            set_last_error(&format!(
-                "Field '{}' not found on entry {}",
-                field_str, uuid
-            ));
-            std::ptr::null_mut()
         }
-    }
+    })
 }
 
 use keepassxc::serialization::{EntryFields, TotpInfo};
@@ -85,40 +87,42 @@ pub extern "C" fn kpxc_entry_read_fields(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(uuid) => uuid,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &*db };
-    let entry = match db.0.root.find_entry_by_uuid(uuid) {
-        Some(entry) => entry,
-        None => {
-            set_last_error(&format!("Entry not found: {}", uuid));
-            return std::ptr::null_mut();
-        }
-    };
+        let db = unsafe { &*db };
+        let entry = match db.0.root.find_entry_by_uuid(uuid) {
+            Some(entry) => entry,
+            None => {
+                set_last_error(&format!("Entry not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
 
-    let payload = read_entry_fields(entry);
-    let fields = EntryFields::from(payload);
+        let payload = read_entry_fields(entry);
+        let fields = EntryFields::from(payload);
 
-    match serde_json::to_string(&fields) {
-        Ok(json) => match CString::new(json) {
-            Ok(cs) => cs.into_raw(),
-            Err(_) => {
-                set_last_error("JSON contains null byte");
+        match serde_json::to_string(&fields) {
+            Ok(json) => match CString::new(json) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => {
+                    set_last_error("JSON contains null byte");
+                    std::ptr::null_mut()
+                }
+            },
+            Err(e) => {
+                set_last_error(&format!("Failed to serialize fields: {}", e));
                 std::ptr::null_mut()
             }
-        },
-        Err(e) => {
-            set_last_error(&format!("Failed to serialize fields: {}", e));
-            std::ptr::null_mut()
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -126,55 +130,57 @@ pub extern "C" fn kpxc_entry_get_totp(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(uuid) => uuid,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &*db };
-    let entry = match db.0.root.find_entry_by_uuid(uuid) {
-        Some(entry) => entry,
-        None => {
-            set_last_error(&format!("Entry not found: {}", uuid));
-            return std::ptr::null_mut();
+        let db = unsafe { &*db };
+        let entry = match db.0.root.find_entry_by_uuid(uuid) {
+            Some(entry) => entry,
+            None => {
+                set_last_error(&format!("Entry not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
+
+        let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(duration) => duration.as_secs(),
+            Err(error) => {
+                set_last_error(&format!("Failed to determine current time: {}", error));
+                return std::ptr::null_mut();
+            }
+        };
+
+        let payload = match read_entry_totp_at(entry, now) {
+            Ok(payload) => payload,
+            Err(error) => {
+                set_last_error(&format!("Failed to read TOTP payload: {}", error));
+                return std::ptr::null_mut();
+            }
+        };
+
+        let json = match payload {
+            Some(payload) => {
+                let info = TotpInfo::from(payload);
+                serde_json::to_string(&info).unwrap_or_else(|_| "null".to_string())
+            }
+            None => "null".to_string(),
+        };
+
+        match CString::new(json) {
+            Ok(value) => value.into_raw(),
+            Err(_) => {
+                set_last_error("TOTP payload contains null byte");
+                std::ptr::null_mut()
+            }
         }
-    };
-
-    let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration.as_secs(),
-        Err(error) => {
-            set_last_error(&format!("Failed to determine current time: {}", error));
-            return std::ptr::null_mut();
-        }
-    };
-
-    let payload = match read_entry_totp_at(entry, now) {
-        Ok(payload) => payload,
-        Err(error) => {
-            set_last_error(&format!("Failed to read TOTP payload: {}", error));
-            return std::ptr::null_mut();
-        }
-    };
-
-    let json = match payload {
-        Some(payload) => {
-            let info = TotpInfo::from(payload);
-            serde_json::to_string(&info).unwrap_or_else(|_| "null".to_string())
-        }
-        None => "null".to_string(),
-    };
-
-    match CString::new(json) {
-        Ok(value) => value.into_raw(),
-        Err(_) => {
-            set_last_error("TOTP payload contains null byte");
-            std::ptr::null_mut()
-        }
-    }
+    })
 }
 
 #[no_mangle]
@@ -185,30 +191,32 @@ pub extern "C" fn kpxc_entry_set_field(
     value: *const c_char,
     protected: c_int,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let uuid_str = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
-    let field_str = cstr_to_str!(field_name, KPXC_ERR_NULL_PTR);
-    let value_str = cstr_to_str!(value, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let uuid_str = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
+        let field_str = cstr_to_str!(field_name, KPXC_ERR_NULL_PTR);
+        let value_str = cstr_to_str!(value, KPXC_ERR_NULL_PTR);
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(code) => return code,
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &mut *db };
-    let is_protected = protected != 0;
+        let db = unsafe { &mut *db };
+        let is_protected = protected != 0;
 
-    let field_owned = field_str.to_string();
-    let value_owned = value_str.to_string();
+        let field_owned = field_str.to_string();
+        let value_owned = value_str.to_string();
 
-    let meta = db.0.meta.clone();
-    match update_entry(&mut db.0.root, uuid, &meta, |e| {
-        e.set_field(&field_owned, &value_owned, is_protected);
-    }) {
-        Ok(()) => KPXC_OK,
-        Err(e) => set_error_from_kpxc(&e),
-    }
+        let meta = db.0.meta.clone();
+        match update_entry(&mut db.0.root, uuid, &meta, |e| {
+            e.set_field(&field_owned, &value_owned, is_protected);
+        }) {
+            Ok(()) => KPXC_OK,
+            Err(e) => set_error_from_kpxc(&e),
+        }
+    })
 }
 
 #[no_mangle]
@@ -217,37 +225,39 @@ pub extern "C" fn kpxc_entry_get_uuid(
     group_uuid: *const c_char,
     index: usize,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &*db };
-    let group = match db.0.root.find_group_by_uuid(uuid) {
-        Some(g) => g,
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            return std::ptr::null_mut();
-        }
-    };
+        let db = unsafe { &*db };
+        let group = match db.0.root.find_group_by_uuid(uuid) {
+            Some(g) => g,
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
 
-    match group.entries.get(index) {
-        Some(entry) => match CString::new(entry.uuid.to_string()) {
-            Ok(cs) => cs.into_raw(),
-            Err(_) => {
-                set_last_error("Failed to create UUID string");
+        match group.entries.get(index) {
+            Some(entry) => match CString::new(entry.uuid.to_string()) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => {
+                    set_last_error("Failed to create UUID string");
+                    std::ptr::null_mut()
+                }
+            },
+            None => {
+                set_last_error(&format!("Entry index {} out of bounds", index));
                 std::ptr::null_mut()
             }
-        },
-        None => {
-            set_last_error(&format!("Entry index {} out of bounds", index));
-            std::ptr::null_mut()
         }
-    }
+    })
 }
 
 #[no_mangle]
@@ -255,35 +265,37 @@ pub extern "C" fn kpxc_entry_create(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> *mut c_char {
-    clear_last_error();
-    check_null!(db, std::ptr::null_mut());
-    let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_null!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(_) => return std::ptr::null_mut(),
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(_) => return std::ptr::null_mut(),
+        };
 
-    let db = unsafe { &mut *db };
-    let group = match db.0.root.find_group_by_uuid_mut(uuid) {
-        Some(g) => g,
-        None => {
-            set_last_error(&format!("Group not found: {}", uuid));
-            return std::ptr::null_mut();
+        let db = unsafe { &mut *db };
+        let group = match db.0.root.find_group_by_uuid_mut(uuid) {
+            Some(g) => g,
+            None => {
+                set_last_error(&format!("Group not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
+
+        let entry = Entry::new();
+        let new_uuid = entry.uuid;
+        group.add_entry(entry);
+
+        match CString::new(new_uuid.to_string()) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => {
+                set_last_error("Failed to create UUID string");
+                std::ptr::null_mut()
+            }
         }
-    };
-
-    let entry = Entry::new();
-    let new_uuid = entry.uuid;
-    group.add_entry(entry);
-
-    match CString::new(new_uuid.to_string()) {
-        Ok(cs) => cs.into_raw(),
-        Err(_) => {
-            set_last_error("Failed to create UUID string");
-            std::ptr::null_mut()
-        }
-    }
+    })
 }
 
 #[no_mangle]
@@ -292,22 +304,24 @@ pub extern "C" fn kpxc_entry_delete(
     entry_uuid: *const c_char,
     permanent: c_int,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let uuid_str = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let uuid_str = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
 
-    let uuid = match parse_uuid(uuid_str) {
-        Ok(u) => u,
-        Err(code) => return code,
-    };
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(u) => u,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &mut *db };
-    let soft = permanent == 0;
+        let db = unsafe { &mut *db };
+        let soft = permanent == 0;
 
-    match delete_entry(&mut db.0, uuid, soft) {
-        Ok(()) => KPXC_OK,
-        Err(e) => set_error_from_kpxc(&e),
-    }
+        match delete_entry(&mut db.0, uuid, soft) {
+            Ok(()) => KPXC_OK,
+            Err(e) => set_error_from_kpxc(&e),
+        }
+    })
 }
 
 #[no_mangle]
@@ -316,25 +330,27 @@ pub extern "C" fn kpxc_entry_move(
     entry_uuid: *const c_char,
     target_group_uuid: *const c_char,
 ) -> c_int {
-    clear_last_error();
-    check_null!(db, KPXC_ERR_NULL_PTR);
-    let entry_uuid = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
-    let target_group_uuid = cstr_to_str!(target_group_uuid, KPXC_ERR_NULL_PTR);
+    crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
+        clear_last_error();
+        check_null!(db, KPXC_ERR_NULL_PTR);
+        let entry_uuid = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
+        let target_group_uuid = cstr_to_str!(target_group_uuid, KPXC_ERR_NULL_PTR);
 
-    let entry_uuid = match parse_uuid(entry_uuid) {
-        Ok(uuid) => uuid,
-        Err(code) => return code,
-    };
-    let target_group_uuid = match parse_uuid(target_group_uuid) {
-        Ok(uuid) => uuid,
-        Err(code) => return code,
-    };
+        let entry_uuid = match parse_uuid(entry_uuid) {
+            Ok(uuid) => uuid,
+            Err(code) => return code,
+        };
+        let target_group_uuid = match parse_uuid(target_group_uuid) {
+            Ok(uuid) => uuid,
+            Err(code) => return code,
+        };
 
-    let db = unsafe { &mut *db };
-    match move_entry(&mut db.0.root, entry_uuid, target_group_uuid) {
-        Ok(()) => KPXC_OK,
-        Err(error) => set_error_from_kpxc(&error),
-    }
+        let db = unsafe { &mut *db };
+        match move_entry(&mut db.0.root, entry_uuid, target_group_uuid) {
+            Ok(()) => KPXC_OK,
+            Err(error) => set_error_from_kpxc(&error),
+        }
+    })
 }
 
 #[cfg(test)]
