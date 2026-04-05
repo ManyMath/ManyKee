@@ -396,8 +396,8 @@ fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group) {
         let uuid_b64 = base64_engine::STANDARD.encode(group.uuid.as_bytes());
         let s: String = group.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
         if let Some(uuid_pos) = xml.find(&format!("<UUID>{}</UUID>", uuid_b64)) {
-            if let Some(rel_close) = xml[uuid_pos..].find("</Group>") {
-                xml.insert_str(uuid_pos + rel_close, &s);
+            if let Some(close_pos) = find_own_close_tag(xml, uuid_pos, "<Group>", "</Group>") {
+                xml.insert_str(close_pos, &s);
             }
         }
     }
@@ -406,8 +406,8 @@ fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group) {
             let uuid_b64 = base64_engine::STANDARD.encode(entry.uuid.as_bytes());
             let s: String = entry.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
             if let Some(uuid_pos) = xml.find(&format!("<UUID>{}</UUID>", uuid_b64)) {
-                if let Some(rel_close) = xml[uuid_pos..].find("</Entry>") {
-                    xml.insert_str(uuid_pos + rel_close, &s);
+                if let Some(close_pos) = find_own_close_tag(xml, uuid_pos, "<Entry>", "</Entry>") {
+                    xml.insert_str(close_pos, &s);
                 }
             }
         }
@@ -417,9 +417,106 @@ fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group) {
     }
 }
 
+/// Find the `close_tag` that matches the `open_tag` this UUID lives inside,
+/// scanning forward from `from` (a position inside that element, e.g. its
+/// `<UUID>` child) and depth-tracking any same-named nested elements -
+/// child `Group`s under a `Group`, or history-revision `Entry`s under an
+/// `Entry`, so the first same-named close tag isn't mistaken for the
+/// element's own.
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+fn find_own_close_tag(xml: &str, from: usize, open_tag: &str, close_tag: &str) -> Option<usize> {
+    let mut depth = 1i32;
+    let mut pos = from;
+    loop {
+        let next_open = xml[pos..].find(open_tag).map(|i| pos + i);
+        let next_close = xml[pos..].find(close_tag).map(|i| pos + i);
+        match (next_open, next_close) {
+            (Some(open_pos), Some(close_pos)) if open_pos < close_pos => {
+                depth += 1;
+                pos = open_pos + open_tag.len();
+            }
+            (_, Some(close_pos)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(close_pos);
+                }
+                pos = close_pos + close_tag.len();
+            }
+            _ => return None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    #[test]
+    fn test_find_own_close_tag_skips_nested_same_named_elements() {
+        // A subgroup between the parent's UUID and the parent's own </Group>
+        // used to make the naive "first </Group> after the UUID" search
+        // return the subgroup's close tag instead of the parent's.
+        let xml = "<Group><UUID>parent</UUID><Group><UUID>child</UUID></Group></Group>";
+        let uuid_pos = xml.find("<UUID>parent</UUID>").unwrap();
+
+        let close_pos = find_own_close_tag(xml, uuid_pos, "<Group>", "</Group>").unwrap();
+
+        assert_eq!(&xml[close_pos..], "</Group>");
+        assert_eq!(
+            &xml[..close_pos],
+            "<Group><UUID>parent</UUID><Group><UUID>child</UUID></Group>"
+        );
+    }
+
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    #[test]
+    fn test_find_own_close_tag_skips_history_revisions() {
+        // History revisions share the live entry's <Entry> tag name, so a
+        // naive search for the first </Entry> after the UUID would match
+        // inside <History> instead of the live entry's own close tag.
+        let xml = "<Entry><UUID>live</UUID><History><Entry><UUID>rev</UUID></Entry></History></Entry>";
+        let uuid_pos = xml.find("<UUID>live</UUID>").unwrap();
+
+        let close_pos = find_own_close_tag(xml, uuid_pos, "<Entry>", "</Entry>").unwrap();
+
+        assert_eq!(&xml[close_pos..], "</Entry>");
+        assert_eq!(
+            &xml[..close_pos],
+            "<Entry><UUID>live</UUID><History><Entry><UUID>rev</UUID></Entry></History>"
+        );
+    }
+
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    #[test]
+    fn test_inject_group_unknowns_targets_parent_not_subgroup() {
+        use base64::{engine::general_purpose as base64_engine, Engine as _};
+
+        let child = crate::db::Group::new("Child");
+        let mut parent = crate::db::Group::new("Parent");
+        parent.unknown_xml = vec![XmlNode {
+            name: "ParentUnknown".to_string(),
+            inner_xml: String::new(),
+        }];
+        parent.groups.push(child.clone());
+
+        let mut xml = format!(
+            "<Group><UUID>{}</UUID><Group><UUID>{}</UUID></Group></Group>",
+            base64_engine::STANDARD.encode(parent.uuid.as_bytes()),
+            base64_engine::STANDARD.encode(child.uuid.as_bytes()),
+        );
+
+        inject_group_unknowns(&mut xml, &parent);
+
+        assert_eq!(
+            xml,
+            format!(
+                "<Group><UUID>{}</UUID><Group><UUID>{}</UUID></Group><ParentUnknown/></Group>",
+                base64_engine::STANDARD.encode(parent.uuid.as_bytes()),
+                base64_engine::STANDARD.encode(child.uuid.as_bytes()),
+            )
+        );
+    }
 
     #[test]
     fn test_xml_node_to_string() {
