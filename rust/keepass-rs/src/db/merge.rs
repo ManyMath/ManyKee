@@ -50,9 +50,6 @@ pub enum MergeError {
 
     #[error("Groups with UUID {0} have the same modification time but have diverged.")]
     GroupModificationTimeNotUpdated(String),
-
-    #[error("Found history entries with the same timestamp ({0}) for entry {1}.")]
-    DuplicateHistoryEntries(String, String),
 }
 
 impl MergeLog {
@@ -885,47 +882,41 @@ impl History {
         true
     }
 
-    // Merge both histories together.
+    // Merge both histories together. Same-second timestamps are a normal,
+    // foreseeable state (see `is_ordered`'s doc comment) rather than purely
+    // adversarial, so a collision on either side (or across sides) is
+    // handled the same way: the first entry seen at that timestamp wins,
+    // destination entries are seen before source entries, and a mismatch
+    // between the kept entry and a dropped one is only logged as a warning
+    // instead of aborting the whole merge.
     pub(crate) fn merge_with(&mut self, other: &History) -> Result<MergeLog, MergeError> {
         let mut log = MergeLog::default();
         let mut new_history_entries: HashMap<chrono::NaiveDateTime, Entry> = HashMap::new();
 
-        for history_entry in &self.entries {
+        let destination_entries = self.entries.iter().map(|entry| ("Destination", entry));
+        let source_entries = other.entries.iter().map(|entry| ("Source", entry));
+
+        for (side, history_entry) in destination_entries.chain(source_entries) {
             let modification_time = history_entry.times.last_modification.unwrap_or_else(|| {
                 log.warnings.push(format!(
-                    "Destination history entry {} did not have a last modification timestamp",
+                    "{side} history entry {} did not have a last modification timestamp",
                     history_entry.uuid
                 ));
                 Times::epoch()
             });
 
-            if new_history_entries.contains_key(&modification_time) {
-                return Err(MergeError::DuplicateHistoryEntries(
-                    modification_time.to_string(),
-                    history_entry.uuid.to_string(),
-                ));
-            }
-            new_history_entries.insert(modification_time, history_entry.clone());
-        }
-
-        for history_entry in &other.entries {
-            let modification_time = history_entry.times.last_modification.unwrap_or_else(|| {
-                log.warnings.push(format!(
-                    "Source history entry {} did not have a last modification timestamp",
-                    history_entry.uuid
-                ));
-                Times::epoch()
-            });
-            let existing_history_entry = new_history_entries.get(&modification_time);
-            if let Some(existing_history_entry) = existing_history_entry {
-                if existing_history_entry.has_diverged_from(history_entry) {
-                    log.warnings.push(format!(
-                        "History entries for {} have the same modification timestamp but were not the same.",
-                        existing_history_entry.uuid
-                    ));
+            match new_history_entries.get(&modification_time) {
+                Some(existing_history_entry) => {
+                    if existing_history_entry.has_diverged_from(history_entry) {
+                        log.warnings.push(format!(
+                            "History entries for {} have the same modification timestamp but were not the same.",
+                            history_entry.uuid
+                        ));
+                    }
                 }
-            } else {
-                new_history_entries.insert(modification_time, history_entry.clone());
+                None => {
+                    new_history_entries.insert(modification_time, history_entry.clone());
+                }
             }
         }
 
@@ -2059,5 +2050,63 @@ mod merge_tests {
         let merge_log = destination.merge_with(&other_history).unwrap();
         assert_eq!(merge_log.warnings.len(), 1);
         assert_eq!(destination.entries.len(), 1);
+    }
+
+    fn history_entry_at(uuid: Uuid, modification_time: chrono::NaiveDateTime) -> Entry {
+        let mut entry = Entry::new();
+        entry.uuid = uuid;
+        entry.times.last_modification = Some(modification_time);
+        entry
+    }
+
+    #[test]
+    fn test_history_merge_with_duplicate_destination_timestamps_warns_instead_of_erroring() {
+        let t = Times::now();
+        let mut destination = History {
+            entries: vec![history_entry_at(ENTRY1_ID, t), history_entry_at(ENTRY2_ID, t)],
+        };
+
+        let merge_log = destination
+            .merge_with(&History::default())
+            .expect("duplicate same-second timestamps within the destination should not hard-error");
+
+        assert_eq!(merge_log.warnings.len(), 1);
+        assert_eq!(destination.entries.len(), 1, "the later duplicate should be dropped");
+        assert_eq!(destination.entries[0].uuid, ENTRY1_ID, "the first entry seen should win");
+    }
+
+    #[test]
+    fn test_history_merge_with_duplicate_source_timestamps_warns_and_dedupes() {
+        let t = Times::now();
+        let mut destination = History::default();
+        let other = History {
+            entries: vec![history_entry_at(ENTRY1_ID, t), history_entry_at(ENTRY2_ID, t)],
+        };
+
+        let merge_log = destination.merge_with(&other).unwrap();
+
+        assert_eq!(merge_log.warnings.len(), 1);
+        assert_eq!(destination.entries.len(), 1, "the later duplicate should be dropped");
+        assert_eq!(destination.entries[0].uuid, ENTRY1_ID, "the first entry seen should win");
+    }
+
+    #[test]
+    fn test_history_merge_with_cross_side_timestamp_collision_keeps_destination_entry() {
+        let t = Times::now();
+        let mut destination = History {
+            entries: vec![history_entry_at(ENTRY1_ID, t)],
+        };
+        let other = History {
+            entries: vec![history_entry_at(ENTRY2_ID, t)],
+        };
+
+        let merge_log = destination.merge_with(&other).unwrap();
+
+        assert_eq!(merge_log.warnings.len(), 1);
+        assert_eq!(destination.entries.len(), 1);
+        assert_eq!(
+            destination.entries[0].uuid, ENTRY1_ID,
+            "destination entries are seen before source entries, so destination should win"
+        );
     }
 }
