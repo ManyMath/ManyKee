@@ -143,11 +143,38 @@ pub type UnknownMap = HashMap<UnknownKey, Vec<XmlNode>>;
 
 /// State for tracking unknown element accumulation during skip.
 struct SkipState {
-    parent_type: String,
-    parent_uuid: String,
+    key: UnknownKey,
     tag_name: String,
     inner_xml: String,
     depth: u32, // depth within the skipped element (0 = direct children)
+}
+
+/// A tracked ancestor (`Group`/`Entry`/`Meta`) on the parent stack.
+struct StackEntry {
+    /// The real element tag name: "Group", "Entry", or "Meta". History
+    /// revisions are still tagged "Entry" here so they use the same known-tag
+    /// set as the live entry, `history_index` is what distinguishes them.
+    tag: String,
+    uuid: String,
+    depth: u32,
+    /// `Some(i)` when this `Entry` is the `i`-th (0-based, document order)
+    /// `<History>` revision of its enclosing live entry, rather than the
+    /// live entry itself. History revisions share the live entry's UUID, so
+    /// without this, unknowns from every revision would collide into one
+    /// bucket keyed only by that shared UUID.
+    history_index: Option<usize>,
+}
+
+impl StackEntry {
+    /// The `UnknownMap` key unknowns attached to this element should be
+    /// filed under: `("Group"|"Entry", uuid_b64)` normally, or
+    /// `("HistoryEntry", "uuid_b64:index")` for a history revision.
+    fn unknown_key(&self) -> UnknownKey {
+        match self.history_index {
+            Some(index) => ("HistoryEntry".to_string(), format!("{}:{}", self.uuid, index)),
+            None => (self.tag.clone(), self.uuid.clone()),
+        }
+    }
 }
 
 /// Pre-process KDBX XML: extract unknown child elements from Group, Entry, and Meta,
@@ -162,11 +189,16 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
     let mut buf = Vec::new();
     let mut unknown_map = UnknownMap::new();
 
-    // Parent stack: (tag_name, uuid_base64, depth_at_push)
-    let mut parent_stack: Vec<(String, String, u32)> = Vec::new();
+    let mut parent_stack: Vec<StackEntry> = Vec::new();
     let mut skip: Option<SkipState> = None;
     let mut capturing_uuid = false;
     let mut current_depth: u32 = 0;
+    // Whether we're currently inside a live entry's <History> block, and how
+    // many <Entry> revisions we've seen inside it so far (document order).
+    // History doesn't nest, so a flat counter (reset on each <History>) is
+    // enough to index revisions.
+    let mut in_history = false;
+    let mut history_revision_index: usize = 0;
 
     let entry_tags = entry_known_tags();
     let group_tags = group_known_tags();
@@ -189,8 +221,7 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                             if ss.depth == 0 {
                                 // End of the unknown element
                                 let finished = skip.take().unwrap();
-                                let key = (finished.parent_type, finished.parent_uuid);
-                                unknown_map.entry(key).or_default().push(XmlNode {
+                                unknown_map.entry(finished.key).or_default().push(XmlNode {
                                     name: finished.tag_name,
                                     inner_xml: finished.inner_xml,
                                 });
@@ -227,13 +258,30 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                         let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                         let is_tracked = matches!(tag.as_str(), "Group" | "Entry" | "Meta");
 
+                        if tag == "History" {
+                            in_history = true;
+                            history_revision_index = 0;
+                        }
+
                         if is_tracked {
-                            parent_stack.push((tag.clone(), String::new(), current_depth));
+                            let history_index = if tag == "Entry" && in_history {
+                                let index = history_revision_index;
+                                history_revision_index += 1;
+                                Some(index)
+                            } else {
+                                None
+                            };
+                            parent_stack.push(StackEntry {
+                                tag: tag.clone(),
+                                uuid: String::new(),
+                                depth: current_depth,
+                                history_index,
+                            });
                         }
 
                         if tag == "UUID" && !parent_stack.is_empty() {
                             // Only capture UUID if we're a direct child of the tracked parent
-                            let parent_depth = parent_stack.last().unwrap().2;
+                            let parent_depth = parent_stack.last().unwrap().depth;
                             if current_depth == parent_depth + 1 {
                                 capturing_uuid = true;
                             }
@@ -243,10 +291,10 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                         // (depth == parent_depth + 1)
                         if !is_tracked && !parent_stack.is_empty() {
                             let parent = parent_stack.last().unwrap();
-                            let is_direct_child = current_depth == parent.2 + 1;
+                            let is_direct_child = current_depth == parent.depth + 1;
 
                             if is_direct_child {
-                                let known = match parent.0.as_str() {
+                                let known = match parent.tag.as_str() {
                                     "Group" => Some(&group_tags),
                                     "Entry" => Some(&entry_tags),
                                     "Meta" => Some(&meta_tags),
@@ -257,8 +305,7 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                                     if !known_set.contains(tag.as_str()) {
                                         // Start skipping
                                         skip = Some(SkipState {
-                                            parent_type: parent.0.clone(),
-                                            parent_uuid: parent.1.clone(),
+                                            key: parent.unknown_key(),
                                             tag_name: tag,
                                             inner_xml: String::new(),
                                             depth: 0,
@@ -274,6 +321,9 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                     }
                     Event::End(e) => {
                         let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                        if tag == "History" {
+                            in_history = false;
+                        }
                         if matches!(tag.as_str(), "Group" | "Entry" | "Meta") {
                             parent_stack.pop();
                         }
@@ -286,7 +336,7 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                             let uuid_text = String::from_utf8_lossy(e.as_ref()).trim().to_string();
                             if !uuid_text.is_empty() {
                                 if let Some(parent) = parent_stack.last_mut() {
-                                    parent.1 = uuid_text;
+                                    parent.uuid = uuid_text;
                                 }
                             }
                         }
@@ -298,11 +348,11 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                         if !parent_stack.is_empty() {
                             let parent = parent_stack.last().unwrap();
                             // For Empty elements, current_depth is the same as the parent's depth
-                            // (since Empty doesn't push). Direct child means current_depth == parent.2.
-                            let is_direct_child = current_depth == parent.2;
+                            // (since Empty doesn't push). Direct child means current_depth == parent.depth.
+                            let is_direct_child = current_depth == parent.depth;
 
                             if is_direct_child {
-                                let known = match parent.0.as_str() {
+                                let known = match parent.tag.as_str() {
                                     "Group" => Some(&group_tags),
                                     "Entry" => Some(&entry_tags),
                                     "Meta" => Some(&meta_tags),
@@ -311,8 +361,7 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
 
                                 if let Some(known_set) = known {
                                     if !known_set.contains(tag.as_str()) {
-                                        let key = (parent.0.clone(), parent.1.clone());
-                                        unknown_map.entry(key).or_default().push(XmlNode {
+                                        unknown_map.entry(parent.unknown_key()).or_default().push(XmlNode {
                                             name: tag,
                                             inner_xml: String::new(),
                                         });
@@ -343,34 +392,57 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
 // --------------------------------------------------------------------------------
 
 pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
-    use base64::{engine::general_purpose as base64_engine, Engine as _};
-
     if let Some(nodes) = unknown_map.get(&("Meta".to_string(), String::new())) {
         db.meta.unknown_xml = nodes.clone();
     }
 
-    for ((parent_type, uuid_b64), nodes) in unknown_map {
-        if uuid_b64.is_empty() {
+    for ((parent_type, identity), nodes) in unknown_map {
+        if identity.is_empty() {
             continue;
         }
-        if let Ok(bytes) = base64_engine::STANDARD.decode(uuid_b64) {
-            if let Ok(uuid) = uuid::Uuid::from_slice(&bytes) {
-                match parent_type.as_str() {
-                    "Group" => {
-                        if let Some(group) = db.root.group_by_uuid_mut(uuid) {
-                            group.unknown_xml = nodes.clone();
-                        }
+
+        match parent_type.as_str() {
+            "Group" => {
+                if let Some(uuid) = decode_uuid(identity) {
+                    if let Some(group) = db.root.group_by_uuid_mut(uuid) {
+                        group.unknown_xml = nodes.clone();
                     }
-                    "Entry" => {
-                        if let Some(entry) = db.root.entry_by_uuid_mut(uuid) {
-                            entry.unknown_xml = nodes.clone();
-                        }
-                    }
-                    _ => {}
                 }
             }
+            "Entry" => {
+                if let Some(uuid) = decode_uuid(identity) {
+                    if let Some(entry) = db.root.entry_by_uuid_mut(uuid) {
+                        entry.unknown_xml = nodes.clone();
+                    }
+                }
+            }
+            "HistoryEntry" => {
+                // identity is "uuid_base64:revision_index", see `StackEntry::unknown_key`.
+                if let Some((uuid_b64, index)) = identity
+                    .split_once(':')
+                    .and_then(|(uuid_b64, index)| Some((uuid_b64, index.parse::<usize>().ok()?)))
+                {
+                    if let Some(uuid) = decode_uuid(uuid_b64) {
+                        if let Some(revision) = db
+                            .root
+                            .entry_by_uuid_mut(uuid)
+                            .and_then(|entry| entry.history.as_mut())
+                            .and_then(|history| history.entries.get_mut(index))
+                        {
+                            revision.unknown_xml = nodes.clone();
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
+}
+
+fn decode_uuid(uuid_b64: &str) -> Option<uuid::Uuid> {
+    use base64::{engine::general_purpose as base64_engine, Engine as _};
+    let bytes = base64_engine::STANDARD.decode(uuid_b64).ok()?;
+    uuid::Uuid::from_slice(&bytes).ok()
 }
 
 // --------------------------------------------------------------------------------
@@ -645,6 +717,83 @@ mod tests {
         );
         assert_eq!(db.root.entries[0].unknown_xml[0].name, "AnUnknownEntryField");
         assert!(db.root.entries[0].unknown_xml[0].inner_xml.contains("hello"));
+    }
+
+    #[test]
+    fn test_history_revisions_keep_distinct_unknowns() {
+        // History revisions share the live entry's UUID, so without
+        // per-revision keying, unknowns from every revision (and the live
+        // entry) collide into one bucket and only the live entry ever gets
+        // them written back.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<KeePassFile>
+ <Meta>
+ <Generator>Test</Generator>
+ <DatabaseName>TestDB</DatabaseName>
+ <DatabaseNameChanged/>
+ <DatabaseDescription/>
+ <DatabaseDescriptionChanged/>
+ <DefaultUsername/>
+ <DefaultUsernameChanged/>
+ <MaintenanceHistoryDays>365</MaintenanceHistoryDays>
+ <Color/>
+ <MasterKeyChanged/>
+ <MasterKeyChangeRec>-1</MasterKeyChangeRec>
+ <MasterKeyChangeForce>-1</MasterKeyChangeForce>
+ <RecycleBinEnabled>False</RecycleBinEnabled>
+ <RecycleBinUUID>AAAAAAAAAAAAAAAAAAAAAA==</RecycleBinUUID>
+ <RecycleBinChanged/>
+ <EntryTemplatesGroup>AAAAAAAAAAAAAAAAAAAAAA==</EntryTemplatesGroup>
+ <EntryTemplatesGroupChanged/>
+ <LastSelectedGroup>AAAAAAAAAAAAAAAAAAAAAA==</LastSelectedGroup>
+ <LastTopVisibleGroup>AAAAAAAAAAAAAAAAAAAAAA==</LastTopVisibleGroup>
+ <HistoryMaxItems>10</HistoryMaxItems>
+ <HistoryMaxSize>6291456</HistoryMaxSize>
+ <SettingsChanged/>
+ </Meta>
+ <Root>
+ <Group>
+ <UUID>AAECAwQFBgcICQoLDA0ODw==</UUID>
+ <Name>Root</Name>
+ <IconID>48</IconID>
+ <IsExpanded>True</IsExpanded>
+ <Entry>
+ <UUID>EBESExQVFhcYGRobHB0eHw==</UUID>
+ <IconID>0</IconID>
+ <LiveEntryUnknown><V>live</V></LiveEntryUnknown>
+ <Tags>test</Tags>
+ <History>
+ <Entry>
+ <UUID>EBESExQVFhcYGRobHB0eHw==</UUID>
+ <IconID>0</IconID>
+ <RevisionUnknown><V>rev0</V></RevisionUnknown>
+ </Entry>
+ <Entry>
+ <UUID>EBESExQVFhcYGRobHB0eHw==</UUID>
+ <IconID>0</IconID>
+ <RevisionUnknown><V>rev1</V></RevisionUnknown>
+ </Entry>
+ </History>
+ </Entry>
+ </Group>
+ <DeletedObjects/>
+ </Root>
+</KeePassFile>"#;
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let db = crate::format::xml_db::parse_xml(xml.as_bytes(), &[], &mut cipher).unwrap();
+
+        let entry = &db.root.entries[0];
+        assert_eq!(entry.unknown_xml.len(), 1, "live entry should keep only its own unknown");
+        assert_eq!(entry.unknown_xml[0].name, "LiveEntryUnknown");
+        assert!(entry.unknown_xml[0].inner_xml.contains("live"));
+
+        let history = entry.history.as_ref().expect("entry should have history");
+        assert_eq!(history.entries.len(), 2);
+        assert_eq!(history.entries[0].unknown_xml.len(), 1);
+        assert!(history.entries[0].unknown_xml[0].inner_xml.contains("rev0"));
+        assert_eq!(history.entries[1].unknown_xml.len(), 1);
+        assert!(history.entries[1].unknown_xml[0].inner_xml.contains("rev1"));
     }
 
     #[test]
