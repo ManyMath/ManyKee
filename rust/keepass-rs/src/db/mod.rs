@@ -10,10 +10,10 @@ pub mod merge;
 #[cfg(feature = "totp")]
 mod otp;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 mod save;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 pub use crate::db::save::DatabaseSaveError;
 
 pub use crate::db::{

@@ -1,14 +1,14 @@
 use flate2::read::GzDecoder;
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use flate2::write::GzEncoder;
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use flate2::Compression as Flate2Compression;
 use std::io::Read;
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use std::io::Write;
 
 pub trait Compression {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn compress(&self, in_buffer: &[u8]) -> Result<Vec<u8>, std::io::Error>;
     fn decompress(&self, in_buffer: &[u8]) -> Result<Vec<u8>, std::io::Error>;
 }
@@ -16,7 +16,7 @@ pub trait Compression {
 pub struct NoCompression;
 
 impl Compression for NoCompression {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn compress(&self, in_buffer: &[u8]) -> Result<Vec<u8>, std::io::Error> {
         Ok(in_buffer.to_vec())
     }
@@ -28,7 +28,7 @@ impl Compression for NoCompression {
 pub struct GZipCompression;
 
 impl Compression for GZipCompression {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn compress(&self, in_buffer: &[u8]) -> Result<Vec<u8>, std::io::Error> {
         let mut res = Vec::new();
         let mut encoder = GzEncoder::new(&mut res, Flate2Compression::default());

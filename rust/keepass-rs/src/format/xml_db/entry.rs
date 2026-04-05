@@ -80,7 +80,7 @@ fn custom_data_otp_value(custom_data: &HashMap<String, crate::db::CustomDataItem
     })
 }
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 fn compatibility_totp_uri(db: &crate::db::Entry) -> Option<&str> {
     if db.fields.contains_key(fields::OTP) {
         return None;
@@ -173,7 +173,7 @@ impl Entry {
         Ok(())
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     pub(crate) fn db_to_xml(
         db: &crate::db::Entry,
         inner_encryptor: &mut dyn Cipher,

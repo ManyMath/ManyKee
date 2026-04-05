@@ -1,5 +1,5 @@
 use aes::Aes256;
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use cipher::BlockEncryptMut;
 use cipher::{block_padding::Pkcs7, generic_array::GenericArray, BlockDecryptMut};
 use salsa20::{
@@ -10,24 +10,24 @@ use salsa20::{
 use crate::crypt::CryptographyError;
 
 pub(crate) trait Cipher {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, CryptographyError>;
     fn decrypt(&mut self, ciphertext: &[u8]) -> Result<Vec<u8>, CryptographyError>;
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     /// The number of bytes expected by the cipher as an initialization vector.
     fn iv_size() -> usize
     where
         Self: Sized;
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     /// The number of bytes expected by the cipher as a key.
     fn key_size() -> usize
     where
         Self: Sized;
 }
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 type Aes256CbcEncryptor = cbc::Encryptor<Aes256>;
 type Aes256CbcDecryptor = cbc::Decryptor<Aes256>;
 pub(crate) struct AES256Cipher {
@@ -45,7 +45,7 @@ impl AES256Cipher {
 }
 
 impl Cipher for AES256Cipher {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, CryptographyError> {
         let cipher = Aes256CbcEncryptor::new_from_slices(&self.key, &self.iv)?;
 
@@ -67,18 +67,18 @@ impl Cipher for AES256Cipher {
         Ok(out)
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn iv_size() -> usize {
         16
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn key_size() -> usize {
         32
     }
 }
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 type TwofishCbcEncryptor = cbc::Encryptor<twofish::Twofish>;
 type TwofishCbcDecryptor = cbc::Decryptor<twofish::Twofish>;
 pub(crate) struct TwofishCipher {
@@ -96,7 +96,7 @@ impl TwofishCipher {
 }
 
 impl Cipher for TwofishCipher {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, CryptographyError> {
         let cipher = TwofishCbcEncryptor::new_from_slices(&self.key, &self.iv)?;
 
@@ -113,12 +113,12 @@ impl Cipher for TwofishCipher {
         Ok(buf)
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn iv_size() -> usize {
         16
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn key_size() -> usize {
         32
     }
@@ -140,7 +140,7 @@ impl Salsa20Cipher {
 }
 
 impl Cipher for Salsa20Cipher {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, CryptographyError> {
         let mut buffer = Vec::from(plaintext);
         self.cipher.apply_keystream(&mut buffer);
@@ -152,13 +152,13 @@ impl Cipher for Salsa20Cipher {
         Ok(buffer)
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn iv_size() -> usize {
         // or 16
         32
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn key_size() -> usize {
         32
     }
@@ -190,7 +190,7 @@ impl ChaCha20Cipher {
 }
 
 impl Cipher for ChaCha20Cipher {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, CryptographyError> {
         let mut buffer = Vec::from(plaintext);
         self.cipher.apply_keystream(&mut buffer);
@@ -202,12 +202,12 @@ impl Cipher for ChaCha20Cipher {
         Ok(buffer)
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn iv_size() -> usize {
         12
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn key_size() -> usize {
         32
     }
@@ -220,7 +220,7 @@ impl PlainCipher {
     }
 }
 impl Cipher for PlainCipher {
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, CryptographyError> {
         Ok(Vec::from(plaintext))
     }
@@ -228,12 +228,12 @@ impl Cipher for PlainCipher {
         Ok(Vec::from(ciphertext))
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn iv_size() -> usize {
         1
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn key_size() -> usize {
         1
     }

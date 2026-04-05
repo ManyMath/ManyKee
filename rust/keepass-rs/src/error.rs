@@ -19,7 +19,7 @@ pub use crate::{
 #[cfg(feature = "challenge_response")]
 pub use crate::key::ChallengeResponseKeyError;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 pub use crate::db::DatabaseSaveError;
 
 #[cfg(feature = "totp")]

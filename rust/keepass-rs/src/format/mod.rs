@@ -2,17 +2,22 @@ pub(crate) mod kdb;
 pub(crate) mod kdbx3;
 pub(crate) mod kdbx4;
 
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+pub mod compat;
+
 pub(crate) mod hmac_block_stream;
+#[cfg(feature = "save_kdbx3")]
+pub(crate) mod sha256_block_stream;
 pub(crate) mod variant_dictionary;
 pub(crate) mod xml_db;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 mod io;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use std::io::Write;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use byteorder::WriteBytesExt;
 use byteorder::{ByteOrder, LittleEndian};
 use thiserror::Error;
@@ -78,18 +83,20 @@ impl DatabaseVersion {
         Ok(response)
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn dump(&self, writer: &mut dyn Write) -> Result<(), std::io::Error> {
-        if let DatabaseVersion::KDB4(minor_version) = self {
-            writer.write_all(&crate::format::KDBX_IDENTIFIER)?;
-            writer.write_u32::<LittleEndian>(KEEPASS_LATEST_ID)?;
-            writer.write_u16::<LittleEndian>(*minor_version)?;
-            writer.write_u16::<LittleEndian>(KDBX4_MAJOR_VERSION)?;
+        let (minor_version, major_version) = match self {
+            DatabaseVersion::KDB4(minor_version) => (*minor_version, KDBX4_MAJOR_VERSION),
+            DatabaseVersion::KDB3(minor_version) => (*minor_version, KDBX3_MAJOR_VERSION),
+            _ => panic!("DatabaseVersion::dump only supports dumping KDBX3 and KDBX4."),
+        };
 
-            Ok(())
-        } else {
-            panic!("DatabaseVersion::dump only supports dumping KDBX4.");
-        }
+        writer.write_all(&crate::format::KDBX_IDENTIFIER)?;
+        writer.write_u32::<LittleEndian>(KEEPASS_LATEST_ID)?;
+        writer.write_u16::<LittleEndian>(minor_version)?;
+        writer.write_u16::<LittleEndian>(major_version)?;
+
+        Ok(())
     }
 
     pub(crate) fn get_version_header_size() -> usize {

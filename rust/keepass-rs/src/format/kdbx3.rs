@@ -1,3 +1,6 @@
+#[cfg(feature = "save_kdbx3")]
+use std::io::Write;
+
 use crate::{
     config::{CompressionConfig, DatabaseConfig, InnerCipherConfig, KdfConfig, OuterCipherConfig},
     crypt::{calculate_sha256, ciphers::Cipher},
@@ -6,10 +9,34 @@ use crate::{
     key::{DatabaseKey, DatabaseKeyError},
 };
 
+#[cfg(feature = "save_kdbx3")]
+use crate::db::DatabaseSaveError;
+
+#[cfg(feature = "save_kdbx3")]
+use byteorder::WriteBytesExt;
 use byteorder::{ByteOrder, LittleEndian};
 use thiserror::Error;
 
 use std::convert::TryFrom;
+
+// Outer header entry type identifiers, shared by the reader
+// (`parse_outer_header`) and the writer (`dump_kdbx3`).
+const HEADER_END: u8 = 0;
+const HEADER_COMMENT: u8 = 1;
+const HEADER_OUTER_ENCRYPTION_ID: u8 = 2;
+const HEADER_COMPRESSION_ID: u8 = 3;
+const HEADER_MASTER_SEED: u8 = 4;
+const HEADER_TRANSFORM_SEED: u8 = 5;
+const HEADER_TRANSFORM_ROUNDS: u8 = 6;
+const HEADER_ENCRYPTION_IV: u8 = 7;
+const HEADER_PROTECTED_STREAM_KEY: u8 = 8;
+const HEADER_STREAM_START_BYTES: u8 = 9;
+const HEADER_INNER_RANDOM_STREAM_ID: u8 = 10;
+
+/// Size (in bytes) of the master seed, transform seed, protected stream key
+/// and stream start marker generated when writing a KDBX3 file.
+#[cfg(feature = "save_kdbx3")]
+const KDBX3_RANDOM_FIELD_SIZE: usize = 32;
 
 #[derive(Debug)]
 struct KDBX3Header {
@@ -67,45 +94,45 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
 
         match entry_type {
             // END - finished parsing header
-            0 => {
+            HEADER_END => {
                 break;
             }
 
             // COMMENT
-            1 => {}
+            HEADER_COMMENT => {}
 
             // CIPHERID - a UUID specifying which cipher suite
             // should be used to encrypt the payload
-            2 => {
+            HEADER_OUTER_ENCRYPTION_ID => {
                 outer_cipher = Some(OuterCipherConfig::try_from(entry_buffer)?);
             }
 
             // COMPRESSIONFLAGS - first byte determines compression of payload
-            3 => {
+            HEADER_COMPRESSION_ID => {
                 compression = Some(CompressionConfig::try_from(LittleEndian::read_u32(entry_buffer))?);
             }
 
             // MASTERSEED - Master seed for deriving the master key
-            4 => master_seed = Some(entry_buffer.to_vec()),
+            HEADER_MASTER_SEED => master_seed = Some(entry_buffer.to_vec()),
 
             // TRANSFORMSEED - Seed used in deriving the transformed key
-            5 => transform_seed = Some(entry_buffer.to_vec()),
+            HEADER_TRANSFORM_SEED => transform_seed = Some(entry_buffer.to_vec()),
 
             // TRANSFORMROUNDS - Number of rounds used in derivation of transformed key
-            6 => transform_rounds = Some(LittleEndian::read_u64(entry_buffer)),
+            HEADER_TRANSFORM_ROUNDS => transform_rounds = Some(LittleEndian::read_u64(entry_buffer)),
 
             // ENCRYPTIONIV - Initialization Vector for decrypting the payload
-            7 => outer_iv = Some(entry_buffer.to_vec()),
+            HEADER_ENCRYPTION_IV => outer_iv = Some(entry_buffer.to_vec()),
 
             // PROTECTEDSTREAMKEY - Key for decrypting the inner protected values
-            8 => protected_stream_key = Some(entry_buffer.to_vec()),
+            HEADER_PROTECTED_STREAM_KEY => protected_stream_key = Some(entry_buffer.to_vec()),
 
             // STREAMSTARTBYTES - First bytes of decrypted payload (to check correct decryption)
-            9 => stream_start = Some(entry_buffer.to_vec()),
+            HEADER_STREAM_START_BYTES => stream_start = Some(entry_buffer.to_vec()),
 
             // INNERRANDOMSTREAMID - specifies which cipher suite
             // to use for decrypting the inner protected values
-            10 => {
+            HEADER_INNER_RANDOM_STREAM_ID => {
                 inner_cipher = Some(InnerCipherConfig::try_from(LittleEndian::read_u32(entry_buffer))?);
             }
 
@@ -303,6 +330,183 @@ pub(crate) fn decrypt_kdbx3(
     Ok((config, inner_decryptor, xml))
 }
 
+/// Dump a KeePass database using the key elements, in the legacy KDBX3
+/// format. Only databases using AES-KDF, and AES256/Twofish outer
+/// encryption with a Plain/Salsa20 inner stream cipher can be represented in
+/// this format; anything else (Argon2, ChaCha20, public custom data) returns
+/// [`DatabaseSaveError::IncompatibleWithVersion`].
+#[cfg(feature = "save_kdbx3")]
+pub fn dump_kdbx3(db: &Database, db_key: &DatabaseKey, writer: &mut dyn Write) -> Result<(), DatabaseSaveError> {
+    if !matches!(db.config.version, DatabaseVersion::KDB3(_)) {
+        return Err(DatabaseSaveError::UnsupportedVersion);
+    }
+
+    let rounds = match &db.config.kdf_config {
+        KdfConfig::Aes { rounds } => *rounds,
+        _ => {
+            return Err(DatabaseSaveError::IncompatibleWithVersion(
+                "KDBX3 only supports the AES-KDF key derivation function",
+            ))
+        }
+    };
+
+    if !matches!(
+        db.config.outer_cipher_config,
+        OuterCipherConfig::AES256 | OuterCipherConfig::Twofish
+    ) {
+        return Err(DatabaseSaveError::IncompatibleWithVersion(
+            "KDBX3 only supports AES256/Twofish outer encryption",
+        ));
+    }
+
+    if !matches!(
+        db.config.inner_cipher_config,
+        InnerCipherConfig::Plain | InnerCipherConfig::Salsa20
+    ) {
+        return Err(DatabaseSaveError::IncompatibleWithVersion(
+            "KDBX3 only supports Plain/Salsa20 inner encryption",
+        ));
+    }
+
+    if db.config.public_custom_data.as_ref().is_some_and(|d| !d.data.is_empty()) {
+        return Err(DatabaseSaveError::IncompatibleWithVersion(
+            "KDBX3 has no public custom data header field",
+        ));
+    }
+
+    // generate encryption keys and seeds on the fly when saving
+    let mut master_seed = vec![0; KDBX3_RANDOM_FIELD_SIZE];
+    getrandom::getrandom(&mut master_seed)?;
+
+    let mut outer_iv = vec![0; db.config.outer_cipher_config.get_iv_size()];
+    getrandom::getrandom(&mut outer_iv)?;
+
+    let mut transform_seed = vec![0; KDBX3_RANDOM_FIELD_SIZE];
+    getrandom::getrandom(&mut transform_seed)?;
+
+    let mut protected_stream_key = vec![0; KDBX3_RANDOM_FIELD_SIZE];
+    getrandom::getrandom(&mut protected_stream_key)?;
+
+    let mut stream_start = vec![0; KDBX3_RANDOM_FIELD_SIZE];
+    getrandom::getrandom(&mut stream_start)?;
+
+    #[cfg(feature = "challenge_response")]
+    let db_key = db_key.clone().perform_challenge(&transform_seed)?;
+
+    // dump the outer header
+    let mut header_data = Vec::new();
+    db.config.version.dump(&mut header_data)?;
+
+    KDBX3OuterHeader {
+        outer_cipher: db.config.outer_cipher_config.clone(),
+        compression: db.config.compression_config.clone(),
+        master_seed: master_seed.clone(),
+        transform_seed: transform_seed.clone(),
+        rounds,
+        outer_iv: outer_iv.clone(),
+        protected_stream_key: protected_stream_key.clone(),
+        stream_start: stream_start.clone(),
+        inner_cipher: db.config.inner_cipher_config.clone(),
+    }
+    .dump(&mut header_data)?;
+
+    writer.write_all(&header_data)?;
+
+    // derive master key from composite key, transform_seed, rounds and master_seed
+    let key_elements = db_key.get_key_elements()?;
+    let key_elements: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
+    let composite_key = calculate_sha256(&key_elements);
+
+    let transformed_key = db
+        .config
+        .kdf_config
+        .get_kdf_seeded(&transform_seed)
+        .transform_key(&composite_key)?;
+
+    let master_key = calculate_sha256(&[&master_seed, &transformed_key]);
+
+    // Initialize inner encryptor from the protected stream key
+    let stream_key = calculate_sha256(&[protected_stream_key.as_ref()]);
+    let mut inner_cipher = db.config.inner_cipher_config.get_cipher(&stream_key)?;
+
+    // convert database to XML, with attachments inlined as Meta/Binaries
+    let xml = crate::format::xml_db::to_xml_inline_binaries(db, &mut *inner_cipher)?;
+
+    let xml_compressed = db.config.compression_config.get_compression().compress(&xml)?;
+
+    let mut payload = stream_start;
+    payload.extend(crate::format::sha256_block_stream::write_sha256_block_stream(
+        &xml_compressed,
+    ));
+
+    let payload_encrypted = db
+        .config
+        .outer_cipher_config
+        .get_cipher(&master_key, &outer_iv)?
+        .encrypt(&payload)?;
+
+    writer.write_all(&payload_encrypted)?;
+
+    Ok(())
+}
+
+/// Fields needed to dump a KDBX3 outer header. Distinct from [`KDBX3Header`]
+/// (which additionally tracks where the header ends in a parsed buffer, and
+/// is only meaningful when reading).
+#[cfg(feature = "save_kdbx3")]
+struct KDBX3OuterHeader {
+    outer_cipher: OuterCipherConfig,
+    compression: CompressionConfig,
+    master_seed: Vec<u8>,
+    transform_seed: Vec<u8>,
+    rounds: u64,
+    outer_iv: Vec<u8>,
+    protected_stream_key: Vec<u8>,
+    stream_start: Vec<u8>,
+    inner_cipher: InnerCipherConfig,
+}
+
+#[cfg(feature = "save_kdbx3")]
+fn write_kdbx3_header_entry(
+    writer: &mut dyn Write,
+    entry_type: u8,
+    data: &[u8],
+) -> Result<(), std::io::Error> {
+    // Unlike KDBX4 (which length-prefixes header entries with a u32, see
+    // `format::io::WriteLengthTaggedExt`), KDBX3 uses a u16 entry length -
+    // see the `entry_length` read in `parse_outer_header` above.
+    writer.write_u8(entry_type)?;
+    writer.write_u16::<LittleEndian>(data.len() as u16)?;
+    writer.write_all(data)?;
+    Ok(())
+}
+
+#[cfg(feature = "save_kdbx3")]
+impl KDBX3OuterHeader {
+    fn dump(&self, writer: &mut dyn Write) -> Result<(), DatabaseSaveError> {
+        write_kdbx3_header_entry(writer, HEADER_OUTER_ENCRYPTION_ID, &self.outer_cipher.dump())?;
+        write_kdbx3_header_entry(writer, HEADER_COMPRESSION_ID, &self.compression.dump())?;
+        write_kdbx3_header_entry(writer, HEADER_MASTER_SEED, &self.master_seed)?;
+        write_kdbx3_header_entry(writer, HEADER_TRANSFORM_SEED, &self.transform_seed)?;
+
+        let mut rounds_bytes = vec![0; 8];
+        LittleEndian::write_u64(&mut rounds_bytes, self.rounds);
+        write_kdbx3_header_entry(writer, HEADER_TRANSFORM_ROUNDS, &rounds_bytes)?;
+
+        write_kdbx3_header_entry(writer, HEADER_ENCRYPTION_IV, &self.outer_iv)?;
+        write_kdbx3_header_entry(writer, HEADER_PROTECTED_STREAM_KEY, &self.protected_stream_key)?;
+        write_kdbx3_header_entry(writer, HEADER_STREAM_START_BYTES, &self.stream_start)?;
+
+        let mut inner_cipher_bytes = vec![0; 4];
+        LittleEndian::write_u32(&mut inner_cipher_bytes, self.inner_cipher.dump());
+        write_kdbx3_header_entry(writer, HEADER_INNER_RANDOM_STREAM_ID, &inner_cipher_bytes)?;
+
+        write_kdbx3_header_entry(writer, HEADER_END, &[])?;
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Kdbx3OpenError {
     #[error(transparent)]
@@ -313,4 +517,157 @@ pub enum Kdbx3OpenError {
 
     #[error(transparent)]
     Xml(#[from] crate::format::xml_db::ParseXmlError),
+}
+
+#[cfg(feature = "save_kdbx3")]
+#[cfg(test)]
+mod kdbx3_dump_tests {
+    use super::*;
+
+    use crate::{
+        db::{fields, Attachment, Database, Entry, Group, Value},
+        key::DatabaseKey,
+    };
+
+    fn test_config(
+        outer_cipher_config: OuterCipherConfig,
+        inner_cipher_config: InnerCipherConfig,
+        compression_config: CompressionConfig,
+    ) -> DatabaseConfig {
+        DatabaseConfig {
+            version: DatabaseVersion::KDB3(1),
+            outer_cipher_config,
+            compression_config,
+            inner_cipher_config,
+            kdf_config: KdfConfig::Aes { rounds: 10 },
+            public_custom_data: Default::default(),
+        }
+    }
+
+    fn test_with_config(config: DatabaseConfig) {
+        let mut db = Database::new(config);
+
+        let mut entry_with_password = Entry::new();
+        entry_with_password.set_unprotected(fields::TITLE, "Demo Entry");
+        entry_with_password.set_protected(fields::PASSWORD, "secret");
+
+        entry_with_password.attachments.insert(
+            "file1.txt".into(),
+            Attachment {
+                data: Value::protected(vec![0x01, 0x02, 0x03, 0x04]),
+            },
+        );
+        entry_with_password.attachments.insert(
+            "file2.txt".into(),
+            Attachment {
+                data: Value::unprotected(vec![0x04, 0x03, 0x02, 0x01]),
+            },
+        );
+
+        let mut root_group = Group::new("Root");
+        root_group.entries.push(entry_with_password);
+        root_group.entries.push(Entry::new());
+        db.root = root_group;
+
+        let db_key = DatabaseKey::new().with_password("testing");
+
+        let mut encrypted_db = Vec::new();
+        dump_kdbx3(&db, &db_key, &mut encrypted_db).unwrap();
+
+        let decrypted_db = parse_kdbx3(&encrypted_db, &db_key).unwrap();
+
+        assert_eq!(decrypted_db.root.entries.len(), 2);
+
+        let entry = decrypted_db.root.entry_by_name("Demo Entry").unwrap();
+        assert_eq!(entry.get_password(), Some("secret"));
+
+        let attachments = &entry.attachments;
+        assert_eq!(attachments.len(), 2);
+        assert!(attachments["file1.txt"].is_protected());
+        assert_eq!(attachments["file1.txt"].get(), &[0x01, 0x02, 0x03, 0x04]);
+        assert!(!attachments["file2.txt"].is_protected());
+        assert_eq!(attachments["file2.txt"].get(), &[0x04, 0x03, 0x02, 0x01]);
+    }
+
+    #[test]
+    fn test_config_matrix() {
+        let outer_cipher_configs = [OuterCipherConfig::AES256, OuterCipherConfig::Twofish];
+        let inner_cipher_configs = [InnerCipherConfig::Plain, InnerCipherConfig::Salsa20];
+        let compression_configs = [CompressionConfig::None, CompressionConfig::GZip];
+
+        for outer_cipher_config in &outer_cipher_configs {
+            for inner_cipher_config in &inner_cipher_configs {
+                for compression_config in &compression_configs {
+                    test_with_config(test_config(
+                        outer_cipher_config.clone(),
+                        inner_cipher_config.clone(),
+                        compression_config.clone(),
+                    ));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_rejects_argon2_kdf() {
+        let mut config = test_config(OuterCipherConfig::AES256, InnerCipherConfig::Salsa20, CompressionConfig::GZip);
+        config.kdf_config = KdfConfig::Argon2 {
+            iterations: 1,
+            memory: 1024,
+            parallelism: 1,
+            version: argon2::Version::Version13,
+        };
+
+        let db = Database::new(config);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            dump_kdbx3(&db, &DatabaseKey::new().with_password("testing"), &mut buf),
+            Err(DatabaseSaveError::IncompatibleWithVersion(_))
+        ));
+    }
+
+    #[test]
+    fn test_rejects_chacha20_outer_cipher() {
+        let config = test_config(OuterCipherConfig::ChaCha20, InnerCipherConfig::Salsa20, CompressionConfig::GZip);
+
+        let db = Database::new(config);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            dump_kdbx3(&db, &DatabaseKey::new().with_password("testing"), &mut buf),
+            Err(DatabaseSaveError::IncompatibleWithVersion(_))
+        ));
+    }
+
+    #[test]
+    fn test_rejects_chacha20_inner_cipher() {
+        let config = test_config(OuterCipherConfig::AES256, InnerCipherConfig::ChaCha20, CompressionConfig::GZip);
+
+        let db = Database::new(config);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            dump_kdbx3(&db, &DatabaseKey::new().with_password("testing"), &mut buf),
+            Err(DatabaseSaveError::IncompatibleWithVersion(_))
+        ));
+    }
+
+    // Building the `VariantDictionary` test fixture below reuses the
+    // KDBX4-only writer helpers (`VariantDictionary::new`/`set`); the
+    // KDBX3-incompatibility check itself doesn't need `save_kdbx4`.
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn test_rejects_public_custom_data() {
+        use crate::format::variant_dictionary::VariantDictionary;
+
+        let mut config = test_config(OuterCipherConfig::AES256, InnerCipherConfig::Salsa20, CompressionConfig::GZip);
+        let mut public_custom_data = VariantDictionary::new();
+        public_custom_data.set("example", 42);
+        config.public_custom_data = Some(public_custom_data);
+
+        let db = Database::new(config);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            dump_kdbx3(&db, &DatabaseKey::new().with_password("testing"), &mut buf),
+            Err(DatabaseSaveError::IncompatibleWithVersion(_))
+        ));
+    }
 }

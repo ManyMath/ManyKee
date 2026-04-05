@@ -6,7 +6,7 @@ use std::convert::TryFrom;
 
 pub use crate::format::DatabaseVersion;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use crate::crypt::ciphers::Cipher;
 use crate::{
     compression,
@@ -94,7 +94,7 @@ impl OuterCipherConfig {
         }
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     pub(crate) fn get_iv_size(&self) -> usize {
         match self {
             OuterCipherConfig::AES256 => ciphers::AES256Cipher::iv_size(),
@@ -103,7 +103,7 @@ impl OuterCipherConfig {
         }
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     pub(crate) fn dump(&self) -> [u8; 16] {
         match self {
             OuterCipherConfig::AES256 => CIPHERSUITE_AES256,
@@ -156,7 +156,7 @@ impl InnerCipherConfig {
         }
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     pub(crate) fn dump(&self) -> u32 {
         match self {
             InnerCipherConfig::Plain => PLAIN,
@@ -165,7 +165,7 @@ impl InnerCipherConfig {
         }
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     pub(crate) fn get_key_size(&self) -> usize {
         match self {
             InnerCipherConfig::Plain => ciphers::PlainCipher::key_size(),
@@ -497,7 +497,7 @@ impl CompressionConfig {
         }
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     pub(crate) fn dump(&self) -> [u8; 4] {
         match self {
             CompressionConfig::None => [0, 0, 0, 0],

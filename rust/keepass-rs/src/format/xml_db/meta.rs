@@ -144,7 +144,7 @@ impl From<Meta> for crate::db::Meta {
     }
 }
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 impl From<crate::db::Meta> for Meta {
     fn from(db: crate::db::Meta) -> Self {
         Self {
@@ -234,13 +234,36 @@ impl Binary {
             })
         }
     }
+
+    /// Build an inline (KDBX3-style) `Meta/Binaries` entry from an attachment.
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    pub(crate) fn db_to_xml(
+        id: usize,
+        attachment: &crate::db::Attachment,
+        inner_cipher: &mut dyn crate::crypt::ciphers::Cipher,
+    ) -> Result<Binary, crate::crypt::CryptographyError> {
+        let protected = attachment.is_protected();
+
+        let data = if protected {
+            inner_cipher.encrypt(attachment.get())?
+        } else {
+            attachment.get().to_vec()
+        };
+
+        Ok(Binary {
+            value: base64_engine::STANDARD.encode(data),
+            id,
+            compressed: None,
+            protected: Some(protected),
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CustomData {
     #[serde(default, rename = "Item")]
-    items: Vec<CustomDataItem>,
+    pub(crate) items: Vec<CustomDataItem>,
 }
 
 impl CustomData {
@@ -263,7 +286,7 @@ impl CustomData {
             .collect()
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn db_to_xml(db: &[(String, crate::db::CustomDataItem)]) -> Self {
         let items = db
             .iter()
@@ -336,8 +359,8 @@ impl From<CustomData> for HashMap<String, crate::db::CustomDataItem> {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename = "Item", rename_all = "PascalCase")]
-struct CustomDataItem {
-    key: String,
+pub(crate) struct CustomDataItem {
+    pub(crate) key: String,
     value: CustomDataValue,
 
     #[serde(default, with = "cs_opt_string")]

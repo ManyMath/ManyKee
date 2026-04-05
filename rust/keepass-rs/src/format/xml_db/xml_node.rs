@@ -46,9 +46,9 @@ impl<'de> Deserialize<'de> for XmlNode {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 // Known tag sets
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 
 fn entry_known_tags() -> HashSet<&'static str> {
     [
@@ -137,9 +137,9 @@ fn meta_known_tags() -> HashSet<&'static str> {
 type UnknownKey = (String, String); // (parent_type, uuid_base64)
 pub type UnknownMap = HashMap<UnknownKey, Vec<XmlNode>>;
 
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 // Pre-processing
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 
 /// State for tracking unknown element accumulation during skip.
 struct SkipState {
@@ -338,9 +338,9 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
     (cleaned, unknown_map)
 }
 
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 // Attach unknowns to db structs
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 
 pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
     use base64::{engine::general_purpose as base64_engine, Engine as _};
@@ -373,11 +373,11 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 // Post-processing injection
-// ────────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------------
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 pub fn inject_unknowns_into_xml(xml: &mut String, db: &crate::db::Database) {
     if !db.meta.unknown_xml.is_empty() {
         let s: String = db.meta.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
@@ -388,7 +388,7 @@ pub fn inject_unknowns_into_xml(xml: &mut String, db: &crate::db::Database) {
     inject_group_unknowns(xml, &db.root);
 }
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group) {
     use base64::{engine::general_purpose as base64_engine, Engine as _};
 

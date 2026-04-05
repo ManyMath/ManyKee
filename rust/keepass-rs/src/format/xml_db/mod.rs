@@ -26,7 +26,7 @@ use crate::{
         custom_serde::cs_opt_string, entry::UnprotectError, group::Group, meta::Meta, timestamp::Timestamp,
     },
 };
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use crate::{crypt::CryptographyError, db::DatabaseSaveError};
 
 pub fn parse_xml(
@@ -56,7 +56,7 @@ pub enum ParseXmlError {
     Unprotect(#[from] UnprotectError),
 }
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 pub fn to_xml(
     db: &crate::db::Database,
     inner_encryptor: &mut dyn Cipher,
@@ -70,6 +70,72 @@ pub fn to_xml(
     xml_node::inject_unknowns_into_xml(&mut xml_string, db);
 
     Ok((xml_string.into_bytes(), attachments))
+}
+
+/// Like [`to_xml`], but embeds attachments inline as base64 `Meta/Binaries`
+/// entries (KDBX3-style) instead of returning them for header/inner-header
+/// storage (KDBX4-style).
+///
+/// On read, `KeePassFile::xml_to_db` decrypts `Meta/Binaries` entries with
+/// the inner cipher *before* it walks entries to decrypt protected string
+/// fields, so, since Salsa20/ChaCha20 are stream ciphers whose keystream
+/// must be consumed in the same order it was produced, this must encrypt
+/// binaries before it encrypts fields (unlike KDBX4, where binaries are
+/// never inner-cipher-encrypted, so no such ordering constraint exists).
+#[cfg(feature = "save_kdbx3")]
+pub fn to_xml_inline_binaries(
+    db: &crate::db::Database,
+    inner_encryptor: &mut dyn Cipher,
+) -> Result<Vec<u8>, DatabaseSaveError> {
+    let mut ordered_attachments = Vec::new();
+    collect_group_attachments_in_order(&db.root, &mut ordered_attachments);
+
+    let binaries = ordered_attachments
+        .iter()
+        .enumerate()
+        .map(|(id, attachment)| meta::Binary::db_to_xml(id, attachment, inner_encryptor))
+        .collect::<Result<_, CryptographyError>>()?;
+
+    // `db_to_xml` re-derives its own attachments vector (discarded below) by
+    // walking the tree in the same order as `collect_group_attachments_in_order`,
+    // so the `value_ref` indices it assigns to binary fields already line up
+    // with `binaries` above.
+    let mut discarded_attachments = Vec::new();
+    let mut kdbx = KeePassFile::db_to_xml(db, inner_encryptor, &mut discarded_attachments)?;
+    kdbx.meta.binaries = Some(meta::Binaries { binaries });
+
+    let mut xml_string = quick_xml::se::to_string_with_root("KeePassFile", &kdbx)?;
+
+    // Post-process: inject unknown XML elements back into the serialized output.
+    xml_node::inject_unknowns_into_xml(&mut xml_string, db);
+
+    Ok(xml_string.into_bytes())
+}
+
+/// Mirrors the attachment-collection order of `Group::db_to_xml`/
+/// `Entry::db_to_xml`: child groups (depth-first) before this group's own
+/// entries, and for each entry, its own attachments before its history
+/// entries' attachments.
+#[cfg(feature = "save_kdbx3")]
+fn collect_group_attachments_in_order(group: &crate::db::Group, out: &mut Vec<crate::db::Attachment>) {
+    for g in &group.groups {
+        collect_group_attachments_in_order(g, out);
+    }
+    for e in &group.entries {
+        collect_entry_attachments_in_order(e, out);
+    }
+}
+
+#[cfg(feature = "save_kdbx3")]
+fn collect_entry_attachments_in_order(entry: &crate::db::Entry, out: &mut Vec<crate::db::Attachment>) {
+    for attachment in entry.attachments.values() {
+        out.push(attachment.clone());
+    }
+    if let Some(history) = entry.history.as_ref() {
+        for history_entry in &history.entries {
+            collect_entry_attachments_in_order(history_entry, out);
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -128,7 +194,7 @@ impl KeePassFile {
     }
 
     /// Convert from database representation to XML representation.
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn db_to_xml(
         db: &crate::db::Database,
         inner_cipher: &mut dyn Cipher,

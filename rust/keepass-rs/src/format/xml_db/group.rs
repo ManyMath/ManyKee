@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[cfg(feature = "save_kdbx4")]
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 use crate::crypt::CryptographyError;
 use crate::{
     crypt::ciphers::Cipher,
@@ -130,7 +130,7 @@ impl Group {
         Ok(())
     }
 
-    #[cfg(feature = "save_kdbx4")]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     pub(crate) fn db_to_xml(
         source: &crate::db::Group,
         inner_cipher: &mut dyn Cipher,
