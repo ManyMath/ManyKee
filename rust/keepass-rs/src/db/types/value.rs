@@ -59,7 +59,10 @@ impl<T: Zeroize + Clone> Clone for Value<T> {
     fn clone(&self) -> Self {
         match self {
             Value::Unprotected(data) => Value::Unprotected(data.clone()),
-            Value::Protected(data) => Value::Protected(SecretBox::new(Box::new(data.expose_secret().clone()))),
+            // `SecretBox::new(Box::new(data.expose_secret().clone()))` would build the
+            // cloned plaintext as a local temporary before boxing it; `init_with` zeroizes
+            // that local once the boxed copy exists instead of leaving it for the allocator.
+            Value::Protected(data) => Value::Protected(SecretBox::init_with(|| data.expose_secret().clone())),
         }
     }
 }
@@ -117,5 +120,15 @@ mod tests {
         assert_eq!(format!("{}", protected), "[redacted]");
 
         assert_ne!(unprotected, protected);
+    }
+
+    #[test]
+    fn test_protected_clone_preserves_secret() {
+        let protected: Value<Vec<u8>> = Value::protected(vec![1, 2, 3, 4]);
+        let cloned = protected.clone();
+
+        assert!(cloned.is_protected());
+        assert_eq!(cloned.get(), protected.get());
+        assert_eq!(cloned, protected);
     }
 }
