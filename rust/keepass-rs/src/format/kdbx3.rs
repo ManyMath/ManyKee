@@ -271,7 +271,11 @@ pub(crate) fn decrypt_kdbx3(
     // Check if we decrypted correctly. `stream_start` is attacker-controlled
     // header data, so it may claim a length longer than the decrypted
     // payload; treat that as a failed check rather than panicking.
-    if payload.get(0..header.stream_start.len()) != Some(header.stream_start.as_slice()) {
+    let expected_stream_start = &header.stream_start;
+    let stream_start_matches = payload
+        .get(0..expected_stream_start.len())
+        .is_some_and(|start| crate::crypt::constant_time_eq(start, expected_stream_start));
+    if !stream_start_matches {
         return Err(DatabaseKeyError::IncorrectKey.into());
     }
 

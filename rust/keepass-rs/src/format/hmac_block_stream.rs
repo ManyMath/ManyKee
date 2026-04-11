@@ -30,11 +30,12 @@ pub(crate) fn read_hmac_block_stream(
         let mut block_index_buf = [0u8; 8];
         LittleEndian::write_u64(&mut block_index_buf, block_index);
 
-        if hmac
-            != crate::crypt::calculate_hmac(&[&block_index_buf, size_bytes, block], &hmac_block_key)
+        if !crate::crypt::constant_time_eq(
+            hmac,
+            crate::crypt::calculate_hmac(&[&block_index_buf, size_bytes, block], &hmac_block_key)
                 .expect("Block stream key always correctly sized")
-                .as_slice()
-        {
+                .as_slice(),
+        ) {
             return Err(BlockStreamError::BlockHashMismatch { block_index });
         }
 
