@@ -133,9 +133,10 @@ impl Entry {
         }
 
         for field in self.binary_fields {
-            if let Some(attachment) = header_attachments.get(field.value.value_ref) {
-                target.attachments.insert(field.key.clone(), attachment.clone());
-            }
+            let attachment = header_attachments
+                .get(field.value.value_ref)
+                .ok_or(UnprotectError::InvalidBinaryReference(field.value.value_ref))?;
+            target.attachments.insert(field.key.clone(), attachment.clone());
         }
 
         target.autotype = self.auto_type.map(|at| at.into());
@@ -284,6 +285,9 @@ pub enum UnprotectError {
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
+    #[error("Binary field references out-of-range attachment index {0}")]
+    InvalidBinaryReference(usize),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -700,6 +704,26 @@ mod tests {
         assert!(target.fields.get(fields::OTP).is_none());
         assert_eq!(target.get_raw_otp_value(), Some(otp));
         assert!(target.custom_data.contains_key(fields::OTP));
+    }
+
+    #[test]
+    fn test_xml_to_db_handle_errors_on_out_of_range_binary_reference() {
+        let xml = "<Entry><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><Binary><Key>file.txt</Key><Value Ref=\"3\"/></Binary></Entry>";
+        let xml_entry: Test<Entry> = quick_xml::de::from_str(xml).unwrap();
+
+        let mut target = crate::db::Entry::new();
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        // Only one attachment (index 0) exists at the header level, but the
+        // field references index 3.
+        let header_attachments = [crate::db::Attachment {
+            data: crate::db::Value::unprotected(vec![1, 2, 3]),
+        }];
+
+        let result = xml_entry
+            .0
+            .xml_to_db_handle(&mut target, &header_attachments, &HashMap::new(), &mut cipher);
+
+        assert!(matches!(result, Err(UnprotectError::InvalidBinaryReference(3))));
     }
 
     #[test]
