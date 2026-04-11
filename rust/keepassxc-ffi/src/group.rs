@@ -141,7 +141,10 @@ pub extern "C" fn kpxc_group_entries_count(
 
         let db = unsafe { &*db };
         match db.0.root.find_group_by_uuid(uuid) {
-            Some(group) => group.entries.len() as c_int,
+            // Saturate rather than `as c_int`, which would wrap a >2^31-entry
+            // group's count into a negative value indistinguishable from
+            // KPXC_ERR_NOT_FOUND.
+            Some(group) => c_int::try_from(group.entries.len()).unwrap_or(c_int::MAX),
             None => {
                 set_last_error(&format!("Group not found: {}", uuid));
                 KPXC_ERR_NOT_FOUND
@@ -167,7 +170,8 @@ pub extern "C" fn kpxc_group_groups_count(
 
         let db = unsafe { &*db };
         match db.0.root.find_group_by_uuid(uuid) {
-            Some(group) => group.groups.len() as c_int,
+            // See the analogous comment in kpxc_group_entries_count.
+            Some(group) => c_int::try_from(group.groups.len()).unwrap_or(c_int::MAX),
             None => {
                 set_last_error(&format!("Group not found: {}", uuid));
                 KPXC_ERR_NOT_FOUND
