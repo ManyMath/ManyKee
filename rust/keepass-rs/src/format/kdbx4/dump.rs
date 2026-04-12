@@ -69,16 +69,26 @@ pub fn dump_kdbx4(
     writer.write_all(&header_data)?;
     writer.write_all(&header_sha256)?;
 
-    // derive master key from composite key, transform_seed, transform_rounds and master_seed
-    let key_elements = db_key.get_key_elements()?;
-    let key_elements: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
-    let composite_key = crypt::calculate_sha256(&key_elements);
-    let transformed_key = kdf.transform_key(&composite_key)?;
-    let master_key = crypt::calculate_sha256(&[&master_seed, &transformed_key]);
+    // derive master key from composite key, transform_seed, transform_rounds and master_seed.
+    // These are all key-derived secrets with no zeroization otherwise, so each is wrapped in
+    // `Zeroizing` to guarantee it's cleared on every exit path, including `?` error returns.
+    let key_elements = zeroize::Zeroizing::new(db_key.get_key_elements()?);
+    let key_element_refs: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
+    let composite_key = zeroize::Zeroizing::new(crypt::calculate_sha256(&key_element_refs).to_vec());
+    let transformed_key = zeroize::Zeroizing::new(
+        kdf.transform_key(cipher::generic_array::GenericArray::from_slice(&composite_key))?
+            .to_vec(),
+    );
+    let master_key = zeroize::Zeroizing::new(crypt::calculate_sha256(&[&master_seed, &transformed_key]).to_vec());
 
     // verify credentials
-    let hmac_key = crypt::calculate_sha512(&[&master_seed, &transformed_key, &hmac_block_stream::HMAC_KEY_END]);
-    let header_hmac_key = hmac_block_stream::get_hmac_block_key(u64::MAX, &hmac_key);
+    let hmac_key = zeroize::Zeroizing::new(
+        crypt::calculate_sha512(&[&master_seed, &transformed_key, &hmac_block_stream::HMAC_KEY_END]).to_vec(),
+    );
+    let header_hmac_key = zeroize::Zeroizing::new(
+        hmac_block_stream::get_hmac_block_key(u64::MAX, cipher::generic_array::GenericArray::from_slice(&hmac_key))
+            .to_vec(),
+    );
     let header_hmac =
         crypt::calculate_hmac(&[&header_data], &header_hmac_key).expect("HMAC key always correctly sized");
 
@@ -115,7 +125,10 @@ pub fn dump_kdbx4(
         .get_cipher(&master_key, &outer_iv)?
         .encrypt(&payload_compressed)?;
 
-    let payload_hmac = hmac_block_stream::write_hmac_block_stream(&payload_encrypted, &hmac_key);
+    let payload_hmac = hmac_block_stream::write_hmac_block_stream(
+        &payload_encrypted,
+        cipher::generic_array::GenericArray::from_slice(&hmac_key),
+    );
     writer.write_all(&payload_hmac)?;
 
     Ok(())

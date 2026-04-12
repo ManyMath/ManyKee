@@ -7,6 +7,8 @@ use salsa20::{
     Salsa20,
 };
 
+use zeroize::{Zeroize, ZeroizeOnDrop};
+
 use crate::crypt::CryptographyError;
 
 pub(crate) trait Cipher {
@@ -30,6 +32,7 @@ pub(crate) trait Cipher {
 #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 type Aes256CbcEncryptor = cbc::Encryptor<Aes256>;
 type Aes256CbcDecryptor = cbc::Decryptor<Aes256>;
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct AES256Cipher {
     key: Vec<u8>,
     iv: Vec<u8>,
@@ -81,6 +84,7 @@ impl Cipher for AES256Cipher {
 #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 type TwofishCbcEncryptor = cbc::Encryptor<twofish::Twofish>;
 type TwofishCbcDecryptor = cbc::Decryptor<twofish::Twofish>;
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct TwofishCipher {
     key: Vec<u8>,
     iv: Vec<u8>,

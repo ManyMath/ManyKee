@@ -6,6 +6,7 @@ use cipher::{
     BlockEncrypt, KeyInit,
 };
 use sha2::{Digest, Sha256};
+use zeroize::Zeroize;
 
 use super::CryptographyError;
 use crate::config::MAX_ARGON2_MEMORY_BYTES;
@@ -21,6 +22,14 @@ pub struct AesKdf {
     pub seed: Vec<u8>,
     pub rounds: u64,
 }
+
+impl Drop for AesKdf {
+    fn drop(&mut self) {
+        self.seed.zeroize();
+    }
+}
+
+impl zeroize::ZeroizeOnDrop for AesKdf {}
 
 impl Kdf for AesKdf {
     fn transform_key(
@@ -52,6 +61,14 @@ pub struct Argon2Kdf {
     pub version: argon2::Version,
     pub variant: argon2::Variant,
 }
+
+impl Drop for Argon2Kdf {
+    fn drop(&mut self) {
+        self.salt.zeroize();
+    }
+}
+
+impl zeroize::ZeroizeOnDrop for Argon2Kdf {}
 
 impl Kdf for Argon2Kdf {
     fn transform_key(

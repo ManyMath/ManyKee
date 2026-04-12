@@ -3,7 +3,9 @@
 use std::convert::{TryFrom, TryInto};
 
 use byteorder::{ByteOrder, LittleEndian};
+use cipher::generic_array::GenericArray;
 use thiserror::Error;
+use zeroize::Zeroizing;
 
 use crate::{
     config::{CompressionConfig, DatabaseConfig, InnerCipherConfig, KdfConfig, OuterCipherConfig},
@@ -97,23 +99,34 @@ pub(crate) fn decrypt_kdbx4(
     #[cfg(feature = "challenge_response")]
     let db_key = db_key.clone().perform_challenge(&outer_header.kdf_seed)?;
 
-    // derive master key from composite key, transform_seed, transform_rounds and master_seed
-    let key_elements = db_key.get_key_elements()?;
-    let key_elements: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
-    let composite_key = crypt::calculate_sha256(&key_elements);
-    let transformed_key = outer_header
-        .kdf_config
-        .get_kdf_seeded(&outer_header.kdf_seed)
-        .transform_key(&composite_key)?;
-    let master_key = crypt::calculate_sha256(&[outer_header.master_seed.as_ref(), &transformed_key]);
+    // derive master key from composite key, transform_seed, transform_rounds and master_seed.
+    // These are all key-derived secrets with no zeroization otherwise, so each is wrapped in
+    // `Zeroizing` to guarantee it's cleared on every exit path, including `?` error returns.
+    let key_elements = Zeroizing::new(db_key.get_key_elements()?);
+    let key_element_refs: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
+    let composite_key = Zeroizing::new(crypt::calculate_sha256(&key_element_refs).to_vec());
+    let transformed_key = Zeroizing::new(
+        outer_header
+            .kdf_config
+            .get_kdf_seeded(&outer_header.kdf_seed)
+            .transform_key(GenericArray::from_slice(&composite_key))?
+            .to_vec(),
+    );
+    let master_key =
+        Zeroizing::new(crypt::calculate_sha256(&[outer_header.master_seed.as_ref(), &transformed_key]).to_vec());
 
     // verify credentials
-    let hmac_key = crypt::calculate_sha512(&[
-        &outer_header.master_seed,
-        &transformed_key,
-        &hmac_block_stream::HMAC_KEY_END,
-    ]);
-    let header_hmac_key = hmac_block_stream::get_hmac_block_key(u64::MAX, &hmac_key);
+    let hmac_key = Zeroizing::new(
+        crypt::calculate_sha512(&[
+            &outer_header.master_seed,
+            &transformed_key,
+            &hmac_block_stream::HMAC_KEY_END,
+        ])
+        .to_vec(),
+    );
+    let header_hmac_key = Zeroizing::new(
+        hmac_block_stream::get_hmac_block_key(u64::MAX, GenericArray::from_slice(&hmac_key)).to_vec(),
+    );
     if !crypt::constant_time_eq(
         header_hmac,
         crypt::calculate_hmac(&[header_data], &header_hmac_key)
@@ -124,8 +137,9 @@ pub(crate) fn decrypt_kdbx4(
     }
 
     // read encrypted payload from hmac-verified block stream
-    let payload_encrypted = hmac_block_stream::read_hmac_block_stream(hmac_block_stream, &hmac_key)
-        .map_err(|e| DatabaseOpenError::Format(DatabaseFormatError::Kdbx4(Kdbx4OpenError::BlockStream(e))))?;
+    let payload_encrypted =
+        hmac_block_stream::read_hmac_block_stream(hmac_block_stream, GenericArray::from_slice(&hmac_key))
+            .map_err(|e| DatabaseOpenError::Format(DatabaseFormatError::Kdbx4(Kdbx4OpenError::BlockStream(e))))?;
 
     // Decrypt and decompress encrypted payload
     let payload_compressed = outer_header

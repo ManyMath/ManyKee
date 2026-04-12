@@ -249,18 +249,24 @@ pub(crate) fn decrypt_kdbx3(
     // Rest of file after header is payload
     let payload_encrypted = &data[pos..];
 
-    // derive master key from composite key, transform_seed, transform_rounds and master_seed
-    let key_elements = db_key.get_key_elements()?;
-    let key_elements: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
-    let composite_key = calculate_sha256(&key_elements);
+    // derive master key from composite key, transform_seed, transform_rounds and master_seed.
+    // These are all key-derived secrets with no zeroization otherwise, so each is wrapped in
+    // `Zeroizing` to guarantee it's cleared on every exit path, including `?` error returns.
+    let key_elements = zeroize::Zeroizing::new(db_key.get_key_elements()?);
+    let key_element_refs: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
+    let composite_key = zeroize::Zeroizing::new(calculate_sha256(&key_element_refs).to_vec());
 
     // transform the key
-    let transformed_key = config
-        .kdf_config
-        .get_kdf_seeded(&header.transform_seed)
-        .transform_key(&composite_key)?;
+    let transformed_key = zeroize::Zeroizing::new(
+        config
+            .kdf_config
+            .get_kdf_seeded(&header.transform_seed)
+            .transform_key(cipher::generic_array::GenericArray::from_slice(&composite_key))?
+            .to_vec(),
+    );
 
-    let master_key = calculate_sha256(&[header.master_seed.as_ref(), &transformed_key]);
+    let master_key =
+        zeroize::Zeroizing::new(calculate_sha256(&[header.master_seed.as_ref(), &transformed_key]).to_vec());
 
     // Decrypt payload
     let payload = config
@@ -416,18 +422,22 @@ pub fn dump_kdbx3(db: &Database, db_key: &DatabaseKey, writer: &mut dyn Write) -
 
     writer.write_all(&header_data)?;
 
-    // derive master key from composite key, transform_seed, rounds and master_seed
-    let key_elements = db_key.get_key_elements()?;
-    let key_elements: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
-    let composite_key = calculate_sha256(&key_elements);
+    // derive master key from composite key, transform_seed, rounds and master_seed. These are
+    // all key-derived secrets with no zeroization otherwise, so each is wrapped in `Zeroizing`
+    // to guarantee it's cleared on every exit path, including `?` error returns.
+    let key_elements = zeroize::Zeroizing::new(db_key.get_key_elements()?);
+    let key_element_refs: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
+    let composite_key = zeroize::Zeroizing::new(calculate_sha256(&key_element_refs).to_vec());
 
-    let transformed_key = db
-        .config
-        .kdf_config
-        .get_kdf_seeded(&transform_seed)
-        .transform_key(&composite_key)?;
+    let transformed_key = zeroize::Zeroizing::new(
+        db.config
+            .kdf_config
+            .get_kdf_seeded(&transform_seed)
+            .transform_key(cipher::generic_array::GenericArray::from_slice(&composite_key))?
+            .to_vec(),
+    );
 
-    let master_key = calculate_sha256(&[&master_seed, &transformed_key]);
+    let master_key = zeroize::Zeroizing::new(calculate_sha256(&[&master_seed, &transformed_key]).to_vec());
 
     // Initialize inner encryptor from the protected stream key
     let stream_key = calculate_sha256(&[protected_stream_key.as_ref()]);

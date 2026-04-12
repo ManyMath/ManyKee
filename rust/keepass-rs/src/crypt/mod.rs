@@ -109,4 +109,22 @@ mod tests {
     fn constant_time_eq_rejects_different_length() {
         assert!(!constant_time_eq(b"short", b"much longer input"));
     }
+
+    /// Compile-time assertion that `T` implements `ZeroizeOnDrop`, mirroring
+    /// `rust/keepassxc/tests/zeroize_audit.rs`'s pattern for `DatabaseKey`.
+    /// These types are crate-private, so the assertion has to live here
+    /// rather than in that external integration test.
+    fn assert_zeroize_on_drop<T: zeroize::ZeroizeOnDrop>() {}
+
+    #[test]
+    fn cipher_key_material_zeroizes_on_drop() {
+        assert_zeroize_on_drop::<super::ciphers::AES256Cipher>();
+        assert_zeroize_on_drop::<super::ciphers::TwofishCipher>();
+    }
+
+    #[test]
+    fn kdf_seed_material_zeroizes_on_drop() {
+        assert_zeroize_on_drop::<super::kdf::AesKdf>();
+        assert_zeroize_on_drop::<super::kdf::Argon2Kdf>();
+    }
 }
