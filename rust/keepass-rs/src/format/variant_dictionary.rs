@@ -33,7 +33,11 @@ impl VariantDictionary {
     }
 
     pub(crate) fn parse(buffer: &[u8]) -> Result<VariantDictionary, VariantDictionaryError> {
-        let version = LittleEndian::read_u16(&buffer[0..2]);
+        let version = LittleEndian::read_u16(
+            buffer
+                .get(0..2)
+                .ok_or(VariantDictionaryError::UnexpectedEof)?,
+        );
 
         if version != VARIANT_DICTIONARY_VERSION {
             return Err(VariantDictionaryError::InvalidVersion { version });
@@ -43,20 +47,55 @@ impl VariantDictionary {
         let mut data = HashMap::new();
 
         while pos + 9 < buffer.len() {
-            let value_type = buffer[pos];
+            let value_type = *buffer.get(pos).ok_or(VariantDictionaryError::UnexpectedEof)?;
             pos += 1;
 
-            let key_length = LittleEndian::read_u32(&buffer[pos..(pos + 4)]) as usize;
+            let key_length = LittleEndian::read_u32(
+                buffer
+                    .get(pos..(pos + 4))
+                    .ok_or(VariantDictionaryError::UnexpectedEof)?,
+            ) as usize;
             pos += 4;
 
-            let key = String::from_utf8_lossy(&buffer[pos..(pos + key_length)]).to_string();
+            let key = String::from_utf8_lossy(
+                buffer
+                    .get(pos..(pos + key_length))
+                    .ok_or(VariantDictionaryError::UnexpectedEof)?,
+            )
+            .to_string();
             pos += key_length;
 
-            let value_length = LittleEndian::read_u32(&buffer[pos..(pos + 4)]) as usize;
+            let value_length = LittleEndian::read_u32(
+                buffer
+                    .get(pos..(pos + 4))
+                    .ok_or(VariantDictionaryError::UnexpectedEof)?,
+            ) as usize;
             pos += 4;
 
-            let value_buffer = &buffer[pos..(pos + value_length)];
+            let value_buffer = buffer
+                .get(pos..(pos + value_length))
+                .ok_or(VariantDictionaryError::UnexpectedEof)?;
             pos += value_length;
+
+            let expected_len = match value_type {
+                U32_TYPE_ID | I32_TYPE_ID => Some(4),
+                U64_TYPE_ID | I64_TYPE_ID => Some(8),
+                BOOL_TYPE_ID => Some(1),
+                STR_TYPE_ID | BYTES_TYPE_ID => None,
+                _ => {
+                    return Err(VariantDictionaryError::InvalidValueType { value_type });
+                }
+            };
+
+            if let Some(expected_len) = expected_len {
+                if value_buffer.len() != expected_len {
+                    return Err(VariantDictionaryError::InvalidValueLength {
+                        value_type,
+                        expected_len,
+                        actual_len: value_buffer.len(),
+                    });
+                }
+            }
 
             let value = match value_type {
                 U32_TYPE_ID => VariantDictionaryValue::UInt32(LittleEndian::read_u32(value_buffer)),
@@ -68,19 +107,18 @@ impl VariantDictionary {
                     VariantDictionaryValue::String(String::from_utf8_lossy(value_buffer).to_string())
                 }
                 BYTES_TYPE_ID => VariantDictionaryValue::ByteArray(value_buffer.to_vec()),
-                _ => {
-                    return Err(VariantDictionaryError::InvalidValueType { value_type });
-                }
+                _ => unreachable!("value_type already validated above"),
             };
 
             data.insert(key, value);
         }
 
-        if pos == buffer.len() || buffer[pos] != VARIANT_DICTIONARY_END {
+        match buffer.get(pos) {
+            Some(&b) if b == VARIANT_DICTIONARY_END => {}
             // even though we can determine when to stop parsing a VariantDictionary by where we
             // are in the buffer, there should always be a value_type = 0 entry to denote that a
             // VariantDictionary is finished
-            return Err(VariantDictionaryError::NotTerminated);
+            _ => return Err(VariantDictionaryError::NotTerminated),
         }
 
         Ok(VariantDictionary { data })
@@ -288,6 +326,18 @@ pub enum VariantDictionaryError {
     #[error("Invalid value type: {}", value_type)]
     InvalidValueType { value_type: u8 },
 
+    #[error(
+        "Invalid value length for type {}: expected {} bytes, got {}",
+        value_type,
+        expected_len,
+        actual_len
+    )]
+    InvalidValueLength {
+        value_type: u8,
+        expected_len: usize,
+        actual_len: usize,
+    },
+
     #[error("Missing key: {}", key)]
     MissingKey { key: String },
 
@@ -296,6 +346,9 @@ pub enum VariantDictionaryError {
 
     #[error("VariantDictionary did not end with null byte, when it should")]
     NotTerminated,
+
+    #[error("Unexpected end of buffer while parsing VariantDictionary")]
+    UnexpectedEof,
 }
 
 #[cfg(test)]
@@ -303,6 +356,40 @@ mod variant_dictionary_tests {
     use hex_literal::hex;
 
     use super::*;
+
+    #[test]
+    fn parse_does_not_panic_on_empty_buffer() {
+        let res = VariantDictionary::parse(&[]);
+        assert!(matches!(res, Err(VariantDictionaryError::UnexpectedEof)));
+    }
+
+    #[test]
+    fn parse_does_not_panic_on_huge_key_length() {
+        // ver t key_len (huge, near u32::MAX), padded so the loop guard is entered
+        let res = VariantDictionary::parse(&hex!("000104F0FFFFFF0000000000"));
+        assert!(matches!(res, Err(VariantDictionaryError::UnexpectedEof)));
+    }
+
+    #[test]
+    fn parse_does_not_panic_on_huge_value_length() {
+        // ver t key_len key val_len (huge, near u32::MAX)
+        let res = VariantDictionary::parse(&hex!("000104030000004142430500000010"));
+        assert!(matches!(res, Err(VariantDictionaryError::UnexpectedEof)));
+    }
+
+    #[test]
+    fn parse_errors_on_undersized_typed_value() {
+        // ver t key_len key val_len(=1) value(1 byte, too short for a U32)
+        let res = VariantDictionary::parse(&hex!("00010403000000414243010000000000"));
+        assert!(matches!(
+            res,
+            Err(VariantDictionaryError::InvalidValueLength {
+                value_type: U32_TYPE_ID,
+                expected_len: 4,
+                actual_len: 1,
+            })
+        ));
+    }
 
     #[test]
     fn parsing_errors() -> Result<(), VariantDictionaryError> {
