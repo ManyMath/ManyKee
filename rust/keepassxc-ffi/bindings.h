@@ -35,33 +35,12 @@
  struct KpxcDatabase *kpxc_database_open(const char *path, const char *password) ;
 
 
-struct KpxcDatabase *kpxc_database_open_bytes(const uint8_t *bytes,
-                                              uintptr_t len,
-                                              const char *password)
-;
-
-
 struct KpxcDatabase *kpxc_database_open_with_keyfile(const char *path,
                                                      const char *password,
                                                      const char *keyfile_path)
 ;
 
-
-struct KpxcDatabase *kpxc_database_open_bytes_with_keyfile(const uint8_t *bytes,
-                                                           uintptr_t len,
-                                                           const char *password,
-                                                           const uint8_t *keyfile_bytes,
-                                                           uintptr_t keyfile_len)
-;
-
  int kpxc_database_save(struct KpxcDatabase *db, const char *path, const char *password) ;
-
-
-int kpxc_database_save_bytes(struct KpxcDatabase *db,
-                             const char *password,
-                             uint8_t **out_ptr,
-                             uintptr_t *out_len)
-;
 
 
 int kpxc_database_save_with_keyfile(struct KpxcDatabase *db,
@@ -69,17 +48,6 @@ int kpxc_database_save_with_keyfile(struct KpxcDatabase *db,
                                     const char *password,
                                     const char *keyfile_path)
 ;
-
-
-int kpxc_database_save_bytes_with_keyfile(struct KpxcDatabase *db,
-                                          const char *password,
-                                          const uint8_t *keyfile_bytes,
-                                          uintptr_t keyfile_len,
-                                          uint8_t **out_ptr,
-                                          uintptr_t *out_len)
-;
-
- void kpxc_bytes_free(uint8_t *ptr, uintptr_t len) ;
 
  void kpxc_database_free(struct KpxcDatabase *db) ;
 
