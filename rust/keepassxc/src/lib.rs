@@ -56,7 +56,10 @@ pub fn extract_challenge(db_bytes: &[u8]) -> Result<Vec<u8>, KeePassXcError> {
 
     let mut pos = VERSION_HEADER_SIZE;
     loop {
-        if pos + 5 > db_bytes.len() {
+        let entry_start = pos
+            .checked_add(5)
+            .ok_or_else(|| KeePassXcError::Parse("Header entry length overflow".to_string()))?;
+        if entry_start > db_bytes.len() {
             return Err(KeePassXcError::Parse(
                 "Unexpected end of header".to_string(),
             ));
@@ -70,13 +73,16 @@ pub fn extract_challenge(db_bytes: &[u8]) -> Result<Vec<u8>, KeePassXcError> {
             db_bytes[pos + 4],
         ]) as usize;
 
-        pos += 5;
+        pos = entry_start;
 
         if entry_type == HEADER_END {
             break;
         }
 
-        if pos + entry_len > db_bytes.len() {
+        let entry_end = pos
+            .checked_add(entry_len)
+            .ok_or_else(|| KeePassXcError::Parse("Header entry length overflow".to_string()))?;
+        if entry_end > db_bytes.len() {
             return Err(KeePassXcError::Parse(
                 "Header entry extends past file end".to_string(),
             ));
@@ -84,7 +90,7 @@ pub fn extract_challenge(db_bytes: &[u8]) -> Result<Vec<u8>, KeePassXcError> {
 
         if entry_type == HEADER_KDF_PARAMS {
             // Parse VariantDictionary to find the seed (key "S")
-            let vd_bytes = &db_bytes[pos..pos + entry_len];
+            let vd_bytes = &db_bytes[pos..entry_end];
             match extract_vd_seed(vd_bytes) {
                 Some(seed) => return Ok(seed),
                 None => {
@@ -95,7 +101,7 @@ pub fn extract_challenge(db_bytes: &[u8]) -> Result<Vec<u8>, KeePassXcError> {
             }
         }
 
-        pos += entry_len;
+        pos = entry_end;
     }
 
     Err(KeePassXcError::Parse(
@@ -116,40 +122,91 @@ fn extract_vd_seed(data: &[u8]) -> Option<Vec<u8>> {
         }
 
         let entry_type = data[pos];
-        pos += 1;
+        pos = pos.checked_add(1)?;
 
         if entry_type == 0x00 {
             return None; // end of dictionary, "S" not found
         }
 
-        if pos + 4 > data.len() {
+        let key_start = pos.checked_add(4)?;
+        if key_start > data.len() {
             return None;
         }
         let key_len =
             u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
-        pos += 4;
+        pos = key_start;
 
-        if pos + key_len > data.len() {
+        let key_end = pos.checked_add(key_len)?;
+        if key_end > data.len() {
             return None;
         }
-        let key = &data[pos..pos + key_len];
-        pos += key_len;
+        let key = &data[pos..key_end];
+        pos = key_end;
 
-        if pos + 4 > data.len() {
+        let val_start = pos.checked_add(4)?;
+        if val_start > data.len() {
             return None;
         }
         let val_len =
             u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
-        pos += 4;
+        pos = val_start;
 
-        if pos + val_len > data.len() {
+        let val_end = pos.checked_add(val_len)?;
+        if val_end > data.len() {
             return None;
         }
-        let value = &data[pos..pos + val_len];
-        pos += val_len;
+        let value = &data[pos..val_end];
+        pos = val_end;
 
         if key == b"S" {
             return Some(value.to_vec());
         }
+    }
+}
+
+#[cfg(test)]
+mod header_length_tests {
+    use super::*;
+
+    /// A header entry whose declared length is near `u32::MAX` must be rejected
+    /// (as "extends past file end") rather than overflow `pos + entry_len` or
+    /// panic on the resulting slice, the same class of bug already fixed for
+    /// `VariantDictionary::parse`, but reachable here through the WASM entry
+    /// point where `usize` can be 32 bits wide.
+    #[test]
+    fn extract_challenge_does_not_panic_on_huge_entry_len() {
+        let mut buf = vec![0u8; 12]; // version header
+        buf.push(11); // HEADER_KDF_PARAMS
+        buf.extend_from_slice(&u32::MAX.to_le_bytes()); // entry_len near u32::MAX
+        let res = extract_challenge(&buf);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn extract_challenge_does_not_panic_on_truncated_header() {
+        let mut buf = vec![0u8; 12];
+        buf.push(11);
+        // declared entry_len is missing its remaining bytes entirely
+        buf.extend_from_slice(&[0xFF]);
+        let res = extract_challenge(&buf);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn extract_vd_seed_does_not_panic_on_huge_key_len() {
+        let mut data = vec![0u8; 2]; // version
+        data.push(0x18); // some non-zero entry type
+        data.extend_from_slice(&u32::MAX.to_le_bytes()); // key_len near u32::MAX
+        assert_eq!(extract_vd_seed(&data), None);
+    }
+
+    #[test]
+    fn extract_vd_seed_does_not_panic_on_huge_val_len() {
+        let mut data = vec![0u8; 2]; // version
+        data.push(0x18); // entry type
+        data.extend_from_slice(&1u32.to_le_bytes()); // key_len = 1
+        data.push(b'S'); // key
+        data.extend_from_slice(&u32::MAX.to_le_bytes()); // val_len near u32::MAX
+        assert_eq!(extract_vd_seed(&data), None);
     }
 }
