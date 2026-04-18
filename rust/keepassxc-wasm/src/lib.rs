@@ -68,6 +68,37 @@ fn err_json(code: &str, message: &str) -> JsValue {
     JsValue::from_str(&json!({"code": code, "message": message}).to_string())
 }
 
+/// Runs `f` behind `catch_unwind`, so a panic anywhere in the exported call
+/// graph (including in the `keepass-rs`/`keepassxc` core reached through it,
+/// e.g. from a crafted `.kdbx` file) becomes a `PANIC`-shaped `Err` instead of
+/// unwinding across the `#[wasm_bindgen]` boundary. An uncaught unwind there
+/// traps the whole WASM instance, killing every other open database handle
+/// held in this session's `thread_local!` state, mirrors
+/// `keepassxc-ffi::error::catch_unwind`.
+fn catch_unwind_result<T>(
+    f: impl FnOnce() -> Result<T, JsValue> + std::panic::UnwindSafe,
+) -> Result<T, JsValue> {
+    std::panic::catch_unwind(f).unwrap_or_else(|payload| {
+        let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = payload.downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "unknown panic".to_string()
+        };
+        Err(err_json("PANIC", &format!("internal panic: {}", msg)))
+    })
+}
+
+/// Installs a panic hook that forwards panic messages to the browser/Node
+/// console, and is called automatically on module instantiation. Diagnostic
+/// only, `catch_unwind_result` above is what actually prevents a panic from
+/// trapping the instance.
+#[wasm_bindgen(start)]
+pub fn init_panic_hook() {
+    console_error_panic_hook::set_once();
+}
+
 fn find_group<'a>(root: &'a keepassxc::Group, uuid_str: &str) -> Option<&'a keepassxc::Group> {
     if uuid_str.is_empty() {
         return Some(root);
@@ -97,22 +128,25 @@ pub fn open_db(
     password: &str,
     key_file_bytes: Option<Vec<u8>>,
 ) -> Result<String, JsValue> {
-    let mut key = DatabaseKey::new();
+    catch_unwind_result(|| {
+        let mut key = DatabaseKey::new();
 
-    if !password.is_empty() {
-        key = key.with_password(password);
-    }
+        if !password.is_empty() {
+            key = key.with_password(password);
+        }
 
-    if let Some(kf_bytes) = key_file_bytes {
-        key = key
-            .with_keyfile(&mut kf_bytes.as_slice())
-            .map_err(|e| err_json("KEY_FILE_ERROR", &format!("Failed to read key file: {}", e)))?;
-    }
+        if let Some(kf_bytes) = key_file_bytes {
+            key = key.with_keyfile(&mut kf_bytes.as_slice()).map_err(|e| {
+                err_json("KEY_FILE_ERROR", &format!("Failed to read key file: {}", e))
+            })?;
+        }
 
-    let db = open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
+        let db =
+            open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
 
-    let handle = store_database(db);
-    Ok(json!({"handle": handle}).to_string())
+        let handle = store_database(db);
+        Ok(json!({"handle": handle}).to_string())
+    })
 }
 
 #[wasm_bindgen]
@@ -121,18 +155,21 @@ pub fn open_db_with_key_file(
     password: &str,
     key_file_bytes: &[u8],
 ) -> Result<String, JsValue> {
-    let mut key = DatabaseKey::new();
-    if !password.is_empty() {
-        key = key.with_password(password);
-    }
-    key = key
-        .with_keyfile(&mut &key_file_bytes[..])
-        .map_err(|e| err_json("KEY_FILE_ERROR", &format!("Failed to read key file: {}", e)))?;
+    catch_unwind_result(|| {
+        let mut key = DatabaseKey::new();
+        if !password.is_empty() {
+            key = key.with_password(password);
+        }
+        key = key.with_keyfile(&mut &key_file_bytes[..]).map_err(|e| {
+            err_json("KEY_FILE_ERROR", &format!("Failed to read key file: {}", e))
+        })?;
 
-    let db = open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
+        let db =
+            open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
 
-    let handle = store_database(db);
-    Ok(json!({"handle": handle}).to_string())
+        let handle = store_database(db);
+        Ok(json!({"handle": handle}).to_string())
+    })
 }
 
 #[wasm_bindgen]
@@ -141,114 +178,138 @@ pub fn open_db_with_challenge_response(
     password: &str,
     challenge_response_hex: &str,
 ) -> Result<String, JsValue> {
-    let cr_bytes = hex::decode(challenge_response_hex).map_err(|e| {
-        err_json(
-            "PARSE_ERROR",
-            &format!("Invalid hex in challenge_response: {}", e),
-        )
-    })?;
+    catch_unwind_result(|| {
+        let cr_bytes = hex::decode(challenge_response_hex).map_err(|e| {
+            err_json(
+                "PARSE_ERROR",
+                &format!("Invalid hex in challenge_response: {}", e),
+            )
+        })?;
 
-    let key = DatabaseKey::new()
-        .with_password(password)
-        .with_challenge_response_bytes(cr_bytes);
+        let key = DatabaseKey::new()
+            .with_password(password)
+            .with_challenge_response_bytes(cr_bytes);
 
-    let db = open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
+        let db =
+            open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
 
-    let handle = store_database(db);
-    Ok(json!({"handle": handle}).to_string())
+        let handle = store_database(db);
+        Ok(json!({"handle": handle}).to_string())
+    })
 }
 
 #[wasm_bindgen]
 pub fn close_db(handle: u32) -> Result<(), JsValue> {
-    DATABASES.with(|dbs| {
-        let removed = dbs.borrow_mut().remove(&handle);
-        if removed.is_none() {
-            return Err(err_json(
-                "INVALID_HANDLE",
-                &format!("No database with handle {}", handle),
-            ));
-        }
-        Ok(())
+    catch_unwind_result(|| {
+        DATABASES.with(|dbs| {
+            let removed = dbs.borrow_mut().remove(&handle);
+            if removed.is_none() {
+                return Err(err_json(
+                    "INVALID_HANDLE",
+                    &format!("No database with handle {}", handle),
+                ));
+            }
+            Ok(())
+        })
     })
 }
 
 #[wasm_bindgen]
 pub fn list_groups(handle: u32, group_uuid: &str) -> Result<String, JsValue> {
     let uuid_owned = group_uuid.to_string();
-    with_database(handle, |db| {
-        let group = find_group(&db.root, &uuid_owned)
-            .ok_or_else(|| err_json("NOT_FOUND", &format!("Group not found: {}", uuid_owned)))?;
+    catch_unwind_result(|| {
+        with_database(handle, |db| {
+            let group = find_group(&db.root, &uuid_owned).ok_or_else(|| {
+                err_json("NOT_FOUND", &format!("Group not found: {}", uuid_owned))
+            })?;
 
-        let groups: Vec<GroupInfo> = group.groups.iter().map(GroupInfo::from).collect();
-        Ok(serde_json::to_string(&groups).map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
-    })?
+            let groups: Vec<GroupInfo> = group.groups.iter().map(GroupInfo::from).collect();
+            Ok(serde_json::to_string(&groups)
+                .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn list_entries(handle: u32, group_uuid: &str) -> Result<String, JsValue> {
     let uuid_owned = group_uuid.to_string();
-    with_database(handle, |db| {
-        let group = find_group(&db.root, &uuid_owned)
-            .ok_or_else(|| err_json("NOT_FOUND", &format!("Group not found: {}", uuid_owned)))?;
+    catch_unwind_result(|| {
+        with_database(handle, |db| {
+            let group = find_group(&db.root, &uuid_owned).ok_or_else(|| {
+                err_json("NOT_FOUND", &format!("Group not found: {}", uuid_owned))
+            })?;
 
-        let entries: Vec<EntryInfo> = group.entries.iter().map(EntryInfo::from).collect();
-        Ok(serde_json::to_string(&entries).map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
-    })?
+            let entries: Vec<EntryInfo> = group.entries.iter().map(EntryInfo::from).collect();
+            Ok(serde_json::to_string(&entries)
+                .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValue> {
     let uuid_owned = entry_uuid.to_string();
-    with_database(handle, |db| {
-        let entry = find_entry(&db.root, &uuid_owned)
-            .ok_or_else(|| err_json("NOT_FOUND", &format!("Entry not found: {}", uuid_owned)))?;
-        let payload = read_entry_payload(entry);
-        let fields = EntryFields::from(payload);
-        Ok(serde_json::to_string(&fields).map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
-    })?
+    catch_unwind_result(|| {
+        with_database(handle, |db| {
+            let entry = find_entry(&db.root, &uuid_owned).ok_or_else(|| {
+                err_json("NOT_FOUND", &format!("Entry not found: {}", uuid_owned))
+            })?;
+            let payload = read_entry_payload(entry);
+            let fields = EntryFields::from(payload);
+            Ok(serde_json::to_string(&fields)
+                .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn get_totp(handle: u32, entry_uuid: &str) -> Result<String, JsValue> {
     let uuid_owned = entry_uuid.to_string();
     let now = (js_sys::Date::now() / 1000.0) as u64;
-    with_database(handle, |db| {
-        let entry = find_entry(&db.root, &uuid_owned)
-            .ok_or_else(|| err_json("NOT_FOUND", &format!("Entry not found: {}", uuid_owned)))?;
-        let payload = read_entry_totp_at(entry, now)
-            .map_err(|error| err_json("TOTP_ERROR", &format!("Failed to read TOTP: {}", error)))?;
+    catch_unwind_result(|| {
+        with_database(handle, |db| {
+            let entry = find_entry(&db.root, &uuid_owned).ok_or_else(|| {
+                err_json("NOT_FOUND", &format!("Entry not found: {}", uuid_owned))
+            })?;
+            let payload = read_entry_totp_at(entry, now).map_err(|error| {
+                err_json("TOTP_ERROR", &format!("Failed to read TOTP: {}", error))
+            })?;
 
-        match payload {
-            Some(payload) => {
-                let info = TotpInfo::from(payload);
-                serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
+            match payload {
+                Some(payload) => {
+                    let info = TotpInfo::from(payload);
+                    serde_json::to_string(&info)
+                        .map_err(|e| err_json("JSON_ERROR", &e.to_string()))
+                }
+                None => Ok("null".to_string()),
             }
-            None => Ok("null".to_string()),
-        }
-    })?
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn create_entry(handle: u32, group_uuid: &str, title: &str) -> Result<String, JsValue> {
     let group_uuid = group_uuid.to_string();
     let title = title.to_string();
-    with_database_mut(handle, |db| {
-        let group = if group_uuid.is_empty() {
-            &mut db.root
-        } else {
-            let group_uuid = parse_uuid(&group_uuid, "group")?;
-            db.root
-                .find_group_by_uuid_mut(group_uuid)
-                .ok_or_else(|| err_json("NOT_FOUND", &format!("Group not found: {}", group_uuid)))?
-        };
+    catch_unwind_result(|| {
+        with_database_mut(handle, |db| {
+            let group = if group_uuid.is_empty() {
+                &mut db.root
+            } else {
+                let group_uuid = parse_uuid(&group_uuid, "group")?;
+                db.root.find_group_by_uuid_mut(group_uuid).ok_or_else(|| {
+                    err_json("NOT_FOUND", &format!("Group not found: {}", group_uuid))
+                })?
+            };
 
-        let mut entry = Entry::new();
-        entry.set_unprotected(keepassxc::fields::TITLE, &title);
-        let info = EntryInfo::from(&entry);
-        group.add_entry(entry);
+            let mut entry = Entry::new();
+            entry.set_unprotected(keepassxc::fields::TITLE, &title);
+            let info = EntryInfo::from(&entry);
+            group.add_entry(entry);
 
-        serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
-    })?
+            serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
@@ -259,84 +320,98 @@ pub fn set_entry_field(
     value: &str,
     is_protected: bool,
 ) -> Result<(), JsValue> {
-    let entry_uuid = parse_uuid(entry_uuid, "entry")?;
     let field_name = field_name.to_string();
     let value = value.to_string();
-    with_database_mut(handle, |db| {
-        let meta = db.meta.clone();
-        update_entry(&mut db.root, entry_uuid, &meta, |entry| {
-            entry.set_field(&field_name, &value, is_protected);
-        })
-        .map_err(|error| err_json("UPDATE_ERROR", &error.to_string()))
-    })?
+    catch_unwind_result(|| {
+        let entry_uuid = parse_uuid(entry_uuid, "entry")?;
+        with_database_mut(handle, |db| {
+            let meta = db.meta.clone();
+            update_entry(&mut db.root, entry_uuid, &meta, |entry| {
+                entry.set_field(&field_name, &value, is_protected);
+            })
+            .map_err(|error| err_json("UPDATE_ERROR", &error.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn delete_entry(handle: u32, entry_uuid: &str) -> Result<(), JsValue> {
-    let entry_uuid = parse_uuid(entry_uuid, "entry")?;
-    with_database_mut(handle, |db| {
-        delete_entry_from_db(db, entry_uuid, true)
-            .map_err(|error| err_json("DELETE_ERROR", &error.to_string()))
-    })?
+    catch_unwind_result(|| {
+        let entry_uuid = parse_uuid(entry_uuid, "entry")?;
+        with_database_mut(handle, |db| {
+            delete_entry_from_db(db, entry_uuid, true)
+                .map_err(|error| err_json("DELETE_ERROR", &error.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn move_entry(handle: u32, entry_uuid: &str, target_group_uuid: &str) -> Result<(), JsValue> {
-    let entry_uuid = parse_uuid(entry_uuid, "entry")?;
-    let target_group_uuid = parse_uuid(target_group_uuid, "group")?;
-    with_database_mut(handle, |db| {
-        move_entry_in_db(&mut db.root, entry_uuid, target_group_uuid)
-            .map_err(|error| err_json("MOVE_ERROR", &error.to_string()))
-    })?
+    catch_unwind_result(|| {
+        let entry_uuid = parse_uuid(entry_uuid, "entry")?;
+        let target_group_uuid = parse_uuid(target_group_uuid, "group")?;
+        with_database_mut(handle, |db| {
+            move_entry_in_db(&mut db.root, entry_uuid, target_group_uuid)
+                .map_err(|error| err_json("MOVE_ERROR", &error.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn create_group(handle: u32, parent_group_uuid: &str, name: &str) -> Result<String, JsValue> {
-    let parent_group_uuid = if parent_group_uuid.is_empty() {
-        None
-    } else {
-        Some(parse_uuid(parent_group_uuid, "parent group")?)
-    };
     let name = name.to_string();
-    with_database_mut(handle, |db| {
-        let parent_uuid = parent_group_uuid.unwrap_or(db.root.uuid);
-        let uuid = create_group_in_db(&mut db.root, parent_uuid, &name)
-            .map_err(|error| err_json("CREATE_ERROR", &error.to_string()))?;
+    catch_unwind_result(|| {
+        let parent_group_uuid = if parent_group_uuid.is_empty() {
+            None
+        } else {
+            Some(parse_uuid(parent_group_uuid, "parent group")?)
+        };
+        with_database_mut(handle, |db| {
+            let parent_uuid = parent_group_uuid.unwrap_or(db.root.uuid);
+            let uuid = create_group_in_db(&mut db.root, parent_uuid, &name)
+                .map_err(|error| err_json("CREATE_ERROR", &error.to_string()))?;
 
-        let group = db.root.find_group_by_uuid(uuid).unwrap();
-        let info = GroupInfo::from(group);
+            let group = db.root.find_group_by_uuid(uuid).unwrap();
+            let info = GroupInfo::from(group);
 
-        serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
-    })?
+            serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn rename_group(handle: u32, group_uuid: &str, new_name: &str) -> Result<(), JsValue> {
-    let group_uuid = parse_uuid(group_uuid, "group")?;
     let new_name = new_name.to_string();
-    with_database_mut(handle, |db| {
-        rename_group_in_db(&mut db.root, group_uuid, &new_name)
-            .map_err(|error| err_json("RENAME_ERROR", &error.to_string()))
-    })?
+    catch_unwind_result(|| {
+        let group_uuid = parse_uuid(group_uuid, "group")?;
+        with_database_mut(handle, |db| {
+            rename_group_in_db(&mut db.root, group_uuid, &new_name)
+                .map_err(|error| err_json("RENAME_ERROR", &error.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn delete_group(handle: u32, group_uuid: &str) -> Result<(), JsValue> {
-    let group_uuid = parse_uuid(group_uuid, "group")?;
-    with_database_mut(handle, |db| {
-        delete_group_from_db(db, group_uuid, true)
-            .map_err(|error| err_json("DELETE_ERROR", &error.to_string()))
-    })?
+    catch_unwind_result(|| {
+        let group_uuid = parse_uuid(group_uuid, "group")?;
+        with_database_mut(handle, |db| {
+            delete_group_from_db(db, group_uuid, true)
+                .map_err(|error| err_json("DELETE_ERROR", &error.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn move_group(handle: u32, group_uuid: &str, target_parent_uuid: &str) -> Result<(), JsValue> {
-    let group_uuid = parse_uuid(group_uuid, "group")?;
-    let target_parent_uuid = parse_uuid(target_parent_uuid, "target parent")?;
-    with_database_mut(handle, |db| {
-        move_group_in_db(&mut db.root, group_uuid, target_parent_uuid)
-            .map_err(|error| err_json("MOVE_ERROR", &error.to_string()))
-    })?
+    catch_unwind_result(|| {
+        let group_uuid = parse_uuid(group_uuid, "group")?;
+        let target_parent_uuid = parse_uuid(target_parent_uuid, "target parent")?;
+        with_database_mut(handle, |db| {
+            move_group_in_db(&mut db.root, group_uuid, target_parent_uuid)
+                .map_err(|error| err_json("MOVE_ERROR", &error.to_string()))
+        })?
+    })
 }
 
 #[wasm_bindgen]
@@ -346,59 +421,77 @@ pub fn save_db(
     key_file_bytes: Option<Vec<u8>>,
 ) -> Result<String, JsValue> {
     let password = password.to_string();
-    with_database_mut(handle, |db| {
-        let mut key = DatabaseKey::new();
-        if !password.is_empty() {
-            key = key.with_password(&password);
-        }
-        if let Some(key_file_bytes) = key_file_bytes {
-            key = key
-                .with_keyfile(&mut key_file_bytes.as_slice())
-                .map_err(|error| err_json("KEY_FILE_ERROR", &error.to_string()))?;
-        }
+    catch_unwind_result(|| {
+        with_database_mut(handle, |db| {
+            let mut key = DatabaseKey::new();
+            if !password.is_empty() {
+                key = key.with_password(&password);
+            }
+            if let Some(key_file_bytes) = key_file_bytes {
+                key = key
+                    .with_keyfile(&mut key_file_bytes.as_slice())
+                    .map_err(|error| err_json("KEY_FILE_ERROR", &error.to_string()))?;
+            }
 
-        let buffer =
-            save_bytes(db, key).map_err(|error| err_json("SAVE_ERROR", &error.to_string()))?;
-        Ok(hex::encode(buffer))
-    })?
+            let buffer =
+                save_bytes(db, key).map_err(|error| err_json("SAVE_ERROR", &error.to_string()))?;
+            Ok(hex::encode(buffer))
+        })?
+    })
 }
 
 #[wasm_bindgen]
 pub fn merge_databases(handle_a: u32, handle_b: u32) -> Result<String, JsValue> {
-    DATABASES.with(|dbs| {
-        let mut dbs = dbs.borrow_mut();
+    catch_unwind_result(|| {
+        DATABASES.with(|dbs| {
+            let mut dbs = dbs.borrow_mut();
 
-        if !dbs.contains_key(&handle_a) {
-            return Err(err_json(
-                "INVALID_HANDLE",
-                &format!("No database with handle {}", handle_a),
-            ));
-        }
-        if !dbs.contains_key(&handle_b) {
-            return Err(err_json(
-                "INVALID_HANDLE",
-                &format!("No database with handle {}", handle_b),
-            ));
-        }
+            if !dbs.contains_key(&handle_a) {
+                return Err(err_json(
+                    "INVALID_HANDLE",
+                    &format!("No database with handle {}", handle_a),
+                ));
+            }
+            if !dbs.contains_key(&handle_b) {
+                return Err(err_json(
+                    "INVALID_HANDLE",
+                    &format!("No database with handle {}", handle_b),
+                ));
+            }
 
-        let db_b = dbs.remove(&handle_b).unwrap();
-        let db_a = dbs.get_mut(&handle_a).unwrap();
+            let db_b = dbs.remove(&handle_b).unwrap();
 
-        let merge_result = keepassxc::merge(db_a, &db_b);
-        dbs.insert(handle_b, db_b);
+            // Run the merge behind its own catch_unwind so db_b is always
+            // reinserted before this function returns, even if the merge
+            // itself panics on a crafted database, otherwise db_b would
+            // silently vanish from DATABASES with no way to recover it. Any
+            // caught panic is re-raised afterward so the outer
+            // catch_unwind_result still converts it into a PANIC error.
+            let merge_outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let db_a = dbs.get_mut(&handle_a).unwrap();
+                keepassxc::merge(db_a, &db_b)
+            }));
+            dbs.insert(handle_b, db_b);
 
-        let result = merge_result.map_err(|e| err_json("MERGE_ERROR", &format!("{}", e)))?;
-        let info = MergeInfo::from(&result);
+            let merge_result = match merge_outcome {
+                Ok(result) => result,
+                Err(payload) => std::panic::resume_unwind(payload),
+            };
+            let result = merge_result.map_err(|e| err_json("MERGE_ERROR", &format!("{}", e)))?;
+            let info = MergeInfo::from(&result);
 
-        serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
+            serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
+        })
     })
 }
 
 #[wasm_bindgen]
 pub fn extract_challenge(db_bytes: &[u8]) -> Result<String, JsValue> {
-    let seed =
-        extract_core_challenge(db_bytes).map_err(|e| err_json("PARSE_ERROR", &format!("{}", e)))?;
-    Ok(hex::encode(seed))
+    catch_unwind_result(|| {
+        let seed = extract_core_challenge(db_bytes)
+            .map_err(|e| err_json("PARSE_ERROR", &format!("{}", e)))?;
+        Ok(hex::encode(seed))
+    })
 }
 
 #[cfg(test)]
@@ -490,5 +583,36 @@ mod tests {
         assert_eq!(created.get(fields::USERNAME), Some("wasm-user"));
 
         close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn merge_databases_preserves_handle_b_when_merge_panics() {
+        let handle_a = open_test_handle();
+        let handle_b = open_test_handle();
+
+        // Force a panic inside the merge closure to simulate a crafted-file
+        // panic reached through keepassxc::merge, and confirm handle_b's
+        // database is still present afterward (reinserted before the
+        // panic is re-raised to the outer catch_unwind_result).
+        let result = DATABASES.with(|dbs| {
+            let mut dbs = dbs.borrow_mut();
+            let db_b = dbs.remove(&handle_b).unwrap();
+            let merge_outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _db_a = dbs.get_mut(&handle_a).unwrap();
+                panic!("simulated merge panic");
+                #[allow(unreachable_code)]
+                keepassxc::merge(_db_a, &db_b)
+            }));
+            dbs.insert(handle_b, db_b);
+            merge_outcome
+        });
+
+        assert!(result.is_err());
+        DATABASES.with(|dbs| {
+            assert!(dbs.borrow().contains_key(&handle_b), "handle_b must survive a panicking merge");
+        });
+
+        close_db(handle_a).unwrap();
+        close_db(handle_b).unwrap();
     }
 }

@@ -430,3 +430,41 @@ fn test_open_with_challenge_response_callable() {
         }
     }
 }
+
+/// A crafted `.kdbx` byte buffer that only satisfies enough of the parser to
+/// reach the WASM boundary should surface as a structured `Err`, not trap the
+/// whole instance. This exercises the same class of malformed input the
+/// `catch_unwind_result` wrapper (and the `checked_add` fix in
+/// `extract_challenge`/`extract_vd_seed`) is meant to guard against.
+#[wasm_bindgen_test]
+fn test_open_db_on_garbage_bytes_does_not_trap_instance() {
+    install_panic_hook();
+
+    let garbage = vec![0xFFu8; 64];
+    let result = open_db(&garbage, PASSWORD, None);
+    assert!(result.is_err(), "garbage bytes must be rejected, not panic");
+
+    // The instance must still be usable afterward -- a prior call that
+    // panicked without catch_unwind would have trapped it permanently.
+    let handle = open_handle(TEST_DB_AES, PASSWORD);
+    close_db(handle).unwrap();
+}
+
+#[wasm_bindgen_test]
+fn test_extract_challenge_on_crafted_huge_length_does_not_trap_instance() {
+    install_panic_hook();
+
+    // version header (12 bytes) + a header entry declaring a length near
+    // u32::MAX, which used to wrap `pos + entry_len` to a small value on
+    // wasm32's 32-bit usize.
+    let mut crafted = vec![0u8; 12];
+    crafted.push(11); // HEADER_KDF_PARAMS
+    crafted.extend_from_slice(&u32::MAX.to_le_bytes());
+
+    let result = extract_challenge(&crafted);
+    assert!(result.is_err(), "crafted huge length must be rejected, not panic");
+
+    // Confirm the instance survived: a normal call still works.
+    let handle = open_handle(TEST_DB_AES, PASSWORD);
+    close_db(handle).unwrap();
+}

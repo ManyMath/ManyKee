@@ -20,7 +20,7 @@ js-sys = "0.3"
 uuid = "1"
 hex = "0.4"
 zeroize = { version = "1", features = ["zeroize_derive"] }
+console_error_panic_hook = "0.1.7"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
-console_error_panic_hook = "0.1.7"
