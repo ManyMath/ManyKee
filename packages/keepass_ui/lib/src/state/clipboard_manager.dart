@@ -60,8 +60,12 @@ class ClipboardManager {
   }
 
   void dispose() {
+    final hadPendingClear = _clearTimer != null;
     _clearTimer?.cancel();
     _clearTimer = null;
     _clearOnNextResume = false;
+    if (hadPendingClear) {
+      unawaited(Clipboard.setData(const ClipboardData(text: '')));
+    }
   }
 }

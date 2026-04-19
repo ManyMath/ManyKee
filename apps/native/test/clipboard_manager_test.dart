@@ -81,5 +81,40 @@ void main() {
       );
       manager.dispose();
     });
+
+    testWidgets('dispose clears clipboard when a clear was pending',
+        (tester) async {
+      final copied = await manager.copyWithAutoClear('secret-d');
+      expect(copied, isTrue);
+
+      var data = await Clipboard.getData('text/plain');
+      expect(data?.text, 'secret-d');
+
+      manager.dispose();
+      await tester.pump();
+
+      data = await Clipboard.getData('text/plain');
+      expect(data?.text, '');
+    });
+
+    testWidgets('dispose does not touch clipboard when no clear was pending',
+        (tester) async {
+      ClipboardManager.configure(
+        clearDelay: Duration.zero,
+        pasteOnceEnabled: false,
+      );
+
+      final copied = await manager.copyWithAutoClear('secret-e');
+      expect(copied, isTrue);
+
+      var data = await Clipboard.getData('text/plain');
+      expect(data?.text, 'secret-e');
+
+      manager.dispose();
+      await tester.pump();
+
+      data = await Clipboard.getData('text/plain');
+      expect(data?.text, 'secret-e');
+    });
   });
 }
