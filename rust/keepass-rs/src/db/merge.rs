@@ -663,6 +663,9 @@ impl Group {
         self.icon_id = other.icon_id;
         self.custom_icon_uuid = other.custom_icon_uuid;
         self.custom_data = other.custom_data.clone();
+        self.tags = other.tags.clone();
+        self.previous_parent_group = other.previous_parent_group;
+        self.unknown_xml = other.unknown_xml.clone();
 
         // The location changed timestamp is handled separately when merging two databases.
         let current_times = self.times.clone();
@@ -1904,6 +1907,45 @@ mod merge_tests {
             modified_group.times.last_modification,
             Some(new_modification_timestamp),
         );
+    }
+
+    #[test]
+    fn test_group_update_in_source_carries_over_tags_previous_parent_and_unknown_xml() {
+        let mut destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+
+        let group = source_db
+            .root
+            .group_by_path_mut(&["group1", "subgroup1"])
+            .unwrap();
+        group.tags = Some("work;personal".to_string());
+        group.previous_parent_group = Some(Uuid::new_v4());
+        group.unknown_xml = vec![crate::format::xml_db::xml_node::XmlNode {
+            name: "AnUnknownGroupField".to_string(),
+            inner_xml: "some-value".to_string(),
+        }];
+
+        // Making sure to wait 1 sec before updating the timestamp, to make
+        // sure that we get a different modification timestamp.
+        thread::sleep(time::Duration::from_secs(1));
+        group.times.last_modification = Some(Times::now());
+
+        let expected_tags = group.tags.clone();
+        let expected_previous_parent_group = group.previous_parent_group;
+        let expected_unknown_xml = group.unknown_xml.clone();
+
+        destination_db.merge(&source_db).unwrap();
+
+        let modified_group = destination_db
+            .root
+            .group_by_path(&["group1", "subgroup1"])
+            .unwrap();
+        assert_eq!(modified_group.tags, expected_tags);
+        assert_eq!(
+            modified_group.previous_parent_group,
+            expected_previous_parent_group
+        );
+        assert_eq!(modified_group.unknown_xml, expected_unknown_xml);
     }
 
     #[test]
