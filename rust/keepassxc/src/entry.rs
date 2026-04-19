@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use keepass::db::{CustomDataValue, Entry, Group, History, Meta, Times, Value};
+use keepass::db::{CustomDataValue, Entry, Group, Meta, Times, Value};
 use uuid::Uuid;
 
 use crate::error::KeePassXcError;
@@ -145,79 +145,13 @@ where
         .find_entry_by_uuid_mut(uuid)
         .ok_or(KeePassXcError::EntryNotFound(uuid))?;
 
-    let mut snapshot = entry.clone();
-    snapshot.history.take();
+    entry.update_history_with_limits(meta.history_max_items, meta.history_max_size);
 
     updater(entry);
 
     entry.times.last_modification = Some(Times::now());
 
-    if entry.history.is_none() {
-        entry.history = Some(History::default());
-    }
-    entry.history.as_mut().unwrap().add_entry(snapshot);
-
-    if let Some(max) = meta.history_max_items {
-        if max > 0 {
-            let max = max as usize;
-            let history = entry.history.as_mut().unwrap();
-            let entries = history.get_entries();
-            if entries.len() > max {
-                let mut owned = entries.clone();
-                owned.truncate(max);
-                let mut new_history = History::default();
-                for e in owned.into_iter().rev() {
-                    new_history.add_entry(e);
-                }
-                entry.history = Some(new_history);
-            }
-        }
-    }
-
-    if let Some(max_bytes) = meta.history_max_size {
-        if max_bytes > 0 {
-            let max_bytes = max_bytes as usize;
-            loop {
-                let history = entry.history.as_ref().unwrap();
-                if history.get_entries().len() <= 1 || estimate_history_size(history) <= max_bytes {
-                    break;
-                }
-                let mut entries = history.get_entries().clone();
-                entries.pop();
-                let mut new_history = History::default();
-                for e in entries.into_iter().rev() {
-                    new_history.add_entry(e);
-                }
-                entry.history = Some(new_history);
-            }
-        }
-    }
-
     Ok(())
-}
-
-/// Estimate the size of all entries in a History for max-size enforcement.
-fn estimate_history_size(history: &History) -> usize {
-    history
-        .get_entries()
-        .iter()
-        .map(|e| estimate_entry_size(e))
-        .sum()
-}
-
-/// Approximate size of an entry: sum of all field string lengths + attachment sizes.
-fn estimate_entry_size(entry: &Entry) -> usize {
-    let field_size: usize = entry
-        .fields
-        .iter()
-        .map(|(k, v)| k.len() + v.get().len())
-        .sum();
-    let attachment_size: usize = entry
-        .attachments
-        .iter()
-        .map(|(k, a)| k.len() + a.data.get().len())
-        .sum();
-    field_size + attachment_size
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -459,6 +393,55 @@ mod tests {
 
         let entry = root.find_entry_by_uuid(uuid).unwrap();
         assert_eq!(entry.history.as_ref().unwrap().get_entries().len(), 2);
+    }
+
+    #[test]
+    fn update_entry_history_max_items_zero_disables_history() {
+        let mut root = Group::new("Root");
+        let entry = make_entry("Test");
+        let uuid = entry.uuid;
+        root.entries.push(entry);
+
+        let mut meta = Meta::default();
+        meta.history_max_items = Some(0);
+
+        for i in 0..3 {
+            update_entry(&mut root, uuid, &meta, |e| {
+                e.set_unprotected(fields::TITLE, &format!("Title {}", i));
+            })
+            .unwrap();
+        }
+
+        let entry = root.find_entry_by_uuid(uuid).unwrap();
+        assert!(entry.history.as_ref().unwrap().get_entries().is_empty());
+    }
+
+    #[test]
+    fn update_entry_history_max_size_zero_bounds_history_to_newest_entry() {
+        // `History::trim` always keeps at least the newest snapshot even
+        // when max_size == 0 (a size limit can't sensibly discard
+        // everything), so unlike `history_max_items == Some(0)` this
+        // doesn't fully disable history -- but it must still bound growth
+        // to a single entry instead of accumulating unboundedly, which is
+        // what the old hand-rolled trimming logic did (it skipped size
+        // trimming entirely whenever max_bytes == 0).
+        let mut root = Group::new("Root");
+        let entry = make_entry("Test");
+        let uuid = entry.uuid;
+        root.entries.push(entry);
+
+        let mut meta = Meta::default();
+        meta.history_max_size = Some(0);
+
+        for i in 0..3 {
+            update_entry(&mut root, uuid, &meta, |e| {
+                e.set_unprotected(fields::TITLE, &format!("Title {}", i));
+            })
+            .unwrap();
+        }
+
+        let entry = root.find_entry_by_uuid(uuid).unwrap();
+        assert_eq!(entry.history.as_ref().unwrap().get_entries().len(), 1);
     }
 
     #[test]
