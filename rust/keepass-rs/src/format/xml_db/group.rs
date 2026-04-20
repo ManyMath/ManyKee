@@ -89,9 +89,10 @@ impl Group {
         target.previous_parent_group = self.previous_parent_group.map(|u| u.0);
 
         if let Some(uuid) = self.custom_icon_uuid {
-            if custom_icons.contains_key(&uuid.0) {
-                target.custom_icon_uuid = Some(uuid.0);
+            if !custom_icons.contains_key(&uuid.0) {
+                return Err(UnprotectError::InvalidCustomIconReference(uuid.0));
             }
+            target.custom_icon_uuid = Some(uuid.0);
         }
 
         target.times = self.times.map(|t| t.into()).unwrap_or_default();
@@ -189,6 +190,26 @@ mod tests {
 
     #[derive(Serialize, Deserialize)]
     struct Test<T>(T);
+
+    #[test]
+    fn test_xml_to_db_handle_errors_on_unresolved_custom_icon_uuid() {
+        let xml = "<Group><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><Name>G</Name><CustomIconUUID>AQECAgMDBAQFBQYGBwcICA==</CustomIconUUID></Group>";
+        let xml_group: Test<Group> = quick_xml::de::from_str(xml).unwrap();
+
+        let mut target = crate::db::Group::default();
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let missing_uuid = xml_group.0.custom_icon_uuid.as_ref().unwrap().0;
+
+        let result =
+            xml_group
+                .0
+                .xml_to_db_handle(&mut target, &[], &HashMap::new(), &mut cipher);
+
+        assert!(matches!(
+            result,
+            Err(UnprotectError::InvalidCustomIconReference(uuid)) if uuid == missing_uuid
+        ));
+    }
 
     #[test]
     fn test_deserialize_group_tags() {

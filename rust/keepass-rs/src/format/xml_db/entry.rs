@@ -100,9 +100,10 @@ impl Entry {
         target.icon_id = self.icon_id;
 
         if let Some(uuid) = self.custom_icon_uuid {
-            if let Some(data) = custom_icons.get(&uuid.0) {
-                target.custom_icon = Some((uuid.0, data.clone()));
-            }
+            let data = custom_icons
+                .get(&uuid.0)
+                .ok_or(UnprotectError::InvalidCustomIconReference(uuid.0))?;
+            target.custom_icon = Some((uuid.0, data.clone()));
         }
 
         target.foreground_color = self.foreground_color;
@@ -288,6 +289,9 @@ pub enum UnprotectError {
 
     #[error("Binary field references out-of-range attachment index {0}")]
     InvalidBinaryReference(usize),
+
+    #[error("CustomIconUUID references a custom icon {0} absent from Meta/CustomIcons")]
+    InvalidCustomIconReference(Uuid),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -724,6 +728,25 @@ mod tests {
             .xml_to_db_handle(&mut target, &header_attachments, &HashMap::new(), &mut cipher);
 
         assert!(matches!(result, Err(UnprotectError::InvalidBinaryReference(3))));
+    }
+
+    #[test]
+    fn test_xml_to_db_handle_errors_on_unresolved_custom_icon_uuid() {
+        let xml = "<Entry><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><CustomIconUUID>AQECAgMDBAQFBQYGBwcICA==</CustomIconUUID></Entry>";
+        let xml_entry: Test<Entry> = quick_xml::de::from_str(xml).unwrap();
+
+        let mut target = crate::db::Entry::new();
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let missing_uuid = xml_entry.0.custom_icon_uuid.as_ref().unwrap().0;
+
+        let result = xml_entry
+            .0
+            .xml_to_db_handle(&mut target, &[], &HashMap::new(), &mut cipher);
+
+        assert!(matches!(
+            result,
+            Err(UnprotectError::InvalidCustomIconReference(uuid)) if uuid == missing_uuid
+        ));
     }
 
     #[test]
