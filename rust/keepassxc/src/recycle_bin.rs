@@ -70,8 +70,20 @@ pub fn delete_group(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), Kee
         return Err(KeePassXcError::GroupNotFound(uuid));
     }
 
-    if soft && db.meta.recyclebin_uuid == Some(uuid) {
-        return Err(KeePassXcError::GroupNotFound(uuid));
+    if soft {
+        if let Some(bin_uuid) = db.meta.recyclebin_uuid {
+            if !bin_uuid.is_nil() {
+                let target = db
+                    .root
+                    .find_group_by_uuid(uuid)
+                    .ok_or(KeePassXcError::GroupNotFound(uuid))?;
+                // Rejects both uuid == bin_uuid (find_group_by_uuid matches self)
+                // and uuid being an ancestor of the recycle bin.
+                if target.find_group_by_uuid(bin_uuid).is_some() {
+                    return Err(KeePassXcError::GroupNotFound(uuid));
+                }
+            }
+        }
     }
 
     let removed = db
@@ -329,6 +341,26 @@ mod tests {
 
         let result = delete_group(&mut db, bin_uuid, true);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn cannot_soft_delete_ancestor_of_recycle_bin() {
+        let mut db = make_db();
+        let bin_uuid = get_or_create_recycle_bin(&mut db).unwrap();
+
+        // Move the recycle bin under a new "Ancestor" group.
+        let mut ancestor = Group::new("Ancestor");
+        let bin = db.root.remove_group(bin_uuid).unwrap();
+        let ancestor_uuid = ancestor.uuid;
+        ancestor.groups.push(bin);
+        db.root.groups.push(ancestor);
+
+        // Soft-deleting the ancestor would detach the live recycle bin along
+        // with it, so it must be rejected just like deleting the bin itself.
+        let result = delete_group(&mut db, ancestor_uuid, true);
+        assert!(result.is_err());
+        assert!(db.root.find_group_by_uuid(ancestor_uuid).is_some());
+        assert!(db.root.find_group_by_uuid(bin_uuid).is_some());
     }
 
     #[test]
