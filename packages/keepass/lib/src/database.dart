@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
-import 'package:ffi/ffi.dart';
 import 'bindings.g.dart';
 import 'error.dart';
 import 'ffi_helpers.dart';
@@ -49,8 +48,8 @@ class Database implements Finalizable {
       }
       return Database._(handle);
     } finally {
-      malloc.free(pathPtr);
-      malloc.free(passPtr);
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
     }
   }
 
@@ -71,9 +70,9 @@ class Database implements Finalizable {
       }
       return Database._(handle);
     } finally {
-      malloc.free(pathPtr);
-      malloc.free(passPtr);
-      malloc.free(keyPtr);
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(keyPtr);
     }
   }
 
@@ -86,8 +85,8 @@ class Database implements Finalizable {
       final result = bindings.kpxc_database_save(_handle, pathPtr, passPtr);
       KeePassError.checkResult(result, 'Failed to save database');
     } finally {
-      malloc.free(pathPtr);
-      malloc.free(passPtr);
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
     }
   }
 
@@ -110,9 +109,9 @@ class Database implements Finalizable {
       );
       KeePassError.checkResult(result, 'Failed to save database with key file');
     } finally {
-      malloc.free(pathPtr);
-      malloc.free(passPtr);
-      malloc.free(keyPtr);
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(keyPtr);
     }
   }
 
@@ -197,16 +196,16 @@ class Database implements Finalizable {
       }
       return Database._(handle);
     } finally {
-      malloc.free(pathPtr);
-      malloc.free(passPtr);
-      malloc.free(slotPtr);
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(slotPtr);
     }
   }
 
   static List<Map<String, dynamic>> listYubiKeys() {
     final jsonPtr = bindings.kpxc_yubikey_list();
     if (jsonPtr == nullptr) {
-      // No YubiKeys found or enumeration not supported — return empty.
+      // No YubiKeys found or enumeration not supported, return empty.
       return [];
     }
     final jsonStr = readAndFreeString(jsonPtr);

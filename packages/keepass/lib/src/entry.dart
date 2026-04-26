@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:ffi/ffi.dart';
 import 'database.dart';
 import 'error.dart';
 import 'ffi_helpers.dart';
@@ -24,8 +23,8 @@ class Entry {
           bindings.kpxc_entry_get_field(_db.handle, uuidPtr, fieldPtr);
       return readAndFreeString(valuePtr);
     } finally {
-      malloc.free(uuidPtr);
-      malloc.free(fieldPtr);
+      freeNativeString(uuidPtr);
+      freeNativeString(fieldPtr);
     }
   }
 
@@ -45,9 +44,9 @@ class Entry {
         'Failed to set field $fieldName',
       );
     } finally {
-      malloc.free(uuidPtr);
-      malloc.free(fieldPtr);
-      malloc.free(valuePtr);
+      freeNativeString(uuidPtr);
+      freeNativeString(fieldPtr);
+      freeNativeString(valuePtr);
     }
   }
 
@@ -69,7 +68,7 @@ class Entry {
         json.decode(jsonStr) as Map<String, dynamic>,
       );
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -87,7 +86,7 @@ class Entry {
       }
       return Map<String, dynamic>.from(decoded as Map<String, dynamic>);
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -100,8 +99,8 @@ class Entry {
         'Failed to move entry',
       );
     } finally {
-      malloc.free(uuidPtr);
-      malloc.free(targetPtr);
+      freeNativeString(uuidPtr);
+      freeNativeString(targetPtr);
     }
   }
 
@@ -113,7 +112,7 @@ class Entry {
         'Failed to delete entry',
       );
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 

@@ -1,4 +1,3 @@
-import 'package:ffi/ffi.dart';
 import 'database.dart';
 import 'entry.dart';
 import 'error.dart';
@@ -22,7 +21,7 @@ class Group {
       final namePtr = bindings.kpxc_group_get_name(_db.handle, uuidPtr);
       return readAndFreeStringOrThrow(namePtr, 'Failed to get group name');
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -35,8 +34,8 @@ class Group {
         'Failed to set group name',
       );
     } finally {
-      malloc.free(uuidPtr);
-      malloc.free(namePtr);
+      freeNativeString(uuidPtr);
+      freeNativeString(namePtr);
     }
   }
 
@@ -49,7 +48,7 @@ class Group {
       }
       return count;
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -62,7 +61,7 @@ class Group {
       }
       return count;
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -75,7 +74,7 @@ class Group {
       );
       return Entry(_db, entryUuid);
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -93,7 +92,7 @@ class Group {
       );
       return Group(_db, groupUuid);
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -111,7 +110,7 @@ class Group {
       );
       return Entry(_db, entryUuid);
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
@@ -125,8 +124,8 @@ class Group {
       );
       return Group(_db, groupUuid);
     } finally {
-      malloc.free(uuidPtr);
-      malloc.free(namePtr);
+      freeNativeString(uuidPtr);
+      freeNativeString(namePtr);
     }
   }
 
@@ -139,8 +138,8 @@ class Group {
         'Failed to move group',
       );
     } finally {
-      malloc.free(uuidPtr);
-      malloc.free(targetPtr);
+      freeNativeString(uuidPtr);
+      freeNativeString(targetPtr);
     }
   }
 
@@ -152,7 +151,7 @@ class Group {
         'Failed to delete group',
       );
     } finally {
-      malloc.free(uuidPtr);
+      freeNativeString(uuidPtr);
     }
   }
 
