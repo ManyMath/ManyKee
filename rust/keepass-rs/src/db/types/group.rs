@@ -23,6 +23,14 @@ pub struct Group {
     /// UUID for a custom group icon
     pub custom_icon_uuid: Option<Uuid>,
 
+    /// Bytes of the group's custom icon, keyed by the same UUID as
+    /// `custom_icon_uuid`. Kept separate (rather than folded into a single
+    /// `Option<(Uuid, Vec<u8>)>` like `Entry::custom_icon`) because
+    /// `custom_icon_uuid` alone is already relied on elsewhere (merge,
+    /// semantic snapshots) as a lightweight reference independent of the
+    /// icon bytes.
+    pub custom_icon_data: Option<Vec<u8>>,
+
     /// The list of child groups
     pub groups: Vec<Group>,
 

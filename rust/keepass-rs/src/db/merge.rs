@@ -662,6 +662,7 @@ impl Group {
         self.notes = other.notes.clone();
         self.icon_id = other.icon_id;
         self.custom_icon_uuid = other.custom_icon_uuid;
+        self.custom_icon_data = other.custom_icon_data.clone();
         self.custom_data = other.custom_data.clone();
         self.tags = other.tags.clone();
         self.previous_parent_group = other.previous_parent_group;

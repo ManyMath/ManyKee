@@ -89,10 +89,11 @@ impl Group {
         target.previous_parent_group = self.previous_parent_group.map(|u| u.0);
 
         if let Some(uuid) = self.custom_icon_uuid {
-            if !custom_icons.contains_key(&uuid.0) {
-                return Err(UnprotectError::InvalidCustomIconReference(uuid.0));
-            }
+            let data = custom_icons
+                .get(&uuid.0)
+                .ok_or(UnprotectError::InvalidCustomIconReference(uuid.0))?;
             target.custom_icon_uuid = Some(uuid.0);
+            target.custom_icon_data = Some(data.clone());
         }
 
         target.times = self.times.map(|t| t.into()).unwrap_or_default();
@@ -164,13 +165,22 @@ impl Group {
             Some(source.custom_data.clone().into())
         };
 
+        let custom_icon_uuid = if let (Some(uuid), Some(data)) =
+            (source.custom_icon_uuid, source.custom_icon_data.as_ref())
+        {
+            custom_icons.insert(uuid, data.clone());
+            Some(UUID(uuid))
+        } else {
+            source.custom_icon_uuid.map(UUID)
+        };
+
         Ok(Group {
             uuid: UUID(source.uuid),
             name: source.name.clone(),
             tags: source.tags.clone(),
             notes: source.notes.clone(),
             icon_id: source.icon_id,
-            custom_icon_uuid: source.custom_icon_uuid.map(UUID),
+            custom_icon_uuid,
             times: Some(source.times.clone().into()),
             is_expanded: Some(source.is_expanded),
             default_auto_type_sequence: source.default_autotype_sequence.clone(),
@@ -209,6 +219,33 @@ mod tests {
             result,
             Err(UnprotectError::InvalidCustomIconReference(uuid)) if uuid == missing_uuid
         ));
+    }
+
+    #[test]
+    fn test_group_custom_icon_round_trips_through_db_to_xml_and_back() {
+        let icon_uuid = Uuid::new_v4();
+        let icon_bytes = vec![1, 2, 3, 4, 5];
+
+        let mut source = crate::db::Group::new("Icon Group");
+        source.custom_icon_uuid = Some(icon_uuid);
+        source.custom_icon_data = Some(icon_bytes.clone());
+
+        let mut custom_icons = HashMap::new();
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let mut attachments = Vec::new();
+        let xml_group = Group::db_to_xml(&source, &mut cipher, &mut attachments, &mut custom_icons).unwrap();
+
+        // db_to_xml populates the shared accumulator, mirroring Entry::db_to_xml.
+        assert_eq!(custom_icons.get(&icon_uuid), Some(&icon_bytes));
+        assert_eq!(xml_group.custom_icon_uuid.as_ref().unwrap().0, icon_uuid);
+
+        let mut target = crate::db::Group::default();
+        xml_group
+            .xml_to_db_handle(&mut target, &[], &custom_icons, &mut cipher)
+            .unwrap();
+
+        assert_eq!(target.custom_icon_uuid, Some(icon_uuid));
+        assert_eq!(target.custom_icon_data, Some(icon_bytes));
     }
 
     #[test]
