@@ -55,7 +55,7 @@ struct KDBX4OuterHeader {
 
 struct KDBX4InnerHeader {
     inner_random_stream: InnerCipherConfig,
-    inner_random_stream_key: Vec<u8>,
+    inner_random_stream_key: zeroize::Zeroizing<Vec<u8>>,
 }
 
 #[cfg(feature = "save_kdbx4")]

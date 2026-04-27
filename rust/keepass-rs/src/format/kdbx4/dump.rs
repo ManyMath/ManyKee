@@ -39,7 +39,8 @@ pub fn dump_kdbx4(
     let mut outer_iv = vec![0; db.config.outer_cipher_config.get_iv_size()];
     getrandom::getrandom(&mut outer_iv)?;
 
-    let mut inner_random_stream_key = vec![0; db.config.inner_cipher_config.get_key_size()];
+    let mut inner_random_stream_key =
+        zeroize::Zeroizing::new(vec![0; db.config.inner_cipher_config.get_key_size()]);
     getrandom::getrandom(&mut inner_random_stream_key)?;
 
     let (kdf, kdf_seed) = db.config.kdf_config.get_kdf_and_seed()?;

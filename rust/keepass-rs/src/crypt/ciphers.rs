@@ -128,6 +128,7 @@ impl Cipher for TwofishCipher {
     }
 }
 
+#[derive(ZeroizeOnDrop)]
 pub(crate) struct Salsa20Cipher {
     cipher: salsa20::Salsa20,
 }
@@ -168,6 +169,7 @@ impl Cipher for Salsa20Cipher {
     }
 }
 
+#[derive(ZeroizeOnDrop)]
 pub(crate) struct ChaCha20Cipher {
     cipher: chacha20::ChaCha20,
 }

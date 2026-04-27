@@ -337,7 +337,9 @@ fn parse_inner_header(
                 inner_random_stream = Some(InnerCipherConfig::try_from(LittleEndian::read_u32(entry_buffer))?);
             }
 
-            INNER_HEADER_RANDOM_STREAM_KEY => inner_random_stream_key = Some(entry_buffer.to_vec()),
+            INNER_HEADER_RANDOM_STREAM_KEY => {
+                inner_random_stream_key = Some(zeroize::Zeroizing::new(entry_buffer.to_vec()))
+            }
 
             INNER_HEADER_BINARY_ATTACHMENTS => {
                 let header_attachment = Attachment::from(entry_buffer);

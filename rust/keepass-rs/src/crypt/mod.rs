@@ -120,6 +120,8 @@ mod tests {
     fn cipher_key_material_zeroizes_on_drop() {
         assert_zeroize_on_drop::<super::ciphers::AES256Cipher>();
         assert_zeroize_on_drop::<super::ciphers::TwofishCipher>();
+        assert_zeroize_on_drop::<super::ciphers::Salsa20Cipher>();
+        assert_zeroize_on_drop::<super::ciphers::ChaCha20Cipher>();
     }
 
     #[test]

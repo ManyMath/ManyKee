@@ -49,7 +49,7 @@ struct KDBX3Header {
     kdf_config: KdfConfig,
 
     outer_iv: Vec<u8>,
-    protected_stream_key: Vec<u8>,
+    protected_stream_key: zeroize::Zeroizing<Vec<u8>>,
     stream_start: Vec<u8>,
     inner_cipher: InnerCipherConfig,
     body_start: usize,
@@ -62,7 +62,7 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
     let mut transform_seed: Option<Vec<u8>> = None;
     let mut transform_rounds: Option<u64> = None;
     let mut outer_iv: Option<Vec<u8>> = None;
-    let mut protected_stream_key: Option<Vec<u8>> = None;
+    let mut protected_stream_key: Option<zeroize::Zeroizing<Vec<u8>>> = None;
     let mut stream_start: Option<Vec<u8>> = None;
     let mut inner_cipher: Option<InnerCipherConfig> = None;
 
@@ -125,7 +125,9 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
             HEADER_ENCRYPTION_IV => outer_iv = Some(entry_buffer.to_vec()),
 
             // PROTECTEDSTREAMKEY - Key for decrypting the inner protected values
-            HEADER_PROTECTED_STREAM_KEY => protected_stream_key = Some(entry_buffer.to_vec()),
+            HEADER_PROTECTED_STREAM_KEY => {
+                protected_stream_key = Some(zeroize::Zeroizing::new(entry_buffer.to_vec()))
+            }
 
             // STREAMSTARTBYTES - First bytes of decrypted payload (to check correct decryption)
             HEADER_STREAM_START_BYTES => stream_start = Some(entry_buffer.to_vec()),
@@ -228,7 +230,8 @@ pub(crate) fn decrypt_kdbx3(
         .map_err(|e| DatabaseOpenError::Format(DatabaseFormatError::Kdbx3(Kdbx3OpenError::OuterHeader(e))))?;
 
     // Derive stream key for decrypting inner protected values and set up decryption context
-    let stream_key = calculate_sha256(&[header.protected_stream_key.as_ref()]);
+    let stream_key =
+        zeroize::Zeroizing::new(calculate_sha256(&[header.protected_stream_key.as_ref()]).to_vec());
 
     let inner_decryptor = header.inner_cipher.get_cipher(&stream_key)?;
 
@@ -394,7 +397,7 @@ pub fn dump_kdbx3(db: &Database, db_key: &DatabaseKey, writer: &mut dyn Write) -
     let mut transform_seed = vec![0; KDBX3_RANDOM_FIELD_SIZE];
     getrandom::getrandom(&mut transform_seed)?;
 
-    let mut protected_stream_key = vec![0; KDBX3_RANDOM_FIELD_SIZE];
+    let mut protected_stream_key = zeroize::Zeroizing::new(vec![0; KDBX3_RANDOM_FIELD_SIZE]);
     getrandom::getrandom(&mut protected_stream_key)?;
 
     let mut stream_start = vec![0; KDBX3_RANDOM_FIELD_SIZE];
@@ -440,7 +443,7 @@ pub fn dump_kdbx3(db: &Database, db_key: &DatabaseKey, writer: &mut dyn Write) -
     let master_key = zeroize::Zeroizing::new(calculate_sha256(&[&master_seed, &transformed_key]).to_vec());
 
     // Initialize inner encryptor from the protected stream key
-    let stream_key = calculate_sha256(&[protected_stream_key.as_ref()]);
+    let stream_key = zeroize::Zeroizing::new(calculate_sha256(&[protected_stream_key.as_ref()]).to_vec());
     let mut inner_cipher = db.config.inner_cipher_config.get_cipher(&stream_key)?;
 
     // convert database to XML, with attachments inlined as Meta/Binaries
@@ -475,7 +478,7 @@ struct KDBX3OuterHeader {
     transform_seed: Vec<u8>,
     rounds: u64,
     outer_iv: Vec<u8>,
-    protected_stream_key: Vec<u8>,
+    protected_stream_key: zeroize::Zeroizing<Vec<u8>>,
     stream_start: Vec<u8>,
     inner_cipher: InnerCipherConfig,
 }
