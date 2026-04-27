@@ -287,6 +287,24 @@ void main() {
     final entries = json.decode(listResult.stdout as String) as List<dynamic>;
     final entryUuid = entries.single['uuid'] as String;
 
+    final unrevealedResult = await runCli([
+      'show',
+      totpVaultPath,
+      entryUuid,
+      '--password',
+      totpPassword,
+      '--totp',
+      '--json',
+    ]);
+    expect(unrevealedResult.exitCode, 0,
+        reason: unrevealedResult.stderr.toString());
+    final unrevealedData =
+        json.decode(unrevealedResult.stdout as String) as Map<String, dynamic>;
+    final unrevealedTotp = unrevealedData['totp'];
+    if (unrevealedTotp != null) {
+      expect(unrevealedTotp['code'], '********');
+    }
+
     final showResult = await runCli([
       'show',
       totpVaultPath,
@@ -294,6 +312,7 @@ void main() {
       '--password',
       totpPassword,
       '--totp',
+      '--reveal',
       '--json',
     ]);
     expect(showResult.exitCode, 0, reason: showResult.stderr.toString());

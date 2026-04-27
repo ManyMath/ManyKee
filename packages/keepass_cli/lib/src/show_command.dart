@@ -44,6 +44,10 @@ class ShowCommand extends BaseCommand {
         (payload['custom_data'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{},
       );
+      final protectedFields = Map<String, dynamic>.from(
+        (payload['protected'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{},
+      );
       final revealPassword = argResults!['reveal'] == true;
       final fieldName = argResults!['field'] as String?;
       final includeTotp = argResults!['totp'] == true;
@@ -53,8 +57,15 @@ class ShowCommand extends BaseCommand {
         totp = entry.getTotpCode();
       }
 
-      if (!revealPassword && fields.containsKey('Password')) {
-        fields['Password'] = '********';
+      if (!revealPassword) {
+        for (final key in fields.keys.toList()) {
+          if (protectedFields[key] == true) {
+            fields[key] = '********';
+          }
+        }
+        if (totp != null) {
+          totp['code'] = '********';
+        }
       }
 
       if (fieldName != null) {

@@ -746,6 +746,8 @@ Map<String, dynamic> _normalizeEntryFieldsPayload(
     ...fields,
     'custom_data': (payload['custom_data'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{},
+    'protected': (payload['protected'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{},
   };
 }
 

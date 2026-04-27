@@ -35,6 +35,9 @@ pub struct EntryReadFields {
     pub fields: BTreeMap<String, String>,
     /// Entry custom data flattened to strings so keys like `otp` are visible to Dart.
     pub custom_data: BTreeMap<String, String>,
+    /// Whether each entry in `fields` is a KDBX-protected value (e.g. Password, or a
+    /// custom field marked `Protected="True"`), keyed the same as `fields`.
+    pub protected: BTreeMap<String, bool>,
 }
 
 /// Dart-visible live TOTP payload used by FFI and WASM reads.
@@ -51,8 +54,10 @@ pub struct EntryTotp {
 /// Read an entry into a concrete field payload for FFI and WASM.
 pub fn read_entry_fields(entry: &Entry) -> EntryReadFields {
     let mut fields = BTreeMap::new();
+    let mut protected = BTreeMap::new();
     for (key, value) in &entry.fields {
         fields.insert(key.clone(), value.get().clone());
+        protected.insert(key.clone(), value.is_protected());
     }
 
     let mut custom_data = BTreeMap::new();
@@ -70,6 +75,7 @@ pub fn read_entry_fields(entry: &Entry) -> EntryReadFields {
     EntryReadFields {
         fields,
         custom_data,
+        protected,
     }
 }
 
@@ -477,6 +483,7 @@ mod tests {
     fn read_entry_fields_includes_custom_data() {
         let mut entry = Entry::new();
         entry.set_unprotected(fields::TITLE, "OTP");
+        entry.set_protected(fields::PASSWORD, "hunter2");
         entry.custom_data.insert(
             "otp".to_string(),
             CustomDataItem {
@@ -496,6 +503,8 @@ mod tests {
             payload.custom_data.get("otp").map(String::as_str),
             Some("otpauth://totp/ManyKee:test?secret=JBSWY3DPEHPK3PXP")
         );
+        assert_eq!(payload.protected.get(fields::TITLE), Some(&false));
+        assert_eq!(payload.protected.get(fields::PASSWORD), Some(&true));
     }
 
     #[test]

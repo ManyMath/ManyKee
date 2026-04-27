@@ -40,6 +40,8 @@ impl From<&Entry> for EntryInfo {
 pub struct EntryFields {
     pub fields: BTreeMap<String, String>,
     pub custom_data: BTreeMap<String, String>,
+    /// Whether each `fields` entry is KDBX-protected, keyed the same as `fields`.
+    pub protected: BTreeMap<String, bool>,
 }
 
 impl From<EntryReadFields> for EntryFields {
@@ -47,6 +49,7 @@ impl From<EntryReadFields> for EntryFields {
         Self {
             fields: fields.fields,
             custom_data: fields.custom_data,
+            protected: fields.protected,
         }
     }
 }
