@@ -121,17 +121,13 @@ class Database implements Finalizable {
     List<int>? keyFileBytes,
   }) {
     _ensureOpen();
-    final tempDir = Directory.systemTemp;
-    final tempPath =
-        '${tempDir.path}/manykee_save_${DateTime.now().microsecondsSinceEpoch}.kdbx';
-    final tempFile = File(tempPath);
+    final tempDir = Directory.systemTemp.createTempSync('manykee_save_');
+    final tempFile = File('${tempDir.path}/data.kdbx');
 
     File? tempKeyFile;
     try {
       if (keyFileBytes != null) {
-        final keyPath =
-            '${tempDir.path}/manykee_save_${DateTime.now().microsecondsSinceEpoch}.key';
-        tempKeyFile = File(keyPath);
+        tempKeyFile = File('${tempDir.path}/data.key');
         tempKeyFile.writeAsBytesSync(keyFileBytes, flush: true);
         saveWithKeyFile(
           tempFile.path,
@@ -143,11 +139,8 @@ class Database implements Finalizable {
       }
       return tempFile.readAsBytesSync();
     } finally {
-      if (tempFile.existsSync()) {
-        tempFile.deleteSync();
-      }
-      if (tempKeyFile != null && tempKeyFile.existsSync()) {
-        tempKeyFile.deleteSync();
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
       }
     }
   }

@@ -41,7 +41,7 @@ class KeePassNativeApi implements KeePassApi {
       );
     } finally {
       try {
-        await tempFile.delete();
+        await tempFile.parent.delete(recursive: true);
       } catch (_) {}
     }
   }
@@ -65,10 +65,10 @@ class KeePassNativeApi implements KeePassApi {
       );
     } finally {
       try {
-        await tempDbFile.delete();
+        await tempDbFile.parent.delete(recursive: true);
       } catch (_) {}
       try {
-        await tempKeyFile.delete();
+        await tempKeyFile.parent.delete(recursive: true);
       } catch (_) {}
     }
   }
@@ -91,7 +91,7 @@ class KeePassNativeApi implements KeePassApi {
       );
     } finally {
       try {
-        await tempFile.delete();
+        await tempFile.parent.delete(recursive: true);
       } catch (_) {}
     }
   }
@@ -364,11 +364,9 @@ class KeePassNativeApi implements KeePassApi {
     List<int> bytes, {
     String suffix = '.kdbx',
   }) async {
-    final tempDir = Directory.systemTemp;
-    final tempFile = File(
-      '${tempDir.path}/manykee_${DateTime.now().millisecondsSinceEpoch}$suffix',
-    );
-    await tempFile.writeAsBytes(bytes);
+    final tempDir = Directory.systemTemp.createTempSync('manykee_');
+    final tempFile = File('${tempDir.path}/data$suffix');
+    await tempFile.writeAsBytes(bytes, flush: true);
     return tempFile;
   }
 
