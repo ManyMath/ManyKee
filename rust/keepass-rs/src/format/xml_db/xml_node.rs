@@ -457,36 +457,90 @@ pub fn inject_unknowns_into_xml(xml: &mut String, db: &crate::db::Database) {
             xml.insert_str(pos, &s);
         }
     }
-    inject_group_unknowns(xml, &db.root);
+    let mut cursor = 0;
+    inject_group_unknowns(xml, &db.root, &mut cursor);
+}
+
+/// Encode `uuid` as the literal `<UUID>...</UUID>` tag text used to locate an
+/// element by its child UUID field.
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+fn uuid_tag(uuid: uuid::Uuid) -> String {
+    use base64::{engine::general_purpose as base64_engine, Engine as _};
+    format!("<UUID>{}</UUID>", base64_engine::STANDARD.encode(uuid.as_bytes()))
+}
+
+/// Locate an element by its `<UUID>` child searching only at or after
+/// `search_from`, inject `unknown_xml` (if any) just before its own close
+/// tag, and return the position just past that close tag, or `search_from`
+/// unchanged if the element/close tag can't be located.
+///
+/// Searching only forward from a monotonically-advancing cursor (rather than
+/// `xml.find` from the start of the whole document, as this used to do) is
+/// the key fix: earlier elements' already-injected `unknown_xml` content is
+/// attacker-controlled raw text (captured verbatim, including any embedded
+/// `<UUID>...</UUID>`/`<Group>`/`<Entry>` look-alike sequences in a crafted
+/// CDATA payload, see the "CDATA content ... captured unescaped" item this
+/// fixes) and must never be re-matched as if it were a different element
+/// later in the same document.
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+fn inject_and_advance(
+    xml: &mut String,
+    uuid: uuid::Uuid,
+    unknown_xml: &[XmlNode],
+    open_tag: &str,
+    close_tag: &str,
+    search_from: usize,
+) -> usize {
+    let tag = uuid_tag(uuid);
+    let Some(uuid_pos) = xml[search_from..].find(&tag).map(|i| search_from + i) else {
+        return search_from;
+    };
+    let Some(close_pos) = find_own_close_tag(xml, uuid_pos, open_tag, close_tag) else {
+        return uuid_pos + tag.len();
+    };
+    if unknown_xml.is_empty() {
+        return close_pos + close_tag.len();
+    }
+    let s: String = unknown_xml.iter().map(|n| n.to_xml_string()).collect();
+    xml.insert_str(close_pos, &s);
+    close_pos + s.len() + close_tag.len()
 }
 
 #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
-fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group) {
-    use base64::{engine::general_purpose as base64_engine, Engine as _};
+fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group, cursor: &mut usize) {
+    let tag = uuid_tag(group.uuid);
+    let Some(uuid_pos) = xml[*cursor..].find(&tag).map(|i| *cursor + i) else {
+        return;
+    };
 
+    // Compute this group's own close tag before touching anything in its
+    // subtree, so the depth-scan can't be thrown off by content we (or our
+    // descendants) are about to inject.
+    let mut close_pos = find_own_close_tag(xml, uuid_pos, "<Group>", "</Group>");
     if !group.unknown_xml.is_empty() {
-        let uuid_b64 = base64_engine::STANDARD.encode(group.uuid.as_bytes());
-        let s: String = group.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
-        if let Some(uuid_pos) = xml.find(&format!("<UUID>{}</UUID>", uuid_b64)) {
-            if let Some(close_pos) = find_own_close_tag(xml, uuid_pos, "<Group>", "</Group>") {
-                xml.insert_str(close_pos, &s);
-            }
+        if let Some(cp) = close_pos {
+            let s: String = group.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
+            xml.insert_str(cp, &s);
+            close_pos = Some(cp + s.len());
         }
     }
+
+    // Entries and child groups live strictly inside [uuid_pos, close_pos),
+    // i.e. entirely before this group's own (just-inserted) unknown content
+    // and before anything belonging to a later sibling, bound the inner
+    // cursor accordingly instead of searching the whole document.
+    let mut inner = uuid_pos + tag.len();
     for entry in &group.entries {
-        if !entry.unknown_xml.is_empty() {
-            let uuid_b64 = base64_engine::STANDARD.encode(entry.uuid.as_bytes());
-            let s: String = entry.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
-            if let Some(uuid_pos) = xml.find(&format!("<UUID>{}</UUID>", uuid_b64)) {
-                if let Some(close_pos) = find_own_close_tag(xml, uuid_pos, "<Entry>", "</Entry>") {
-                    xml.insert_str(close_pos, &s);
-                }
-            }
-        }
+        inner = inject_and_advance(xml, entry.uuid, &entry.unknown_xml, "<Entry>", "</Entry>", inner);
     }
     for child_group in &group.groups {
-        inject_group_unknowns(xml, child_group);
+        inject_group_unknowns(xml, child_group, &mut inner);
     }
+
+    *cursor = match close_pos {
+        Some(cp) => cp + "</Group>".len(),
+        None => inner,
+    };
 }
 
 /// Find the `close_tag` that matches the `open_tag` this UUID lives inside,
@@ -578,7 +632,7 @@ mod tests {
             base64_engine::STANDARD.encode(child.uuid.as_bytes()),
         );
 
-        inject_group_unknowns(&mut xml, &parent);
+        inject_group_unknowns(&mut xml, &parent, &mut 0);
 
         assert_eq!(
             xml,
@@ -588,6 +642,58 @@ mod tests {
                 base64_engine::STANDARD.encode(child.uuid.as_bytes()),
             )
         );
+    }
+
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    #[test]
+    fn test_inject_group_unknowns_ignores_uuid_lookalike_in_earlier_siblings_unknown_xml() {
+        use base64::{engine::general_purpose as base64_engine, Engine as _};
+
+        let mut sibling_one = crate::db::Group::new("SiblingOne");
+        let mut sibling_two = crate::db::Group::new("SiblingTwo");
+
+        let sibling_two_uuid_tag = format!(
+            "<UUID>{}</UUID>",
+            base64_engine::STANDARD.encode(sibling_two.uuid.as_bytes())
+        );
+        // Simulates a crafted, verbatim-captured CDATA payload embedding a
+        // fake `<UUID>...</UUID>` matching a later sibling's *real* UUID
+        // followed by tag-shaped text.
+        sibling_one.unknown_xml = vec![XmlNode {
+            name: "Poison".to_string(),
+            inner_xml: format!("</Group>{}<Group>", sibling_two_uuid_tag),
+        }];
+        sibling_two.unknown_xml = vec![XmlNode {
+            name: "RealMarker".to_string(),
+            inner_xml: String::new(),
+        }];
+
+        let mut root = crate::db::Group::new("Root");
+        root.groups.push(sibling_one.clone());
+        root.groups.push(sibling_two.clone());
+
+        let root_b64 = base64_engine::STANDARD.encode(root.uuid.as_bytes());
+        let s1_b64 = base64_engine::STANDARD.encode(sibling_one.uuid.as_bytes());
+        let s2_b64 = base64_engine::STANDARD.encode(sibling_two.uuid.as_bytes());
+
+        let mut xml = format!(
+            "<Group><UUID>{root_b64}</UUID><Group><UUID>{s1_b64}</UUID></Group><Group><UUID>{s2_b64}</UUID></Group></Group>",
+        );
+
+        let mut cursor = 0;
+        inject_group_unknowns(&mut xml, &root, &mut cursor);
+
+        // sibling_one's own poisoned content is injected as-is (it's opaque
+        // preserved XML, not our concern to sanitize) ...
+        let expected = format!(
+            "<Group><UUID>{root_b64}</UUID>\
+             <Group><UUID>{s1_b64}</UUID><Poison></Group>{sibling_two_uuid_tag}<Group></Poison></Group>\
+             <Group><UUID>{s2_b64}</UUID><RealMarker/></Group></Group>",
+        );
+        // ... but sibling_two's *own* unknown content must land in
+        // sibling_two's real element, not get swallowed into sibling_one's
+        // poisoned lookalike.
+        assert_eq!(xml, expected);
     }
 
     #[test]
