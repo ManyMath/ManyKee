@@ -1,6 +1,13 @@
 import 'dart:ffi';
 import 'dart:io';
 
+/// True for release/AOT builds (`flutter build`, `dart compile exe`), false
+/// for debug/JIT runs (`flutter run --debug`, `dart run`). Mirrors how
+/// `package:flutter/foundation.dart`'s `kReleaseMode` is implemented, so it
+/// stays consistent across Flutter and plain-Dart consumers of this package
+/// without depending on Flutter here.
+const bool _isReleaseMode = bool.fromEnvironment('dart.vm.product');
+
 DynamicLibrary _loadLibrary() {
   final libraryBaseNames = <String>[
     'keepass_flutter_native',
@@ -41,12 +48,21 @@ DynamicLibrary _loadLibrary() {
   Object? lastError;
   for (final libraryFileName in libraryFileNames) {
     final candidates = <String>[
-      libraryFileName,
+      // Trusted: next to the running executable, where bundled/packaged
+      // native libraries actually live.
       '$executableDir/$libraryFileName',
       '$executableDir/lib/$libraryFileName',
-      '$cwd/$libraryFileName',
-      '$cwd/lib/$libraryFileName',
-      for (final dir in cargoTargetDirs) '$dir/$libraryFileName',
+      // Untrusted: only searched in debug/JIT runs (local `cargo
+      // build`/`cargo run`/`dart run`/`flutter run --debug` workflows),
+      // never in release builds. A bare name or CWD-relative path lets
+      // `DynamicLibrary.open` load and execute whatever the process's
+      // current working directory happens to contain.
+      if (!_isReleaseMode) ...[
+        libraryFileName,
+        '$cwd/$libraryFileName',
+        '$cwd/lib/$libraryFileName',
+        for (final dir in cargoTargetDirs) '$dir/$libraryFileName',
+      ],
     ];
 
     for (final candidate in candidates) {
