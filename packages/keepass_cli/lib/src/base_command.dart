@@ -95,7 +95,9 @@ abstract class BaseCommand extends Command {
 
     final trimmed = locator.trim();
     try {
-      return Group(db, trimmed);
+      final group = Group(db, trimmed);
+      group.name; // Force FFI validation that this UUID actually exists.
+      return group;
     } on KeePassError {
       return _resolveGroupPath(db, trimmed);
     }
@@ -108,7 +110,9 @@ abstract class BaseCommand extends Command {
     }
 
     try {
-      return Entry(db, trimmed);
+      final entry = Entry(db, trimmed);
+      entry.readFields(); // Force FFI validation that this UUID actually exists.
+      return entry;
     } on KeePassError {
       final normalized =
           trimmed.startsWith('/') ? trimmed.substring(1) : trimmed;

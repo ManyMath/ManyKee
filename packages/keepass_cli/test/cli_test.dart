@@ -182,6 +182,83 @@ void main() {
     );
   });
 
+  test('edit group by name path falls back from UUID resolution', () async {
+    final groupResult = await runCli([
+      'add',
+      'group',
+      tempVault.path,
+      'Path Group',
+      '--password',
+      password,
+      '--json',
+    ]);
+    expect(groupResult.exitCode, 0, reason: groupResult.stderr.toString());
+
+    final editResult = await runCli([
+      'edit',
+      tempVault.path,
+      'Path Group',
+      '--group',
+      '--name',
+      'Renamed Via Path',
+      '--password',
+      password,
+      '--json',
+    ]);
+    expect(editResult.exitCode, 0, reason: editResult.stderr.toString());
+
+    final groups = await lsJson(tempVault.path, password: password);
+    expect(
+      groups.any((item) =>
+          item['type'] == 'group' && item['name'] == 'Renamed Via Path'),
+      isTrue,
+    );
+  });
+
+  test('show entry by name path falls back from UUID resolution', () async {
+    final groupResult = await runCli([
+      'add',
+      'group',
+      tempVault.path,
+      'Path Parent',
+      '--password',
+      password,
+      '--json',
+    ]);
+    final groupUuid = (json.decode(groupResult.stdout as String)
+        as Map<String, dynamic>)['uuid'] as String;
+
+    final addEntryResult = await runCli([
+      'add',
+      'entry',
+      tempVault.path,
+      '--password',
+      password,
+      '--parent',
+      groupUuid,
+      '--title',
+      'Path Entry',
+      '--user',
+      'path-user',
+      '--pass',
+      'path-pass',
+      '--json',
+    ]);
+    expect(addEntryResult.exitCode, 0, reason: addEntryResult.stderr.toString());
+
+    final showResult = await runCli([
+      'show',
+      tempVault.path,
+      'Path Parent/Path Entry',
+      '--password',
+      password,
+      '--json',
+    ]);
+    expect(showResult.exitCode, 0, reason: showResult.stderr.toString());
+    final data = json.decode(showResult.stdout as String) as Map<String, dynamic>;
+    expect(data['title'], 'Path Entry');
+  });
+
   test('move group', () async {
     final g1Res = await runCli([
       'add',
