@@ -102,7 +102,7 @@ pub(crate) fn decrypt_kdbx4(
     // derive master key from composite key, transform_seed, transform_rounds and master_seed.
     // These are all key-derived secrets with no zeroization otherwise, so each is wrapped in
     // `Zeroizing` to guarantee it's cleared on every exit path, including `?` error returns.
-    let key_elements = Zeroizing::new(db_key.get_key_elements()?);
+    let key_elements = db_key.get_key_elements()?;
     let key_element_refs: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
     let composite_key = Zeroizing::new(crypt::calculate_sha256(&key_element_refs).to_vec());
     let transformed_key = Zeroizing::new(

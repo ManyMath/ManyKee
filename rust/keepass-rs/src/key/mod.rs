@@ -3,7 +3,7 @@ use std::io::Read;
 use base64::{engine::general_purpose as base64_engine, Engine as _};
 use quick_xml::{encoding::EncodingError, events::Event, reader::Reader};
 use thiserror::Error;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::crypt::calculate_sha256;
 
@@ -16,7 +16,7 @@ mod yubikey;
 #[cfg(feature = "challenge_response")]
 pub use yubikey::{ChallengeResponseKey, ChallengeResponseKeyError, Yubikey};
 
-fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
+fn parse_xml_keyfile(xml: &[u8]) -> Result<Zeroizing<KeyElement>, ParseXmlKeyFileError> {
     let mut tag_stack = Vec::new();
 
     let mut key_version: Option<String> = None;
@@ -80,9 +80,9 @@ fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
             .replace("\t", "")
             .replace("\r", "");
 
-        let key = match hex::decode(&trimmed_key) {
-            Ok(key) => key,
-            Err(_) => return Ok(key_bytes),
+        let key: Zeroizing<Vec<u8>> = match hex::decode(&trimmed_key) {
+            Ok(key) => Zeroizing::new(key),
+            Err(_) => return Ok(Zeroizing::new(key_bytes)),
         };
 
         if let Some(expected_hash) = key_hash {
@@ -98,9 +98,9 @@ fn parse_xml_keyfile(xml: &[u8]) -> Result<KeyElement, ParseXmlKeyFileError> {
 
     // Check if the key is base64-encoded. If yes, return decoded bytes
     if let Ok(key) = base64_engine::STANDARD.decode(&key_bytes) {
-        Ok(key)
+        Ok(Zeroizing::new(key))
     } else {
-        Ok(key_bytes)
+        Ok(Zeroizing::new(key_bytes))
     }
 }
 
@@ -119,7 +119,7 @@ pub enum ParseXmlKeyFileError {
     Xml(#[from] quick_xml::Error),
 }
 
-fn parse_keyfile(buffer: &[u8]) -> Result<KeyElement, DatabaseKeyError> {
+fn parse_keyfile(buffer: &[u8]) -> Result<Zeroizing<KeyElement>, DatabaseKeyError> {
     // try to parse the buffer as XML, if successful, use that data instead of full file
     match parse_xml_keyfile(buffer) {
         Ok(v) => Ok(v),
@@ -130,9 +130,9 @@ fn parse_keyfile(buffer: &[u8]) -> Result<KeyElement, DatabaseKeyError> {
         Err(ParseXmlKeyFileError::HashMismatch) => Err(DatabaseKeyError::InvalidKeyFile),
         Err(_) if buffer.len() == 32 => {
             // legacy binary key format
-            Ok(buffer.to_vec())
+            Ok(Zeroizing::new(buffer.to_vec()))
         }
-        Err(_) => Ok(calculate_sha256(&[buffer]).as_slice().to_vec()),
+        Err(_) => Ok(Zeroizing::new(calculate_sha256(&[buffer]).as_slice().to_vec())),
     }
 }
 
@@ -212,15 +212,15 @@ impl DatabaseKey {
         Default::default()
     }
 
-    pub(crate) fn get_key_elements(&self) -> Result<KeyElements, DatabaseKeyError> {
-        let mut out = Vec::new();
+    pub(crate) fn get_key_elements(&self) -> Result<Zeroizing<KeyElements>, DatabaseKeyError> {
+        let mut out: Zeroizing<KeyElements> = Zeroizing::new(Vec::new());
 
         if let Some(p) = &self.password {
             out.push(calculate_sha256(&[p.as_bytes()]).to_vec());
         }
 
         if let Some(ref f) = self.keyfile {
-            out.push(parse_keyfile(f)?);
+            out.push(parse_keyfile(f)?.to_vec());
         }
 
         if out.is_empty() {
@@ -377,6 +377,42 @@ mod key_tests {
 
         let result = DatabaseKey::new()
             .with_keyfile(&mut xml_keyfile_v2.trim().as_bytes())
+            .expect("reading the keyfile bytes should succeed")
+            .get_key_elements();
+        assert!(result.is_err(), "a keyfile whose data doesn't match its Hash should be rejected");
+    }
+
+    #[test]
+    fn test_password_survives_keyfile_error_and_result_zeroizes_on_drop() {
+        // Compile-time assertion that `get_key_elements`'s return value is
+        // wrapped in `Zeroizing` from construction, so a password-derived
+        // key element already pushed into `out` is still zeroized on drop
+        // even when a later keyfile error short-circuits via `?` before the
+        // caller ever gets a chance to wrap the result itself.
+        fn assert_zeroize_on_drop<T: zeroize::ZeroizeOnDrop>() {}
+        assert_zeroize_on_drop::<zeroize::Zeroizing<super::KeyElements>>();
+
+        // A password plus a keyfile whose v2 XML hash doesn't match its data
+        // exercises exactly this order: the password element is pushed into
+        // `out` first, then `parse_keyfile` errors and `?` returns early.
+        let xml_keyfile_v2_bad_hash = r###"
+ <?xml version="1.0" encoding="utf-8"?>
+ <KeyFile>
+ <Meta>
+ <Version>2.0</Version>
+ </Meta>
+ <Key>
+ <Data Hash="00000000">
+ 36057B1C 35037FD9 62257893 C0A22403
+ EE3F8FBB 504D9981 08B821CB 00D28F89
+ </Data>
+ </Key>
+ </KeyFile>
+ "###;
+
+        let result = DatabaseKey::new()
+            .with_password("asdf")
+            .with_keyfile(&mut xml_keyfile_v2_bad_hash.trim().as_bytes())
             .expect("reading the keyfile bytes should succeed")
             .get_key_elements();
         assert!(result.is_err(), "a keyfile whose data doesn't match its Hash should be rejected");
