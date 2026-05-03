@@ -36,7 +36,12 @@ wasm-pack build --target web --out-dir ../../packages/keepass_web/web/pkg
 # --- Build Flutter Web ---
 echo "Building Flutter Web (CSP mode, no CDN)..."
 cd "$APP_DIR"
-flutter build web --csp --no-web-resources-cdn --release
+DART_DEFINES=(--csp --no-web-resources-cdn --release)
+if [[ "${MANYKEE_E2E_SEMANTICS:-}" == "1" ]]; then
+  echo "MANYKEE_E2E_SEMANTICS=1: enabling E2E sessionStorage test hooks in this build."
+  DART_DEFINES+=(--dart-define=MANYKEE_E2E_SEMANTICS=true)
+fi
+flutter build web "${DART_DEFINES[@]}"
 
 echo "Copying WASM worker assets into web build..."
 mkdir -p "$BUILD_DIR/web/pkg"
@@ -106,7 +111,7 @@ for wasm_file in "pkg/keepassxc_wasm_bg.wasm" "pkg/keepassxc_wasm.js" "keepassxc
 done
 
 if [ "$MISSING" -eq 1 ]; then
-  echo "ERROR: Extension build verification failed — required files missing"
+  echo "ERROR: Extension build verification failed, required files missing"
   exit 1
 fi
 

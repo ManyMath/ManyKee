@@ -6,6 +6,15 @@ import 'dart:typed_data';
 import 'package:keepass_ui/keepass_ui.dart';
 import 'package:web/web.dart' as web;
 
+/// Compile-time-only switch for the E2E test harness's sessionStorage
+/// mirror below. Must be enabled via `--dart-define=MANYKEE_E2E_SEMANTICS=true`
+/// at build time (see scripts/build_extension.sh); a plain `kDebugMode`
+/// gate isn't usable here because the E2E suite exercises a `--release`
+/// build (matching what's actually shipped), so this is the only gate that
+/// can never be toggled at runtime by an untrusted URL.
+const bool _e2eSemanticsEnabled =
+    bool.fromEnvironment('MANYKEE_E2E_SEMANTICS');
+
 class WebFileStorageProvider implements StorageProvider {
   String? _currentName;
   DateTime? _lastModified;
@@ -119,8 +128,12 @@ class WebFileStorageProvider implements StorageProvider {
     _lastModified = DateTime.now();
 
     // Expose the saved artifact for the standalone E2E harness without
-    // depending on browser download behavior in headless mode.
-    if (web.window.location.search.contains('e2e_semantics=1')) {
+    // depending on browser download behavior in headless mode. Gated behind
+    // a compile-time define so a production build can't be made to mirror
+    // the saved database into sessionStorage just by adding a URL query
+    // param.
+    if (_e2eSemanticsEnabled &&
+        web.window.location.search.contains('e2e_semantics=1')) {
       web.window.sessionStorage.setItem(
         'manykee_last_download_name',
         name,

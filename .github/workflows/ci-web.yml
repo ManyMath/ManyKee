@@ -59,6 +59,8 @@ jobs:
         run: npm ci
 
       - name: Build Chrome extension
+        env:
+          MANYKEE_E2E_SEMANTICS: '1'
         run: bash scripts/build_extension.sh
 
       - name: Run Puppeteer E2E tests
