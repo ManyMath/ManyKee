@@ -135,11 +135,10 @@ pub(crate) struct Salsa20Cipher {
 
 impl Salsa20Cipher {
     pub(crate) fn new(key: &[u8]) -> Result<Self, CryptographyError> {
-        let key = GenericArray::from_slice(key);
-        let iv = GenericArray::from([0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A]);
+        let iv = [0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A];
 
         Ok(Salsa20Cipher {
-            cipher: Salsa20::new(key, &iv),
+            cipher: Salsa20::new_from_slices(key, &iv)?,
         })
     }
 }
@@ -242,5 +241,20 @@ impl Cipher for PlainCipher {
     #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn key_size() -> usize {
         1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Salsa20Cipher;
+
+    #[test]
+    fn salsa20_cipher_new_rejects_short_key_instead_of_panicking() {
+        assert!(Salsa20Cipher::new(&[0u8; 16]).is_err());
+    }
+
+    #[test]
+    fn salsa20_cipher_new_accepts_32_byte_key() {
+        assert!(Salsa20Cipher::new(&[0u8; 32]).is_ok());
     }
 }
