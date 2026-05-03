@@ -5,7 +5,7 @@ use challenge_response::{
 use cipher::InvalidLength;
 use hex::FromHexError;
 use thiserror::Error;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::key::KeyElement;
 
@@ -25,7 +25,7 @@ impl ChallengeResponseKey {
     pub(crate) fn perform_challenge(&self, challenge: &[u8]) -> Result<KeyElement, ChallengeResponseKeyError> {
         match self {
             ChallengeResponseKey::LocalChallenge(secret) => {
-                let secret_bytes = hex::decode(secret)?;
+                let secret_bytes = Zeroizing::new(hex::decode(secret)?);
                 let response = crate::crypt::calculate_hmac_sha1(&[challenge], &secret_bytes)?.to_vec();
                 Ok(response)
             }
