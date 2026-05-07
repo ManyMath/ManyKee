@@ -117,5 +117,11 @@ class Entry {
   }
 
   @override
-  String toString() => 'Entry($uuid, title: $title)';
+  String toString() {
+    try {
+      return 'Entry($uuid, title: $title)';
+    } catch (_) {
+      return 'Entry($uuid)';
+    }
+  }
 }

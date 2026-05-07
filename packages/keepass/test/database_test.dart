@@ -38,6 +38,13 @@ void main() {
     db.close();
   });
 
+  test('Entry.toString degrades gracefully after Database.close', () {
+    final db = Database.open(fixturePath, password: 'demopass');
+    final entry = Entry(db, 'not-a-real-uuid');
+    db.close();
+    expect(entry.toString(), equals('Entry(not-a-real-uuid)'));
+  });
+
   test('saveBytes returns a re-openable database and cleans up its temp dir',
       () {
     final db = Database.open(fixturePath, password: 'demopass');
