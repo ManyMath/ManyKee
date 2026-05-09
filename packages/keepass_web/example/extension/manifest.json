@@ -27,7 +27,11 @@
   },
 
   "web_accessible_resources": [{
-    "resources": ["*.wasm", "*.js"],
+    "resources": [
+      "pkg/keepassxc_wasm_bg.wasm",
+      "pkg/keepassxc_wasm.js",
+      "keepassxc_worker.js"
+    ],
     "matches": ["<all_urls>"]
   }]
 }
