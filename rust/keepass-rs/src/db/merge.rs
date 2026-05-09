@@ -108,6 +108,9 @@ impl Database {
     }
 
     fn collect_custom_icons(group: &Group, icons: &mut HashMap<Uuid, Vec<u8>>) {
+        if let (Some(uuid), Some(data)) = (&group.custom_icon_uuid, &group.custom_icon_data) {
+            icons.entry(*uuid).or_insert_with(|| data.clone());
+        }
         for entry in &group.entries {
             if let Some((uuid, data)) = &entry.custom_icon {
                 icons.entry(*uuid).or_insert_with(|| data.clone());
@@ -127,6 +130,14 @@ impl Database {
     }
 
     fn apply_custom_icons(group: &mut Group, icons: &HashMap<Uuid, Vec<u8>>) {
+        // If the group references a custom icon UUID but lacks its data, fill from source.
+        if let Some(uuid) = &group.custom_icon_uuid {
+            if group.custom_icon_data.is_none() {
+                if let Some(source_data) = icons.get(uuid) {
+                    group.custom_icon_data = Some(source_data.clone());
+                }
+            }
+        }
         for entry in &mut group.entries {
             // If entry has a custom_icon UUID but no data, fill from source.
             if entry.custom_icon.is_none() {
@@ -1947,6 +1958,37 @@ mod merge_tests {
             expected_previous_parent_group
         );
         assert_eq!(modified_group.unknown_xml, expected_unknown_xml);
+    }
+
+    #[test]
+    fn test_merge_backfills_group_custom_icon_data_from_source() {
+        let mut destination_db = create_test_database();
+        let source_db = destination_db.clone();
+
+        let icon_uuid = Uuid::new_v4();
+        let icon_data = vec![1, 2, 3, 4];
+
+        // Destination group references a custom icon but is missing its data
+        // (e.g. it was assigned locally before the icon bytes synced down).
+        let destination_group = destination_db
+            .root
+            .group_by_path_mut(&["group1", "subgroup1"])
+            .unwrap();
+        destination_group.custom_icon_uuid = Some(icon_uuid);
+        destination_group.custom_icon_data = None;
+
+        // Source database carries the actual icon bytes on an entry.
+        let mut source_db = source_db;
+        source_db.root.entries[0].custom_icon = Some((icon_uuid, icon_data.clone()));
+
+        destination_db.merge(&source_db).unwrap();
+
+        let modified_group = destination_db
+            .root
+            .group_by_path(&["group1", "subgroup1"])
+            .unwrap();
+        assert_eq!(modified_group.custom_icon_uuid, Some(icon_uuid));
+        assert_eq!(modified_group.custom_icon_data, Some(icon_data));
     }
 
     #[test]
