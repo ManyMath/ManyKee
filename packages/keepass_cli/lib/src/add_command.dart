@@ -73,7 +73,7 @@ class AddEntrySubcommand extends BaseCommand {
     argParser.addOption('parent', abbr: 'a', help: 'Parent group UUID (defaults to root)');
     argParser.addOption('title', abbr: 't', help: 'Entry title');
     argParser.addOption('user', abbr: 'u', help: 'Username');
-    argParser.addOption('pass', abbr: 'w', help: 'Password');
+    argParser.addOption('pass', abbr: 'w', help: 'Password (visible in ps)');
     argParser.addOption('url', help: 'URL');
     argParser.addOption('notes', abbr: 'n', help: 'Notes');
   }

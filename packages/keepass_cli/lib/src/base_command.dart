@@ -11,7 +11,10 @@ abstract class BaseCommand extends Command {
   int? _yubikeySerial;
 
   BaseCommand() {
-    argParser.addOption('password', abbr: 'p', help: 'Database password');
+    argParser.addOption('password',
+        abbr: 'p',
+        help: 'Database password (visible in ps). '
+            'Prefer the KEEPASS_PASSWORD env var or the interactive prompt.');
     argParser.addOption('keyfile', abbr: 'k', help: 'Path to key file');
     argParser.addOption('yubikey-slot',
         help: 'YubiKey challenge-response slot (1 or 2)');

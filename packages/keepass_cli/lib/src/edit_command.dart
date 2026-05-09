@@ -16,7 +16,7 @@ class EditCommand extends BaseCommand {
     argParser.addOption('name', help: 'New group name');
     argParser.addOption('title', abbr: 't', help: 'Entry title');
     argParser.addOption('user', abbr: 'u', help: 'Username');
-    argParser.addOption('pass', abbr: 'w', help: 'Password');
+    argParser.addOption('pass', abbr: 'w', help: 'Password (visible in ps)');
     argParser.addOption('url', help: 'URL');
     argParser.addOption('notes', abbr: 'n', help: 'Notes');
   }
