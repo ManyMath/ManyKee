@@ -275,7 +275,17 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                         }
                         Event::End(e) => {
                             if ss.depth == 0 {
-                                // End of the unknown element
+                                // End of the unknown element. Its own Start
+                                // event incremented `current_depth` (that
+                                // happens unconditionally, before the event
+                                // is recognized as unknown and dispatched
+                                // here) but, since we never reach the normal
+                                // Event::End handling for this tag, nothing
+                                // decrements it back, do that here, or every
+                                // sibling parsed after this unknown element
+                                // for the rest of the document is
+                                // misjudged as one level deeper than it is.
+                                current_depth -= 1;
                                 let finished = skip.take().unwrap();
                                 let node = XmlNode {
                                     name: finished.tag_name,
@@ -971,6 +981,30 @@ mod tests {
             inner_xml: String::new(),
         };
         assert_eq!(node.to_xml_string(), "<EmptyField/>");
+    }
+
+    #[test]
+    fn test_unknown_element_does_not_shift_depth_for_later_siblings() {
+        // `current_depth` was incremented on every Start event (including an
+        // unknown element's own), but only decremented on a normal
+        // Event::End, the finalizing End of a *skipped* unknown element
+        // never went through that path, so `current_depth` stayed
+        // permanently one level too deep for every sibling parsed after the
+        // first unknown element in the document. A second unknown element
+        // later in the same container (nested one level deeper than it
+        // should be, per the drifted depth) used to go undetected, and any
+        // legitimately nested known field at the drifted depth could be
+        // misclassified too.
+        let xml = r#"<KeePassFile><Meta><Generator>T</Generator></Meta><Root><Group><UUID>AAECAwQFBgcICQoLDA0ODw==</UUID><Name>R</Name><UnknownOne>x</UnknownOne><IconID>48</IconID><UnknownTwo>y</UnknownTwo><IsExpanded>True</IsExpanded></Group></Root></KeePassFile>"#;
+
+        let (cleaned, map) = preprocess_xml(xml.as_bytes());
+
+        assert!(cleaned.contains("<IconID>48</IconID>"));
+        assert!(cleaned.contains("<IsExpanded>True</IsExpanded>"));
+
+        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string());
+        let names: Vec<_> = map[&gk].iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["UnknownOne", "UnknownTwo"], "both unknown siblings should be captured, not just the first");
     }
 
     #[test]
