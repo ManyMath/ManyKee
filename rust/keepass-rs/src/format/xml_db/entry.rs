@@ -654,6 +654,7 @@ mod tests {
             crate::db::CustomDataItem {
                 value: Some(crate::db::CustomDataValue::String(otp.to_string())),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
 

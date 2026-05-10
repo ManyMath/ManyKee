@@ -491,6 +491,7 @@ mod tests {
                     "otpauth://totp/ManyKee:test?secret=JBSWY3DPEHPK3PXP".to_string(),
                 )),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
 
@@ -557,6 +558,7 @@ mod tests {
                         .to_string(),
                 )),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
 

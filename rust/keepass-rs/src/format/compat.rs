@@ -146,6 +146,7 @@ mod tests {
             CustomDataItem {
                 value: Some(CustomDataValue::String("value".to_string())),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
         db.root.entries.push(entry);
@@ -161,6 +162,7 @@ mod tests {
             CustomDataItem {
                 value: Some(CustomDataValue::String("value".to_string())),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
 
@@ -175,6 +177,7 @@ mod tests {
             CustomDataItem {
                 value: Some(CustomDataValue::String("value".to_string())),
                 last_modification_time: Some(crate::db::Times::now()),
+                unknown_xml: Vec::new(),
             },
         );
 

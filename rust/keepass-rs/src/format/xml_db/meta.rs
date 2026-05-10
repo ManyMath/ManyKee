@@ -280,6 +280,7 @@ impl CustomData {
                     crate::db::CustomDataItem {
                         value: Some(value),
                         last_modification_time,
+                        unknown_xml: Vec::new(),
                     },
                 )
             })
@@ -350,6 +351,7 @@ impl From<CustomData> for HashMap<String, crate::db::CustomDataItem> {
                     crate::db::CustomDataItem {
                         value: Some(value),
                         last_modification_time,
+                        unknown_xml: Vec::new(),
                     },
                 )
             })

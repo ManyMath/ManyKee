@@ -376,6 +376,7 @@ mod tests {
                     "otpauth://totp/ManyKee:native?secret=ABC".to_string(),
                 )),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
         db.root.entries.push(entry);

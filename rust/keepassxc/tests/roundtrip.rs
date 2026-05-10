@@ -229,6 +229,7 @@ fn create_richcontent_fixture_inner(path: &Path) {
         CustomDataItem {
             value: Some(CustomDataValue::String("100".to_string())),
             last_modification_time: None,
+            unknown_xml: Vec::new(),
         },
     );
     db.meta.custom_data.insert(
@@ -236,6 +237,7 @@ fn create_richcontent_fixture_inner(path: &Path) {
         CustomDataItem {
             value: Some(CustomDataValue::String("test_value_123".to_string())),
             last_modification_time: None,
+            unknown_xml: Vec::new(),
         },
     );
 
@@ -338,6 +340,7 @@ fn create_richcontent_fixture_inner(path: &Path) {
                     .to_string(),
             )),
             last_modification_time: None,
+            unknown_xml: Vec::new(),
         },
     );
     totp_entry.custom_data.insert(
@@ -345,6 +348,7 @@ fn create_richcontent_fixture_inner(path: &Path) {
         CustomDataItem {
             value: Some(CustomDataValue::String("true".to_string())),
             last_modification_time: None,
+            unknown_xml: Vec::new(),
         },
     );
     db.root.entries.push(totp_entry);

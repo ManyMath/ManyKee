@@ -10,6 +10,10 @@ pub struct CustomDataItem {
 
     /// Time the custom data item was last modified
     pub last_modification_time: Option<NaiveDateTime>,
+
+    /// Unknown child elements of this item's `<Item>` XML element, preserved
+    /// verbatim for round-trip fidelity (see `format::xml_db::xml_node`).
+    pub unknown_xml: Vec<crate::format::xml_db::xml_node::XmlNode>,
 }
 
 /// Value of a [CustomDataItem]

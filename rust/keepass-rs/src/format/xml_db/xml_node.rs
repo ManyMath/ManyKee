@@ -149,9 +149,18 @@ pub type UnknownMap = HashMap<UnknownKey, Vec<XmlNode>>;
 // Pre-processing
 // --------------------------------------------------------------------------------
 
+/// Where a finished `SkipState`'s captured `XmlNode` should land.
+enum SkipTarget {
+    /// Written straight to `unknown_map` under this key, as usual.
+    Map(UnknownKey),
+    /// Buffered into the currently-open `CustomData` `<Item>` instead, since
+    /// its final key (which needs `<Key>`) may not be known yet.
+    ItemPending,
+}
+
 /// State for tracking unknown element accumulation during skip.
 struct SkipState {
-    key: UnknownKey,
+    target: SkipTarget,
     tag_name: String,
     inner_xml: String,
     depth: u32, // depth within the skipped element (0 = direct children)
@@ -185,6 +194,39 @@ impl StackEntry {
     }
 }
 
+/// Direct children of a `CustomData` `<Item>` that carry known data, anything
+/// else nested in an `Item` is preserved via `item_ctx`/`ItemCtx` below.
+fn item_known_tags() -> HashSet<&'static str> {
+    ["Key", "Value", "LastModificationTime"].iter().copied().collect()
+}
+
+/// Tracks the currently-open `<CustomData>` block (a direct child of a
+/// tracked `Group`/`Entry`/`Meta`/history-revision `Entry`), so `<Item>`
+/// elements inside it can be recognized. `CustomData` doesn't nest, so a
+/// single `Option` (not a stack) is enough, the same reasoning as
+/// `item_ctx` below.
+struct CustomDataCtx {
+    /// Depth of the `<CustomData>` element itself; its `<Item>` children live
+    /// at `depth + 1`.
+    depth: u32,
+    /// The owning element's key, e.g. `(["Entry"], uuid_b64)`, `"CustomData"`
+    /// is appended to form the final `UnknownKey` tag_path for an item.
+    owner_key: UnknownKey,
+}
+
+/// Tracks the currently-open `<Item>` inside a `CustomData` block. Buffers
+/// unknown child elements until `</Item>` closes, since `<Key>` (needed to
+/// build the final identity) may not have been read yet when an unknown
+/// sibling is first encountered, order among `Item`'s children isn't
+/// guaranteed by the schema even though real files write `Key` first.
+struct ItemCtx {
+    /// Depth of the `<Item>` element itself; its children live at `depth + 1`.
+    depth: u32,
+    owner_key: UnknownKey,
+    key: Option<String>,
+    pending: Vec<XmlNode>,
+}
+
 /// Pre-process KDBX XML: extract unknown child elements from Group, Entry, and Meta,
 /// return cleaned XML and a map of unknowns.
 pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
@@ -207,10 +249,16 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
     // enough to index revisions.
     let mut in_history = false;
     let mut history_revision_index: usize = 0;
+    // CustomData/Item don't nest, so a single Option each (not a stack) is
+    // enough, see `CustomDataCtx`/`ItemCtx` docs.
+    let mut custom_data_ctx: Option<CustomDataCtx> = None;
+    let mut item_ctx: Option<ItemCtx> = None;
+    let mut capturing_item_key = false;
 
     let entry_tags = entry_known_tags();
     let group_tags = group_known_tags();
     let meta_tags = meta_known_tags();
+    let item_tags = item_known_tags();
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -229,10 +277,20 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                             if ss.depth == 0 {
                                 // End of the unknown element
                                 let finished = skip.take().unwrap();
-                                unknown_map.entry(finished.key).or_default().push(XmlNode {
+                                let node = XmlNode {
                                     name: finished.tag_name,
                                     inner_xml: finished.inner_xml,
-                                });
+                                };
+                                match finished.target {
+                                    SkipTarget::Map(key) => {
+                                        unknown_map.entry(key).or_default().push(node);
+                                    }
+                                    SkipTarget::ItemPending => {
+                                        if let Some(ctx) = item_ctx.as_mut() {
+                                            ctx.pending.push(node);
+                                        }
+                                    }
+                                }
                                 buf.clear();
                                 continue;
                             }
@@ -295,6 +353,61 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                             }
                         }
 
+                        // A <CustomData> that's a direct child of a tracked
+                        // parent opens a new item-tracking scope. It's still
+                        // written to the output normally below (it's a known
+                        // tag), we just also remember we're inside it.
+                        if tag == "CustomData" && !parent_stack.is_empty() {
+                            let parent = parent_stack.last().unwrap();
+                            if current_depth == parent.depth + 1 {
+                                custom_data_ctx = Some(CustomDataCtx {
+                                    depth: current_depth,
+                                    owner_key: parent.unknown_key(),
+                                });
+                            }
+                        }
+
+                        // An <Item> that's a direct child of the open
+                        // <CustomData> opens item tracking; its own unknowns
+                        // are buffered (see ItemCtx) until </Item>, once its
+                        // <Key> (if any) has been read.
+                        if tag == "Item" {
+                            if let Some(cdc) = &custom_data_ctx {
+                                if current_depth == cdc.depth + 1 {
+                                    item_ctx = Some(ItemCtx {
+                                        depth: current_depth,
+                                        owner_key: cdc.owner_key.clone(),
+                                        key: None,
+                                        pending: Vec::new(),
+                                    });
+                                }
+                            }
+                        }
+
+                        if tag == "Key" {
+                            if let Some(ictx) = &item_ctx {
+                                if current_depth == ictx.depth + 1 {
+                                    capturing_item_key = true;
+                                }
+                            }
+                        }
+
+                        // Check if this is an unknown DIRECT child of the
+                        // open <Item> (depth == item_depth + 1).
+                        if let Some(ictx) = &item_ctx {
+                            let is_direct_child = current_depth == ictx.depth + 1;
+                            if is_direct_child && !item_tags.contains(tag.as_str()) {
+                                skip = Some(SkipState {
+                                    target: SkipTarget::ItemPending,
+                                    tag_name: tag,
+                                    inner_xml: String::new(),
+                                    depth: 0,
+                                });
+                                buf.clear();
+                                continue;
+                            }
+                        }
+
                         // Check if this is an unknown DIRECT child of a tracked parent
                         // (depth == parent_depth + 1)
                         if !is_tracked && !parent_stack.is_empty() {
@@ -313,7 +426,7 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                                     if !known_set.contains(tag.as_str()) {
                                         // Start skipping
                                         skip = Some(SkipState {
-                                            key: parent.unknown_key(),
+                                            target: SkipTarget::Map(parent.unknown_key()),
                                             tag_name: tag,
                                             inner_xml: String::new(),
                                             depth: 0,
@@ -335,8 +448,24 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                         if matches!(tag.as_str(), "Group" | "Entry" | "Meta") {
                             parent_stack.pop();
                         }
+                        if tag == "Item" {
+                            if let Some(finished) = item_ctx.take() {
+                                if let Some(key) = finished.key {
+                                    let (mut tag_path, identity) = finished.owner_key;
+                                    tag_path.push("CustomData".to_string());
+                                    let final_key = (tag_path, format!("{}:{}", identity, key));
+                                    for node in finished.pending {
+                                        unknown_map.entry(final_key.clone()).or_default().push(node);
+                                    }
+                                }
+                            }
+                        }
+                        if tag == "CustomData" {
+                            custom_data_ctx = None;
+                        }
                         current_depth -= 1;
                         capturing_uuid = false;
+                        capturing_item_key = false;
                         writer.write_event(event.borrow()).ok();
                     }
                     Event::Text(e) => {
@@ -348,10 +477,30 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                                 }
                             }
                         }
+                        if capturing_item_key {
+                            let key_text = String::from_utf8_lossy(e.as_ref()).trim().to_string();
+                            if !key_text.is_empty() {
+                                if let Some(ictx) = item_ctx.as_mut() {
+                                    ictx.key = Some(key_text);
+                                }
+                            }
+                        }
                         writer.write_event(event.borrow()).ok();
                     }
                     Event::Empty(e) => {
                         let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+
+                        if let Some(ictx) = item_ctx.as_mut() {
+                            let is_direct_child = current_depth == ictx.depth;
+                            if is_direct_child && !item_tags.contains(tag.as_str()) {
+                                ictx.pending.push(XmlNode {
+                                    name: tag,
+                                    inner_xml: String::new(),
+                                });
+                                buf.clear();
+                                continue;
+                            }
+                        }
 
                         if !parent_stack.is_empty() {
                             let parent = parent_stack.last().unwrap();
@@ -442,6 +591,38 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
                     }
                 }
             }
+            [tag, cd] if cd == "CustomData" => {
+                // identity is "owner_identity:item_key", see the `Item`
+                // handling in `preprocess_xml`. `owner_identity` is empty for
+                // Meta, a UUID base64 string for Group/Entry, or
+                // "uuid_base64:revision_index" for a history revision.
+                let Some((owner_identity, item_key)) = identity.split_once(':') else {
+                    continue;
+                };
+                let custom_data = match tag.as_str() {
+                    "Meta" => Some(&mut db.meta.custom_data),
+                    "Group" => decode_uuid(owner_identity)
+                        .and_then(|uuid| db.root.group_by_uuid_mut(uuid))
+                        .map(|group| &mut group.custom_data),
+                    "Entry" => decode_uuid(owner_identity)
+                        .and_then(|uuid| db.root.entry_by_uuid_mut(uuid))
+                        .map(|entry| &mut entry.custom_data),
+                    "HistoryEntry" => owner_identity
+                        .split_once(':')
+                        .and_then(|(uuid_b64, index)| Some((decode_uuid(uuid_b64)?, index.parse::<usize>().ok()?)))
+                        .and_then(|(uuid, index)| {
+                            db.root
+                                .entry_by_uuid_mut(uuid)
+                                .and_then(|entry| entry.history.as_mut())
+                                .and_then(|history| history.entries.get_mut(index))
+                        })
+                        .map(|revision| &mut revision.custom_data),
+                    _ => None,
+                };
+                if let Some(item) = custom_data.and_then(|cd| cd.get_mut(item_key)) {
+                    item.unknown_xml = nodes.clone();
+                }
+            }
             _ => {}
         }
     }
@@ -465,8 +646,62 @@ pub fn inject_unknowns_into_xml(xml: &mut String, db: &crate::db::Database) {
             xml.insert_str(pos, &s);
         }
     }
+    if let Some(meta_start) = xml.find("<Meta>") {
+        if let Some(meta_end) = xml[meta_start..].find("</Meta>").map(|i| meta_start + i) {
+            inject_custom_data_unknowns(xml, meta_start, meta_end, &db.meta.custom_data);
+        }
+    }
     let mut cursor = 0;
     inject_group_unknowns(xml, &db.root, &mut cursor);
+}
+
+/// Escape the characters `quick_xml`'s text serializer escapes, so a
+/// `<Key>` lookup matches the literal serialized form of `key`.
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+/// Inject each `CustomDataItem`'s preserved `unknown_xml` just before its
+/// `<Item>`'s own `</Item>`, searching only the first `<CustomData>...
+/// </CustomData>` block within `[region_start, region_end)`, which, thanks
+/// to `custom_data` always being declared (and thus serialized) before any
+/// nested `Group`/`Entry`/`History` field on `Group`/`Entry`/`Meta`, is
+/// always this element's own block rather than a descendant's. Returns the
+/// number of bytes inserted, so callers can adjust any position recorded
+/// past `region_end`.
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+fn inject_custom_data_unknowns(
+    xml: &mut String,
+    region_start: usize,
+    region_end: usize,
+    custom_data: &std::collections::HashMap<String, crate::db::CustomDataItem>,
+) -> usize {
+    let Some(cd_start) = xml[region_start..region_end].find("<CustomData>").map(|i| region_start + i) else {
+        return 0;
+    };
+    let Some(mut cd_end) = xml[cd_start..region_end].find("</CustomData>").map(|i| cd_start + i) else {
+        return 0;
+    };
+
+    let mut inserted = 0usize;
+    for (key, item) in custom_data {
+        if item.unknown_xml.is_empty() {
+            continue;
+        }
+        let key_tag = format!("<Key>{}</Key>", xml_escape(key));
+        let Some(key_pos) = xml[cd_start..cd_end].find(&key_tag).map(|i| cd_start + i) else {
+            continue;
+        };
+        let Some(item_close) = xml[key_pos..cd_end].find("</Item>").map(|i| key_pos + i) else {
+            continue;
+        };
+        let s: String = item.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
+        xml.insert_str(item_close, &s);
+        cd_end += s.len();
+        inserted += s.len();
+    }
+    inserted
 }
 
 /// Encode `uuid` as the literal `<UUID>...</UUID>` tag text used to locate an
@@ -495,6 +730,7 @@ fn inject_and_advance(
     xml: &mut String,
     uuid: uuid::Uuid,
     unknown_xml: &[XmlNode],
+    custom_data: &std::collections::HashMap<String, crate::db::CustomDataItem>,
     open_tag: &str,
     close_tag: &str,
     search_from: usize,
@@ -503,9 +739,10 @@ fn inject_and_advance(
     let Some(uuid_pos) = xml[search_from..].find(&tag).map(|i| search_from + i) else {
         return search_from;
     };
-    let Some(close_pos) = find_own_close_tag(xml, uuid_pos, open_tag, close_tag) else {
+    let Some(mut close_pos) = find_own_close_tag(xml, uuid_pos, open_tag, close_tag) else {
         return uuid_pos + tag.len();
     };
+    close_pos += inject_custom_data_unknowns(xml, uuid_pos, close_pos, custom_data);
     if unknown_xml.is_empty() {
         return close_pos + close_tag.len();
     }
@@ -525,6 +762,9 @@ fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group, cursor: &mu
     // subtree, so the depth-scan can't be thrown off by content we (or our
     // descendants) are about to inject.
     let mut close_pos = find_own_close_tag(xml, uuid_pos, "<Group>", "</Group>");
+    if let Some(cp) = close_pos {
+        close_pos = Some(cp + inject_custom_data_unknowns(xml, uuid_pos, cp, &group.custom_data));
+    }
     if !group.unknown_xml.is_empty() {
         if let Some(cp) = close_pos {
             let s: String = group.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
@@ -539,7 +779,15 @@ fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group, cursor: &mu
     // cursor accordingly instead of searching the whole document.
     let mut inner = uuid_pos + tag.len();
     for entry in &group.entries {
-        inner = inject_and_advance(xml, entry.uuid, &entry.unknown_xml, "<Entry>", "</Entry>", inner);
+        inner = inject_and_advance(
+            xml,
+            entry.uuid,
+            &entry.unknown_xml,
+            &entry.custom_data,
+            "<Entry>",
+            "</Entry>",
+            inner,
+        );
     }
     for child_group in &group.groups {
         inject_group_unknowns(xml, child_group, &mut inner);
@@ -908,6 +1156,157 @@ mod tests {
         assert!(history.entries[0].unknown_xml[0].inner_xml.contains("rev0"));
         assert_eq!(history.entries[1].unknown_xml.len(), 1);
         assert!(history.entries[1].unknown_xml[0].inner_xml.contains("rev1"));
+    }
+
+    #[test]
+    fn test_custom_data_item_unknown_child_is_preserved_on_parse() {
+        // A future/plugin-added child of a CustomData <Item> (e.g. a
+        // hypothetical <Source>) used to be silently dropped: preprocess_xml
+        // only tracked unknowns one level below Group/Entry/Meta, not inside
+        // an already-known child like CustomData/Item.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<KeePassFile>
+ <Meta>
+ <Generator>Test</Generator>
+ <DatabaseName>TestDB</DatabaseName>
+ <DatabaseNameChanged/>
+ <DatabaseDescription/>
+ <DatabaseDescriptionChanged/>
+ <DefaultUsername/>
+ <DefaultUsernameChanged/>
+ <MaintenanceHistoryDays>365</MaintenanceHistoryDays>
+ <Color/>
+ <MasterKeyChanged/>
+ <MasterKeyChangeRec>-1</MasterKeyChangeRec>
+ <MasterKeyChangeForce>-1</MasterKeyChangeForce>
+ <RecycleBinEnabled>False</RecycleBinEnabled>
+ <RecycleBinUUID>AAAAAAAAAAAAAAAAAAAAAA==</RecycleBinUUID>
+ <RecycleBinChanged/>
+ <EntryTemplatesGroup>AAAAAAAAAAAAAAAAAAAAAA==</EntryTemplatesGroup>
+ <EntryTemplatesGroupChanged/>
+ <LastSelectedGroup>AAAAAAAAAAAAAAAAAAAAAA==</LastSelectedGroup>
+ <LastTopVisibleGroup>AAAAAAAAAAAAAAAAAAAAAA==</LastTopVisibleGroup>
+ <HistoryMaxItems>10</HistoryMaxItems>
+ <HistoryMaxSize>6291456</HistoryMaxSize>
+ <SettingsChanged/>
+ <CustomData>
+ <Item>
+ <Key>meta_plugin_key</Key>
+ <Value>meta_value</Value>
+ <PluginSource>meta-plugin</PluginSource>
+ </Item>
+ </CustomData>
+ </Meta>
+ <Root>
+ <Group>
+ <UUID>AAECAwQFBgcICQoLDA0ODw==</UUID>
+ <Name>Root</Name>
+ <IconID>48</IconID>
+ <IsExpanded>True</IsExpanded>
+ <CustomData>
+ <Item>
+ <Key>group_plugin_key</Key>
+ <Value>group_value</Value>
+ <PluginSource>group-plugin</PluginSource>
+ </Item>
+ </CustomData>
+ <Entry>
+ <UUID>EBESExQVFhcYGRobHB0eHw==</UUID>
+ <IconID>0</IconID>
+ <Tags>test</Tags>
+ <CustomData>
+ <Item>
+ <Key>entry_plugin_key</Key>
+ <Value>entry_value</Value>
+ <PluginSource>entry-plugin</PluginSource>
+ </Item>
+ </CustomData>
+ </Entry>
+ </Group>
+ <DeletedObjects/>
+ </Root>
+</KeePassFile>"#;
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let db = crate::format::xml_db::parse_xml(xml.as_bytes(), &[], &mut cipher).unwrap();
+
+        let meta_item = db.meta.custom_data.get("meta_plugin_key").unwrap();
+        assert_eq!(meta_item.unknown_xml.len(), 1);
+        assert_eq!(meta_item.unknown_xml[0].name, "PluginSource");
+        assert!(meta_item.unknown_xml[0].inner_xml.contains("meta-plugin"));
+
+        let group_item = db.root.custom_data.get("group_plugin_key").unwrap();
+        assert_eq!(group_item.unknown_xml.len(), 1);
+        assert!(group_item.unknown_xml[0].inner_xml.contains("group-plugin"));
+
+        let entry_item = db.root.entries[0].custom_data.get("entry_plugin_key").unwrap();
+        assert_eq!(entry_item.unknown_xml.len(), 1);
+        assert!(entry_item.unknown_xml[0].inner_xml.contains("entry-plugin"));
+    }
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn test_custom_data_item_unknown_child_round_trips_through_save() {
+        use crate::db::{CustomDataItem, CustomDataValue};
+
+        let mut db = crate::db::Database::new(Default::default());
+        db.meta.custom_data.insert(
+            "meta_key".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("meta_value".to_string())),
+                last_modification_time: None,
+                unknown_xml: vec![XmlNode {
+                    name: "PluginSource".to_string(),
+                    inner_xml: "meta-plugin".to_string(),
+                }],
+            },
+        );
+        db.root.custom_data.insert(
+            "group_key".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("group_value".to_string())),
+                last_modification_time: None,
+                unknown_xml: vec![XmlNode {
+                    name: "PluginSource".to_string(),
+                    inner_xml: "group-plugin".to_string(),
+                }],
+            },
+        );
+        let mut entry = crate::db::Entry::new();
+        entry.custom_data.insert(
+            "entry_key".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("entry_value".to_string())),
+                last_modification_time: None,
+                unknown_xml: vec![XmlNode {
+                    name: "PluginSource".to_string(),
+                    inner_xml: "entry-plugin".to_string(),
+                }],
+            },
+        );
+        db.root.entries.push(entry);
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let (xml_bytes, _) = crate::format::xml_db::to_xml(&db, &mut cipher).unwrap();
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let reparsed = crate::format::xml_db::parse_xml(&xml_bytes, &[], &mut cipher).unwrap();
+
+        assert_eq!(
+            reparsed.meta.custom_data.get("meta_key").unwrap().unknown_xml[0].name,
+            "PluginSource"
+        );
+        assert!(reparsed.meta.custom_data.get("meta_key").unwrap().unknown_xml[0]
+            .inner_xml
+            .contains("meta-plugin"));
+        assert!(reparsed.root.custom_data.get("group_key").unwrap().unknown_xml[0]
+            .inner_xml
+            .contains("group-plugin"));
+        assert!(
+            reparsed.root.entries[0].custom_data.get("entry_key").unwrap().unknown_xml[0]
+                .inner_xml
+                .contains("entry-plugin")
+        );
     }
 
     #[test]

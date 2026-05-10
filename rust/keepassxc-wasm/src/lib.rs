@@ -513,6 +513,7 @@ mod tests {
                     "otpauth://totp/ManyKee:wasm?secret=DEF".to_string(),
                 )),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
         db.root.entries.push(entry);

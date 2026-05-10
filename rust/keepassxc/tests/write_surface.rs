@@ -25,6 +25,7 @@ fn make_db() -> (Database, uuid::Uuid, uuid::Uuid, uuid::Uuid, uuid::Uuid) {
                 "otpauth://totp/ManyKee:test?secret=JBSWY3DPEHPK3PXP".to_string(),
             )),
             last_modification_time: None,
+            unknown_xml: Vec::new(),
         },
     );
     let entry_uuid = entry.uuid;

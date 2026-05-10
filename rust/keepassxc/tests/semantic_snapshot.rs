@@ -30,6 +30,7 @@ fn string_custom_data(value: &str) -> CustomDataItem {
     CustomDataItem {
         value: Some(CustomDataValue::String(value.to_string())),
         last_modification_time: Some(Times::epoch()),
+        unknown_xml: Vec::new(),
     }
 }
 
@@ -37,6 +38,7 @@ fn binary_custom_data(bytes: &[u8]) -> CustomDataItem {
     CustomDataItem {
         value: Some(CustomDataValue::Binary(bytes.to_vec())),
         last_modification_time: Some(Times::epoch()),
+        unknown_xml: Vec::new(),
     }
 }
 

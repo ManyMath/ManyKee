@@ -259,6 +259,7 @@ mod entry_tests {
             CustomDataItem {
                 value: Some(CustomDataValue::String(otp.to_string())),
                 last_modification_time: None,
+                unknown_xml: Vec::new(),
             },
         );
 
