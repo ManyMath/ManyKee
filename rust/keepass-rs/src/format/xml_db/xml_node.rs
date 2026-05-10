@@ -134,7 +134,15 @@ fn meta_known_tags() -> HashSet<&'static str> {
     .collect()
 }
 
-type UnknownKey = (String, String); // (parent_type, uuid_base64)
+/// `(tag_path, identity)`. `tag_path` names the chain of tracked containers
+/// an unknown element's parent lives under, today always a single element
+/// (`["Group"]`, `["Entry"]`, `["Meta"]`, or `["HistoryEntry"]`), since only
+/// direct children of `Group`/`Entry`/`Meta` are tracked. Generalizing this
+/// from a bare parent-type string to a path is what lets a future phase
+/// track unknowns nested one level deeper (e.g. `["Entry", "AutoType"]`)
+/// without inventing a new special-cased key variant per container, the way
+/// `"HistoryEntry"` had to be bolted on for history revisions.
+type UnknownKey = (Vec<String>, String); // (tag_path, uuid_base64)
 pub type UnknownMap = HashMap<UnknownKey, Vec<XmlNode>>;
 
 // --------------------------------------------------------------------------------
@@ -167,12 +175,12 @@ struct StackEntry {
 
 impl StackEntry {
     /// The `UnknownMap` key unknowns attached to this element should be
-    /// filed under: `("Group"|"Entry", uuid_b64)` normally, or
-    /// `("HistoryEntry", "uuid_b64:index")` for a history revision.
+    /// filed under: `(["Group"|"Entry"], uuid_b64)` normally, or
+    /// `(["HistoryEntry"], "uuid_b64:index")` for a history revision.
     fn unknown_key(&self) -> UnknownKey {
         match self.history_index {
-            Some(index) => ("HistoryEntry".to_string(), format!("{}:{}", self.uuid, index)),
-            None => (self.tag.clone(), self.uuid.clone()),
+            Some(index) => (vec!["HistoryEntry".to_string()], format!("{}:{}", self.uuid, index)),
+            None => (vec![self.tag.clone()], self.uuid.clone()),
         }
     }
 }
@@ -392,31 +400,31 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
 // --------------------------------------------------------------------------------
 
 pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
-    if let Some(nodes) = unknown_map.get(&("Meta".to_string(), String::new())) {
+    if let Some(nodes) = unknown_map.get(&(vec!["Meta".to_string()], String::new())) {
         db.meta.unknown_xml = nodes.clone();
     }
 
-    for ((parent_type, identity), nodes) in unknown_map {
+    for ((tag_path, identity), nodes) in unknown_map {
         if identity.is_empty() {
             continue;
         }
 
-        match parent_type.as_str() {
-            "Group" => {
+        match tag_path.as_slice() {
+            [tag] if tag == "Group" => {
                 if let Some(uuid) = decode_uuid(identity) {
                     if let Some(group) = db.root.group_by_uuid_mut(uuid) {
                         group.unknown_xml = nodes.clone();
                     }
                 }
             }
-            "Entry" => {
+            [tag] if tag == "Entry" => {
                 if let Some(uuid) = decode_uuid(identity) {
                     if let Some(entry) = db.root.entry_by_uuid_mut(uuid) {
                         entry.unknown_xml = nodes.clone();
                     }
                 }
             }
-            "HistoryEntry" => {
+            [tag] if tag == "HistoryEntry" => {
                 // identity is "uuid_base64:revision_index", see `StackEntry::unknown_key`.
                 if let Some((uuid_b64, index)) = identity
                     .split_once(':')
@@ -736,7 +744,7 @@ mod tests {
         assert!(cleaned.contains("<Name>R</Name>"));
         assert!(cleaned.contains("<Tags>t</Tags>"));
 
-        let gk = ("Group".into(), "AAECAwQFBgcICQoLDA0ODw==".into());
+        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string());
         assert!(
             map.contains_key(&gk),
             "Missing group key. Keys: {:?}",
@@ -745,7 +753,7 @@ mod tests {
         assert_eq!(map[&gk][0].name, "UnknownThing");
         assert!(map[&gk][0].inner_xml.contains("42"));
 
-        let ek = ("Entry".into(), "EBESExQVFhcYGRobHB0eHw==".into());
+        let ek = (vec!["Entry".to_string()], "EBESExQVFhcYGRobHB0eHw==".to_string());
         assert!(
             map.contains_key(&ek),
             "Missing entry key. Keys: {:?}",
