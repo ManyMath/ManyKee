@@ -15,6 +15,9 @@ pub struct AutoType {
     /// Window associations for this entry. The first association whose window matches the active
     /// window will be used.
     pub associations: Vec<AutoTypeAssociation>,
+
+    /// Unknown XML elements preserved for round-trip fidelity.
+    pub unknown_xml: Vec<crate::format::xml_db::xml_node::XmlNode>,
 }
 
 /// A window association associated with an [AutoType] setting

@@ -461,6 +461,7 @@ impl From<MemoryProtection> for crate::db::MemoryProtection {
             protect_password: val.protect_password.unwrap_or(true),
             protect_url: val.protect_url.unwrap_or(false),
             protect_notes: val.protect_notes.unwrap_or(false),
+            unknown_xml: Vec::new(),
         }
     }
 }

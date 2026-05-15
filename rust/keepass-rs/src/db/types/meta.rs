@@ -101,6 +101,9 @@ pub struct MemoryProtection {
 
     /// Whether notes should be protected
     pub protect_notes: bool,
+
+    /// Unknown XML elements preserved for round-trip fidelity.
+    pub unknown_xml: Vec<crate::format::xml_db::xml_node::XmlNode>,
 }
 
 impl Default for MemoryProtection {
@@ -111,6 +114,7 @@ impl Default for MemoryProtection {
             protect_password: true,
             protect_url: false,
             protect_notes: false,
+            unknown_xml: Vec::new(),
         }
     }
 }

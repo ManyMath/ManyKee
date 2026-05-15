@@ -218,6 +218,7 @@ fn create_richcontent_fixture_inner(path: &Path) {
         protect_password: true,
         protect_url: false,
         protect_notes: false,
+        ..Default::default()
     });
     db.meta.history_max_items = Some(10);
     db.meta.history_max_size = Some(6291456);
@@ -294,6 +295,7 @@ fn create_richcontent_fixture_inner(path: &Path) {
                 sequence: "{PASSWORD}{ENTER}".to_string(),
             },
         ],
+        ..Default::default()
     });
     db.root.entries.push(autotype_entry);
 

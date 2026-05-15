@@ -30,6 +30,9 @@ pub struct Times {
 
     /// The number of times the entry or group has been accessed.
     pub usage_count: Option<usize>,
+
+    /// Unknown XML elements preserved for round-trip fidelity.
+    pub unknown_xml: Vec<crate::format::xml_db::xml_node::XmlNode>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -66,6 +69,7 @@ impl Times {
             location_changed: Some(now),
             expires: Some(false),
             usage_count: Some(0),
+            unknown_xml: Vec::new(),
         }
     }
 }

@@ -36,6 +36,7 @@ impl From<Times> for crate::db::Times {
             location_changed: t.location_changed.as_ref().map(|ts| ts.time),
             expires: t.expires,
             usage_count: t.usage_count,
+            unknown_xml: Vec::new(),
         }
     }
 }

@@ -62,6 +62,7 @@ fn build_fid01_database() -> Database {
         protect_password: true,
         protect_url: false,
         protect_notes: false,
+        ..Default::default()
     });
     db.meta
         .custom_data
@@ -117,6 +118,7 @@ fn build_fid01_database() -> Database {
             window: "Example Login".to_string(),
             sequence: "{USERNAME}{TAB}{PASSWORD}{ENTER}".to_string(),
         }],
+        ..Default::default()
     });
     entry.attachments.insert(
         "public.txt".to_string(),

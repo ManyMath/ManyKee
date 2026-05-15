@@ -376,6 +376,7 @@ impl From<AutoType> for crate::db::AutoType {
             default_sequence: value.default_sequence,
             data_transfer_obfuscation: value.data_transfer_obfuscation,
             associations: value.associations.into_iter().map(|a| a.into()).collect(),
+            unknown_xml: Vec::new(),
         }
     }
 }
