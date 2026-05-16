@@ -6,7 +6,7 @@ use keepassxc::{delete_group, move_group, Group, GroupExt};
 
 use crate::database::KpxcDatabase;
 use crate::error::{
-    check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
+    check_live_db, check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
     KPXC_ERR_INVALID_UTF8, KPXC_ERR_NOT_FOUND, KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
 };
 
@@ -27,7 +27,7 @@ pub extern "C" fn kpxc_group_get_name(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
 
         let uuid = match parse_uuid(uuid_str) {
@@ -60,7 +60,7 @@ pub extern "C" fn kpxc_group_set_name(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
         let name_str = cstr_to_str!(name, KPXC_ERR_NULL_PTR);
 
@@ -91,7 +91,7 @@ pub extern "C" fn kpxc_group_get_uuid(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(parent_uuid, std::ptr::null_mut());
 
         let uuid = match parse_uuid(uuid_str) {
@@ -131,7 +131,7 @@ pub extern "C" fn kpxc_group_entries_count(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
 
         let uuid = match parse_uuid(uuid_str) {
@@ -160,7 +160,7 @@ pub extern "C" fn kpxc_group_groups_count(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
 
         let uuid = match parse_uuid(uuid_str) {
@@ -188,7 +188,7 @@ pub extern "C" fn kpxc_group_create(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(parent_uuid, std::ptr::null_mut());
         let name_str = cstr_to_str!(name, std::ptr::null_mut());
 
@@ -228,7 +228,7 @@ pub extern "C" fn kpxc_group_delete(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let uuid_str = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
 
         let uuid = match parse_uuid(uuid_str) {
@@ -259,7 +259,7 @@ pub extern "C" fn kpxc_group_move(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let group_uuid = cstr_to_str!(group_uuid, KPXC_ERR_NULL_PTR);
         let target_parent_uuid = cstr_to_str!(target_parent_uuid, KPXC_ERR_NULL_PTR);
 
@@ -297,7 +297,7 @@ mod tests {
         db.root.groups.push(source);
         db.root.groups.push(target);
 
-        let db_ptr = Box::into_raw(Box::new(KpxcDatabase(db)));
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));
         let source_uuid = CString::new(source_uuid.to_string()).unwrap();
         let target_uuid = CString::new(target_uuid.to_string()).unwrap();
 
@@ -312,8 +312,6 @@ mod tests {
         );
         assert_eq!(db.0.root.groups[0].groups.len(), 1);
 
-        unsafe {
-            drop(Box::from_raw(db_ptr));
-        }
+        crate::database::kpxc_database_free(db_ptr);
     }
 }

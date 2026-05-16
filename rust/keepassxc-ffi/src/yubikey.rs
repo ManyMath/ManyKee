@@ -32,7 +32,7 @@ pub extern "C" fn kpxc_database_open_with_yubikey(
         let serial_opt = if serial == 0 { None } else { Some(serial) };
 
         match keepassxc::open_with_yubikey(&mut file, password_str, serial_opt, slot_str) {
-            Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
+            Ok(db) => crate::database::into_raw_registered(KpxcDatabase(db)),
             Err(e) => {
                 set_error_from_kpxc(&e);
                 std::ptr::null_mut()

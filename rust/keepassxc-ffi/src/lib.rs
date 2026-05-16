@@ -4,6 +4,7 @@ pub mod database;
 pub mod entry;
 pub mod error;
 pub mod group;
+mod handle_registry;
 pub mod merge;
 pub mod yubikey;
 

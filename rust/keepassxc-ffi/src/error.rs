@@ -91,6 +91,19 @@ macro_rules! check_null {
     };
 }
 
+/// Like `check_null!`, but also rejects a non-null pointer that's been freed
+/// (or was never a registered handle to begin with), see
+/// `handle_registry`'s doc comment for what this does and doesn't catch.
+macro_rules! check_live_db {
+    ($ptr:expr, $ret:expr) => {
+        check_null!($ptr, $ret);
+        if !$crate::handle_registry::is_database_handle_live($ptr as *const $crate::database::KpxcDatabase) {
+            $crate::error::set_last_error("invalid or already-freed database handle");
+            return $ret;
+        }
+    };
+}
+
 macro_rules! cstr_to_str {
     ($ptr:expr, $ret:expr) => {{
         check_null!($ptr, $ret);
@@ -104,6 +117,7 @@ macro_rules! cstr_to_str {
     }};
 }
 
+pub(crate) use check_live_db;
 pub(crate) use check_null;
 pub(crate) use cstr_to_str;
 

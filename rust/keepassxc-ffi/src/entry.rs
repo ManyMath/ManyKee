@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::database::KpxcDatabase;
 use crate::error::{
-    check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
+    check_live_db, check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
     KPXC_ERR_INVALID_UTF8, KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
 };
 
@@ -42,7 +42,7 @@ pub extern "C" fn kpxc_entry_get_field(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
         let field_str = cstr_to_str!(field_name, std::ptr::null_mut());
 
@@ -89,7 +89,7 @@ pub extern "C" fn kpxc_entry_read_fields(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
 
         let uuid = match parse_uuid(uuid_str) {
@@ -132,7 +132,7 @@ pub extern "C" fn kpxc_entry_get_totp(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
 
         let uuid = match parse_uuid(uuid_str) {
@@ -193,7 +193,7 @@ pub extern "C" fn kpxc_entry_set_field(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let uuid_str = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
         let field_str = cstr_to_str!(field_name, KPXC_ERR_NULL_PTR);
         let value_str = cstr_to_str!(value, KPXC_ERR_NULL_PTR);
@@ -227,7 +227,7 @@ pub extern "C" fn kpxc_entry_get_uuid(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
 
         let uuid = match parse_uuid(uuid_str) {
@@ -267,7 +267,7 @@ pub extern "C" fn kpxc_entry_create(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let uuid_str = cstr_to_str!(group_uuid, std::ptr::null_mut());
 
         let uuid = match parse_uuid(uuid_str) {
@@ -306,7 +306,7 @@ pub extern "C" fn kpxc_entry_delete(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let uuid_str = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
 
         let uuid = match parse_uuid(uuid_str) {
@@ -332,7 +332,7 @@ pub extern "C" fn kpxc_entry_move(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let entry_uuid = cstr_to_str!(entry_uuid, KPXC_ERR_NULL_PTR);
         let target_group_uuid = cstr_to_str!(target_group_uuid, KPXC_ERR_NULL_PTR);
 
@@ -360,7 +360,7 @@ mod tests {
 
     use crate::database::KpxcDatabase;
 
-    fn make_db() -> (Box<KpxcDatabase>, Uuid, Uuid) {
+    fn make_db() -> (Database, Uuid, Uuid) {
         let mut db = Database::new(DatabaseConfig::default());
         let source_uuid = db.root.uuid;
         let target = keepassxc::Group::new("Target");
@@ -380,13 +380,12 @@ mod tests {
             },
         );
         db.root.entries.push(entry);
-        (Box::new(KpxcDatabase(db)), source_uuid, target_uuid)
+        (db, source_uuid, target_uuid)
     }
 
     #[test]
     fn entry_read_fields_json_includes_custom_data() {
-        let handle = make_db().0;
-        let db_ptr = Box::into_raw(handle);
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(make_db().0));
         let entry_uuid = unsafe { &*db_ptr }.0.root.entries[0].uuid;
         let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
 
@@ -398,15 +397,13 @@ mod tests {
             Some("otpauth://totp/ManyKee:native?secret=ABC")
         );
 
-        unsafe {
-            drop(Box::from_raw(db_ptr));
-        }
+        crate::database::kpxc_database_free(db_ptr);
     }
 
     #[test]
     fn entry_move_updates_tree() {
-        let (handle, _, target_uuid) = make_db();
-        let db_ptr = Box::into_raw(handle);
+        let (db, _, target_uuid) = make_db();
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));
         let entry_uuid = unsafe { &*db_ptr }.0.root.entries[0].uuid;
 
         let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
@@ -418,8 +415,6 @@ mod tests {
         assert!(db.0.root.entries.is_empty());
         assert_eq!(db.0.root.groups[0].entries.len(), 1);
 
-        unsafe {
-            drop(Box::from_raw(db_ptr));
-        }
+        crate::database::kpxc_database_free(db_ptr);
     }
 }

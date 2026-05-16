@@ -7,12 +7,22 @@ use std::path::Path;
 use keepassxc::{save_atomic, Database, DatabaseKey};
 
 use crate::error::{
-    check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error, KPXC_ERR_IO,
-    KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
+    check_live_db, check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
+    KPXC_ERR_IO, KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
 };
 
 /// Opaque handle wrapping a keepassxc Database.
 pub struct KpxcDatabase(pub(crate) Database);
+
+/// Box-allocates `db`, registers the resulting pointer as a live handle (see
+/// `handle_registry`), and returns it. Every FFI entry point that creates a
+/// new `KpxcDatabase` handle to hand back to the caller must go through this
+/// instead of a bare `Box::into_raw`.
+pub(crate) fn into_raw_registered(db: KpxcDatabase) -> *mut KpxcDatabase {
+    let ptr = Box::into_raw(Box::new(db));
+    crate::handle_registry::register_database_handle(ptr);
+    ptr
+}
 
 #[no_mangle]
 pub extern "C" fn kpxc_database_open(
@@ -34,7 +44,7 @@ pub extern "C" fn kpxc_database_open(
 
         let key = DatabaseKey::new().with_password(password_str);
         match Database::open(&mut file, key) {
-            Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
+            Ok(db) => into_raw_registered(KpxcDatabase(db)),
             Err(e) => {
                 let kpxc_err = keepassxc::KeePassXcError::Open(e);
                 set_error_from_kpxc(&kpxc_err);
@@ -82,7 +92,7 @@ pub extern "C" fn kpxc_database_open_with_keyfile(
         };
 
         match Database::open(&mut file, key) {
-            Ok(db) => Box::into_raw(Box::new(KpxcDatabase(db))),
+            Ok(db) => into_raw_registered(KpxcDatabase(db)),
             Err(e) => {
                 let kpxc_err = keepassxc::KeePassXcError::Open(e);
                 set_error_from_kpxc(&kpxc_err);
@@ -100,7 +110,7 @@ pub extern "C" fn kpxc_database_save(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let path_str = cstr_to_str!(path, KPXC_ERR_NULL_PTR);
         let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
 
@@ -123,7 +133,7 @@ pub extern "C" fn kpxc_database_save_with_keyfile(
 ) -> c_int {
     crate::error::catch_unwind(KPXC_ERR_PANIC, move || {
         clear_last_error();
-        check_null!(db, KPXC_ERR_NULL_PTR);
+        check_live_db!(db, KPXC_ERR_NULL_PTR);
         let path_str = cstr_to_str!(path, KPXC_ERR_NULL_PTR);
         let password_str = cstr_to_str!(password, KPXC_ERR_NULL_PTR);
         let keyfile_str = cstr_to_str!(keyfile_path, KPXC_ERR_NULL_PTR);
@@ -158,10 +168,20 @@ pub extern "C" fn kpxc_database_save_with_keyfile(
 #[no_mangle]
 pub extern "C" fn kpxc_database_free(db: *mut KpxcDatabase) {
     crate::error::catch_unwind((), move || {
-        if !db.is_null() {
-            unsafe {
-                drop(Box::from_raw(db));
-            }
+        clear_last_error();
+        if db.is_null() {
+            return;
+        }
+        // Reusing a freed (but non-null) handle here is a double free, not
+        // just a redundant no-op, unlike the null case above, a caller
+        // that hits this has a real bug. Refuse to touch the pointer again
+        // rather than risk a second `Box::from_raw` on already-freed memory.
+        if !crate::handle_registry::unregister_database_handle(db) {
+            set_last_error("attempted to free an invalid or already-freed database handle");
+            return;
+        }
+        unsafe {
+            drop(Box::from_raw(db));
         }
     })
 }
@@ -170,7 +190,7 @@ pub extern "C" fn kpxc_database_free(db: *mut KpxcDatabase) {
 pub extern "C" fn kpxc_database_root_uuid(db: *mut KpxcDatabase) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
         let db = unsafe { &*db };
         let uuid_str = db.0.root.uuid.to_string();
         match CString::new(uuid_str) {
@@ -190,8 +210,7 @@ mod tests {
 
     #[test]
     fn database_save_uses_atomic_helper() {
-        let db = Box::new(KpxcDatabase(Database::new(DatabaseConfig::default())));
-        let db_ptr = Box::into_raw(db);
+        let db_ptr = into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())));
         let path = std::env::temp_dir().join(format!("ffi-save-{}.kdbx", uuid::Uuid::new_v4()));
 
         let path_c = CString::new(path.to_string_lossy().as_ref()).unwrap();
@@ -208,8 +227,40 @@ mod tests {
         assert_eq!(reopened.root.name, "Root");
         let _ = std::fs::remove_file(&path);
 
-        unsafe {
-            drop(Box::from_raw(db_ptr));
-        }
+        kpxc_database_free(db_ptr);
+    }
+
+    #[test]
+    fn kpxc_database_free_rejects_double_free() {
+        let db_ptr = into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())));
+
+        // First free is legitimate: drops the Box and unregisters the handle.
+        kpxc_database_free(db_ptr);
+        // Second free of the same (now-dangling) pointer must not touch the
+        // freed memory again, it should be rejected as an invalid handle
+        // instead of double-freeing.
+        kpxc_database_free(db_ptr);
+
+        let err = unsafe { std::ffi::CStr::from_ptr(crate::error::get_last_error()) }
+            .to_str()
+            .unwrap();
+        assert!(err.contains("already-freed"), "message was: {}", err);
+    }
+
+    #[test]
+    fn kpxc_database_save_rejects_freed_handle() {
+        let db_ptr = into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())));
+        kpxc_database_free(db_ptr);
+
+        let path = std::env::temp_dir().join(format!("ffi-save-freed-{}.kdbx", uuid::Uuid::new_v4()));
+        let path_c = CString::new(path.to_string_lossy().as_ref()).unwrap();
+        let password = CString::new("test").unwrap();
+
+        // The pointer is dangling at this point; a correct implementation
+        // must reject it via the handle registry before ever dereferencing
+        // it, not attempt to read through it.
+        let result = kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr());
+        assert_eq!(result, KPXC_ERR_NULL_PTR);
+        assert!(!path.exists());
     }
 }

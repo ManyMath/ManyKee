@@ -3,7 +3,7 @@
 use std::ffi::{c_char, CString};
 
 use crate::database::KpxcDatabase;
-use crate::error::{check_null, clear_last_error, set_error_from_kpxc, set_last_error};
+use crate::error::{check_live_db, check_null, clear_last_error, set_error_from_kpxc, set_last_error};
 
 use keepassxc::serialization::MergeInfo;
 
@@ -14,8 +14,8 @@ pub extern "C" fn kpxc_database_merge(
 ) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        check_null!(db, std::ptr::null_mut());
-        check_null!(other, std::ptr::null_mut());
+        check_live_db!(db, std::ptr::null_mut());
+        check_live_db!(other, std::ptr::null_mut());
 
         if std::ptr::eq(db, other) {
             set_last_error("Cannot merge a database with itself");
