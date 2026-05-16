@@ -134,15 +134,29 @@ fn meta_known_tags() -> HashSet<&'static str> {
     .collect()
 }
 
-/// `(tag_path, identity)`. `tag_path` names the chain of tracked containers
-/// an unknown element's parent lives under, today always a single element
-/// (`["Group"]`, `["Entry"]`, `["Meta"]`, or `["HistoryEntry"]`), since only
-/// direct children of `Group`/`Entry`/`Meta` are tracked. Generalizing this
-/// from a bare parent-type string to a path is what lets a future phase
-/// track unknowns nested one level deeper (e.g. `["Entry", "AutoType"]`)
-/// without inventing a new special-cased key variant per container, the way
-/// `"HistoryEntry"` had to be bolted on for history revisions.
-type UnknownKey = (Vec<String>, String); // (tag_path, uuid_base64)
+/// `(tag_path, identity, occurrence)`. `tag_path` names the chain of tracked
+/// containers an unknown element's parent lives under, today always a
+/// single element (`["Group"]`, `["Entry"]`, `["Meta"]`, or
+/// `["HistoryEntry"]`), since only direct children of `Group`/`Entry`/`Meta`
+/// are tracked. Generalizing this from a bare parent-type string to a path
+/// is what lets a future phase track unknowns nested one level deeper (e.g.
+/// `["Entry", "AutoType"]`) without inventing a new special-cased key
+/// variant per container, the way `"HistoryEntry"` had to be bolted on for
+/// history revisions.
+///
+/// `occurrence` disambiguates a malformed-but-parseable file where more than
+/// one `Group`/`Entry` shares the same UUID: it's the 0-based count of how
+/// many times that exact `(tag, uuid)` pair had already been seen (in
+/// document order) when this one was encountered. It's always `0` for
+/// `Meta` (a singleton) and `HistoryEntry` (already disambiguated by its own
+/// revision index, appended directly into `identity`, see
+/// `StackEntry::unknown_key`), so this only changes behavior for genuine
+/// sibling UUID collisions among live `Group`/`Entry` elements. Kept as a
+/// separate tuple field rather than folded into `identity` so it never has
+/// to be split back out of a string shared with other `:`-joined identity
+/// conventions (`CustomData` item keys, history revision indices) that are
+/// themselves arbitrary/unbounded text.
+type UnknownKey = (Vec<String>, String, usize); // (tag_path, identity, occurrence)
 pub type UnknownMap = HashMap<UnknownKey, Vec<XmlNode>>;
 
 // --------------------------------------------------------------------------------
@@ -180,16 +194,26 @@ struct StackEntry {
     /// without this, unknowns from every revision would collide into one
     /// bucket keyed only by that shared UUID.
     history_index: Option<usize>,
+    /// 0-based count of how many prior `Group`/`Entry` elements with this
+    /// same tag and UUID have already been fully seen (i.e. had their
+    /// `<UUID>` text captured) earlier in the document, see
+    /// `UnknownKey`'s doc comment. Meaningless (left at `0`) for history
+    /// revisions, which use `history_index` instead.
+    occurrence: usize,
 }
 
 impl StackEntry {
     /// The `UnknownMap` key unknowns attached to this element should be
-    /// filed under: `(["Group"|"Entry"], uuid_b64)` normally, or
-    /// `(["HistoryEntry"], "uuid_b64:index")` for a history revision.
+    /// filed under: `(["Group"|"Entry"], uuid_b64, occurrence)` normally, or
+    /// `(["HistoryEntry"], "uuid_b64:index", 0)` for a history revision.
     fn unknown_key(&self) -> UnknownKey {
         match self.history_index {
-            Some(index) => (vec!["HistoryEntry".to_string()], format!("{}:{}", self.uuid, index)),
-            None => (vec![self.tag.clone()], self.uuid.clone()),
+            Some(index) => (
+                vec!["HistoryEntry".to_string()],
+                format!("{}:{}", self.uuid, index),
+                0,
+            ),
+            None => (vec![self.tag.clone()], self.uuid.clone(), self.occurrence),
         }
     }
 }
@@ -326,6 +350,12 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
     // enough to index revisions.
     let mut in_history = false;
     let mut history_revision_index: usize = 0;
+    // Counts, per (tag, uuid), how many times a live (non-history) Group or
+    // Entry with that UUID has already been fully seen, i.e. how many
+    // times its `occurrence` was already assigned, so a later sibling
+    // sharing the same UUID gets a distinct `UnknownKey` instead of merging
+    // its unknowns into the same bucket. See `UnknownKey`'s doc comment.
+    let mut uuid_occurrence_seen: HashMap<(String, String), usize> = HashMap::new();
     // CustomData/Item don't nest, so a single Option each (not a stack) is
     // enough, see `CustomDataCtx`/`ItemCtx` docs.
     let mut custom_data_ctx: Option<CustomDataCtx> = None;
@@ -432,6 +462,7 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                                 uuid: String::new(),
                                 depth: current_depth,
                                 history_index,
+                                occurrence: 0,
                             });
                         }
 
@@ -489,12 +520,12 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                         if !parent_stack.is_empty() {
                             let parent = parent_stack.last().unwrap();
                             if current_depth == parent.depth + 1 && opens_container(tag.as_str(), parent.tag.as_str()) {
-                                let (mut key_path, identity) = parent.unknown_key();
+                                let (mut key_path, identity, occurrence) = parent.unknown_key();
                                 key_path.push(tag.clone());
                                 container_ctx = Some(ContainerCtx {
                                     depth: current_depth,
                                     container_tag: tag.clone(),
-                                    key: (key_path, identity),
+                                    key: (key_path, identity, occurrence),
                                 });
                             }
                         }
@@ -579,9 +610,9 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                         if tag == "Item" {
                             if let Some(finished) = item_ctx.take() {
                                 if let Some(key) = finished.key {
-                                    let (mut tag_path, identity) = finished.owner_key;
+                                    let (mut tag_path, identity, occurrence) = finished.owner_key;
                                     tag_path.push("CustomData".to_string());
-                                    let final_key = (tag_path, format!("{}:{}", identity, key));
+                                    let final_key = (tag_path, format!("{}:{}", identity, key), occurrence);
                                     for node in finished.pending {
                                         unknown_map.entry(final_key.clone()).or_default().push(node);
                                     }
@@ -604,6 +635,19 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                             let uuid_text = String::from_utf8_lossy(e.as_ref()).trim().to_string();
                             if !uuid_text.is_empty() {
                                 if let Some(parent) = parent_stack.last_mut() {
+                                    // History revisions intentionally share the
+                                    // live entry's UUID (that's not a
+                                    // collision to disambiguate, they already
+                                    // key off `history_index` instead), so
+                                    // only live Group/Entry elements consume
+                                    // an occurrence slot.
+                                    if parent.history_index.is_none() {
+                                        let seen = uuid_occurrence_seen
+                                            .entry((parent.tag.clone(), uuid_text.clone()))
+                                            .or_insert(0);
+                                        parent.occurrence = *seen;
+                                        *seen += 1;
+                                    }
                                     parent.uuid = uuid_text;
                                 }
                             }
@@ -697,11 +741,11 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
 // --------------------------------------------------------------------------------
 
 pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
-    if let Some(nodes) = unknown_map.get(&(vec!["Meta".to_string()], String::new())) {
+    if let Some(nodes) = unknown_map.get(&(vec!["Meta".to_string()], String::new(), 0)) {
         db.meta.unknown_xml = nodes.clone();
     }
 
-    for ((tag_path, identity), nodes) in unknown_map {
+    for ((tag_path, identity, occurrence), nodes) in unknown_map {
         // Group/Entry/HistoryEntry identities are never legitimately empty
         // (every element has a UUID); Meta's is always empty (it's a
         // singleton). The `Meta`-only cases below (bare Meta, and
@@ -714,14 +758,14 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
         match tag_path.as_slice() {
             [tag] if tag == "Group" => {
                 if let Some(uuid) = decode_uuid(identity) {
-                    if let Some(group) = db.root.group_by_uuid_mut(uuid) {
+                    if let Some(group) = db.root.group_by_uuid_occurrence_mut(uuid, *occurrence) {
                         group.unknown_xml = nodes.clone();
                     }
                 }
             }
             [tag] if tag == "Entry" => {
                 if let Some(uuid) = decode_uuid(identity) {
-                    if let Some(entry) = db.root.entry_by_uuid_mut(uuid) {
+                    if let Some(entry) = db.root.entry_by_uuid_occurrence_mut(uuid, *occurrence) {
                         entry.unknown_xml = nodes.clone();
                     }
                 }
@@ -729,10 +773,10 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
             [owner, container] if container == "Times" => {
                 let times = match owner.as_str() {
                     "Group" => decode_uuid(identity)
-                        .and_then(|uuid| db.root.group_by_uuid_mut(uuid))
+                        .and_then(|uuid| db.root.group_by_uuid_occurrence_mut(uuid, *occurrence))
                         .map(|group| &mut group.times),
                     "Entry" => decode_uuid(identity)
-                        .and_then(|uuid| db.root.entry_by_uuid_mut(uuid))
+                        .and_then(|uuid| db.root.entry_by_uuid_occurrence_mut(uuid, *occurrence))
                         .map(|entry| &mut entry.times),
                     "HistoryEntry" => history_revision_mut(db, identity).map(|revision| &mut revision.times),
                     _ => None,
@@ -743,7 +787,9 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
             }
             [owner, container] if container == "AutoType" => {
                 let autotype = match owner.as_str() {
-                    "Entry" => decode_uuid(identity).and_then(|uuid| db.root.entry_by_uuid_mut(uuid)),
+                    "Entry" => {
+                        decode_uuid(identity).and_then(|uuid| db.root.entry_by_uuid_occurrence_mut(uuid, *occurrence))
+                    }
                     "HistoryEntry" => history_revision_mut(db, identity),
                     _ => None,
                 }
@@ -786,10 +832,10 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
                 let custom_data = match tag.as_str() {
                     "Meta" => Some(&mut db.meta.custom_data),
                     "Group" => decode_uuid(owner_identity)
-                        .and_then(|uuid| db.root.group_by_uuid_mut(uuid))
+                        .and_then(|uuid| db.root.group_by_uuid_occurrence_mut(uuid, *occurrence))
                         .map(|group| &mut group.custom_data),
                     "Entry" => decode_uuid(owner_identity)
-                        .and_then(|uuid| db.root.entry_by_uuid_mut(uuid))
+                        .and_then(|uuid| db.root.entry_by_uuid_occurrence_mut(uuid, *occurrence))
                         .map(|entry| &mut entry.custom_data),
                     "HistoryEntry" => owner_identity
                         .split_once(':')
@@ -1261,7 +1307,7 @@ mod tests {
         assert!(cleaned.contains("<Name>R</Name>"));
         assert!(cleaned.contains("<Tags>t</Tags>"));
 
-        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string());
+        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string(), 0);
         assert!(
             map.contains_key(&gk),
             "Missing group key. Keys: {:?}",
@@ -1270,7 +1316,7 @@ mod tests {
         assert_eq!(map[&gk][0].name, "UnknownThing");
         assert!(map[&gk][0].inner_xml.contains("42"));
 
-        let ek = (vec!["Entry".to_string()], "EBESExQVFhcYGRobHB0eHw==".to_string());
+        let ek = (vec!["Entry".to_string()], "EBESExQVFhcYGRobHB0eHw==".to_string(), 0);
         assert!(
             map.contains_key(&ek),
             "Missing entry key. Keys: {:?}",
@@ -1348,6 +1394,88 @@ mod tests {
         );
         assert_eq!(db.root.entries[0].unknown_xml[0].name, "AnUnknownEntryField");
         assert!(db.root.entries[0].unknown_xml[0].inner_xml.contains("hello"));
+    }
+
+    #[test]
+    fn test_duplicate_uuid_siblings_keep_distinct_unknowns() {
+        // A malformed-but-parseable file where two sibling Entries share the
+        // same UUID used to merge their unknown-XML into one map bucket
+        // (keyed only by (tag, uuid)), and `entry_by_uuid_mut` only ever
+        // reaches the first same-UUID entry, so the second entry's unknowns
+        // were silently dropped (not just misattributed), while the first
+        // could end up with a merged bucket containing both entries' fields.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<KeePassFile>
+ <Meta>
+ <Generator>Test</Generator>
+ </Meta>
+ <Root>
+ <Group>
+ <UUID>AAECAwQFBgcICQoLDA0ODw==</UUID>
+ <Name>Root</Name>
+ <Entry>
+ <UUID>EBESExQVFhcYGRobHB0eHw==</UUID>
+ <IconID>0</IconID>
+ <FirstUnknown>one</FirstUnknown>
+ <Tags>t</Tags>
+ </Entry>
+ <Entry>
+ <UUID>EBESExQVFhcYGRobHB0eHw==</UUID>
+ <IconID>0</IconID>
+ <SecondUnknown>two</SecondUnknown>
+ <Tags>t</Tags>
+ </Entry>
+ </Group>
+ <DeletedObjects/>
+ </Root>
+</KeePassFile>"#;
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let db = crate::format::xml_db::parse_xml(xml.as_bytes(), &[], &mut cipher).unwrap();
+
+        assert_eq!(db.root.entries.len(), 2);
+        assert_eq!(db.root.entries[0].unknown_xml.len(), 1, "first entry's unknowns");
+        assert_eq!(db.root.entries[0].unknown_xml[0].name, "FirstUnknown");
+        assert_eq!(db.root.entries[1].unknown_xml.len(), 1, "second entry's unknowns");
+        assert_eq!(db.root.entries[1].unknown_xml[0].name, "SecondUnknown");
+    }
+
+    #[test]
+    fn test_duplicate_uuid_sibling_groups_keep_distinct_unknowns() {
+        // Same scenario as the sibling-Entry case above, but for two
+        // sibling subgroups sharing a UUID.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<KeePassFile>
+ <Meta>
+ <Generator>Test</Generator>
+ </Meta>
+ <Root>
+ <Group>
+ <UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID>
+ <Name>Root</Name>
+ <Group>
+ <UUID>AAECAwQFBgcICQoLDA0ODw==</UUID>
+ <Name>First</Name>
+ <FirstUnknown>one</FirstUnknown>
+ </Group>
+ <Group>
+ <UUID>AAECAwQFBgcICQoLDA0ODw==</UUID>
+ <Name>Second</Name>
+ <SecondUnknown>two</SecondUnknown>
+ </Group>
+ </Group>
+ <DeletedObjects/>
+ </Root>
+</KeePassFile>"#;
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let db = crate::format::xml_db::parse_xml(xml.as_bytes(), &[], &mut cipher).unwrap();
+
+        assert_eq!(db.root.groups.len(), 2);
+        assert_eq!(db.root.groups[0].unknown_xml.len(), 1, "first group's unknowns");
+        assert_eq!(db.root.groups[0].unknown_xml[0].name, "FirstUnknown");
+        assert_eq!(db.root.groups[1].unknown_xml.len(), 1, "second group's unknowns");
+        assert_eq!(db.root.groups[1].unknown_xml[0].name, "SecondUnknown");
     }
 
     #[test]
@@ -1597,7 +1725,7 @@ mod tests {
         assert!(cleaned.contains("<IconID>48</IconID>"));
         assert!(cleaned.contains("<IsExpanded>True</IsExpanded>"));
 
-        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string());
+        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string(), 0);
         let names: Vec<_> = map[&gk].iter().map(|n| n.name.as_str()).collect();
         assert_eq!(names, vec!["UnknownOne", "UnknownTwo"], "both unknown siblings should be captured, not just the first");
     }

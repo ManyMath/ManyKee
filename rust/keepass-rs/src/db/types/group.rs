@@ -159,6 +159,35 @@ impl Group {
         None
     }
 
+    /// Like [`Group::group_by_uuid_mut`], but selects the `occurrence`-th
+    /// match (0-based, in the same pre-order tree-traversal order used
+    /// throughout this crate) instead of always the first. Needed to
+    /// disambiguate a malformed-but-parseable file where more than one Group
+    /// shares a UUID, so callers that already know which occurrence they
+    /// mean (e.g. the unknown-XML map, keyed by document-order occurrence at
+    /// parse time) don't silently collapse onto the first same-UUID Group.
+    pub fn group_by_uuid_occurrence_mut(&mut self, uuid: Uuid, occurrence: usize) -> Option<&mut Group> {
+        let mut remaining = occurrence;
+        self.group_by_uuid_occurrence_mut_inner(uuid, &mut remaining)
+    }
+
+    fn group_by_uuid_occurrence_mut_inner(&mut self, uuid: Uuid, remaining: &mut usize) -> Option<&mut Group> {
+        if self.uuid == uuid {
+            if *remaining == 0 {
+                return Some(self);
+            }
+            *remaining -= 1;
+        }
+
+        for g in &mut self.groups {
+            if let Some(group) = g.group_by_uuid_occurrence_mut_inner(uuid, remaining) {
+                return Some(group);
+            }
+        }
+
+        None
+    }
+
     /// Get an entry by name. This will only search the immediate child entries of the current
     /// group, not any descendant entries in child groups.
     pub fn entry_by_name(&self, name: &str) -> Option<&Entry> {
@@ -200,6 +229,36 @@ impl Group {
 
         for g in &mut self.groups {
             if let Some(e) = g.entry_by_uuid_mut(uuid) {
+                return Some(e);
+            }
+        }
+
+        None
+    }
+
+    /// Like [`Group::entry_by_uuid_mut`], but selects the `occurrence`-th
+    /// match (0-based, in the same pre-order, entries-before-subgroups
+    /// traversal order used throughout this crate) instead of always the
+    /// first. Needed to disambiguate a malformed-but-parseable file where
+    /// more than one Entry shares a UUID, see
+    /// [`Group::group_by_uuid_occurrence_mut`].
+    pub fn entry_by_uuid_occurrence_mut(&mut self, uuid: Uuid, occurrence: usize) -> Option<&mut Entry> {
+        let mut remaining = occurrence;
+        self.entry_by_uuid_occurrence_mut_inner(uuid, &mut remaining)
+    }
+
+    fn entry_by_uuid_occurrence_mut_inner(&mut self, uuid: Uuid, remaining: &mut usize) -> Option<&mut Entry> {
+        for e in &mut self.entries {
+            if e.uuid == uuid {
+                if *remaining == 0 {
+                    return Some(e);
+                }
+                *remaining -= 1;
+            }
+        }
+
+        for g in &mut self.groups {
+            if let Some(e) = g.entry_by_uuid_occurrence_mut_inner(uuid, remaining) {
                 return Some(e);
             }
         }
