@@ -6,3 +6,4 @@ packages/keepass_flutter/rust/Cargo.lock
 pubspec.lock
 
 apps/native/.flutter-plugins-dependencies
+build/
