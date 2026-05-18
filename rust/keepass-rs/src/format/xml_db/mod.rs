@@ -36,7 +36,7 @@ pub fn parse_xml(
 ) -> Result<crate::db::Database, ParseXmlError> {
     // Pre-pass: extract unknown elements from the raw XML and produce a cleaned
     // version that serde can parse without errors.
-    let (cleaned_xml, unknown_map) = xml_node::preprocess_xml(data);
+    let (cleaned_xml, unknown_map) = xml_node::preprocess_xml(data)?;
 
     let kdbx: KeePassFile = quick_xml::de::from_reader(cleaned_xml.as_bytes())?;
     let mut db = kdbx.xml_to_db(inner_decryptor, header_attachments)?;
@@ -54,6 +54,9 @@ pub enum ParseXmlError {
 
     #[error("Error unprotecting entry: {0}")]
     Unprotect(#[from] UnprotectError),
+
+    #[error("Error pre-processing XML inside KDBX: {0}")]
+    Preprocess(#[from] xml_node::PreprocessXmlError),
 }
 
 #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]

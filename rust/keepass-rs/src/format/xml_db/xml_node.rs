@@ -328,9 +328,24 @@ struct ItemCtx {
     pending: Vec<XmlNode>,
 }
 
+/// Malformed-input errors `preprocess_xml` itself can detect, distinct from
+/// the KDBX-schema errors surfaced later by serde/`xml_to_db`, this pass
+/// runs over the raw document before any of that.
+#[derive(Debug, thiserror::Error)]
+pub enum PreprocessXmlError {
+    /// A self-closing `<UUID/>` (parsed as `Event::Empty`, not `Event::Start`)
+    /// on a direct child of `Group`/`Entry`/`Meta` leaves that element with
+    /// no identity to key its unknown-XML (or itself, for lookups elsewhere)
+    /// by, silently treating it as `""` would misattribute/drop its data
+    /// the same way a genuinely malformed UUID would, so this is rejected
+    /// up front instead.
+    #[error("<UUID/> element must not be empty")]
+    EmptyUuid,
+}
+
 /// Pre-process KDBX XML: extract unknown child elements from Group, Entry, and Meta,
 /// return cleaned XML and a map of unknowns.
-pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
+pub fn preprocess_xml(xml_bytes: &[u8]) -> Result<(String, UnknownMap), PreprocessXmlError> {
     use quick_xml::Writer;
     use std::io::Cursor;
 
@@ -665,6 +680,17 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
                     Event::Empty(e) => {
                         let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
 
+                        // A self-closing `<UUID/>` as the UUID of a tracked
+                        // Group/Entry/history-revision would otherwise leave
+                        // `parent.uuid` as `""`, see `PreprocessXmlError::EmptyUuid`.
+                        if tag == "UUID" {
+                            if let Some(parent) = parent_stack.last() {
+                                if current_depth == parent.depth {
+                                    return Err(PreprocessXmlError::EmptyUuid);
+                                }
+                            }
+                        }
+
                         if let Some(cctx) = &container_ctx {
                             let is_direct_child = current_depth == cctx.depth;
                             if is_direct_child {
@@ -733,7 +759,7 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> (String, UnknownMap) {
     }
 
     let cleaned = String::from_utf8(writer.into_inner().into_inner()).unwrap_or_default();
-    (cleaned, unknown_map)
+    Ok((cleaned, unknown_map))
 }
 
 // --------------------------------------------------------------------------------
@@ -1292,7 +1318,7 @@ mod tests {
     fn test_preprocess_strips_and_captures() {
         let xml = r#"<KeePassFile><Meta><Generator>T</Generator></Meta><Root><Group><UUID>AAECAwQFBgcICQoLDA0ODw==</UUID><Name>R</Name><UnknownThing><Data>42</Data></UnknownThing><IconID>48</IconID><Entry><UUID>EBESExQVFhcYGRobHB0eHw==</UUID><UnknownEntry><X>hi</X></UnknownEntry><Tags>t</Tags></Entry></Group></Root></KeePassFile>"#;
 
-        let (cleaned, map) = preprocess_xml(xml.as_bytes());
+        let (cleaned, map) = preprocess_xml(xml.as_bytes()).unwrap();
 
         assert!(
             !cleaned.contains("UnknownThing"),
@@ -1394,6 +1420,20 @@ mod tests {
         );
         assert_eq!(db.root.entries[0].unknown_xml[0].name, "AnUnknownEntryField");
         assert!(db.root.entries[0].unknown_xml[0].inner_xml.contains("hello"));
+    }
+
+    #[test]
+    fn test_self_closing_empty_uuid_is_rejected() {
+        // A self-closing <UUID/> is parsed as Event::Empty, not Event::Start,
+        // so it never went through the Text-event capture that fills
+        // `parent.uuid`, leaving it "" and silently discarding that
+        // element's unknown-XML via `attach_unknowns`'s empty-identity skip.
+        // Now rejected up front instead.
+        let xml = r#"<KeePassFile><Meta><Generator>T</Generator></Meta><Root><Group><UUID/><Name>R</Name></Group></Root></KeePassFile>"#;
+
+        let result = preprocess_xml(xml.as_bytes());
+
+        assert!(matches!(result, Err(PreprocessXmlError::EmptyUuid)));
     }
 
     #[test]
@@ -1720,7 +1760,7 @@ mod tests {
         // misclassified too.
         let xml = r#"<KeePassFile><Meta><Generator>T</Generator></Meta><Root><Group><UUID>AAECAwQFBgcICQoLDA0ODw==</UUID><Name>R</Name><UnknownOne>x</UnknownOne><IconID>48</IconID><UnknownTwo>y</UnknownTwo><IsExpanded>True</IsExpanded></Group></Root></KeePassFile>"#;
 
-        let (cleaned, map) = preprocess_xml(xml.as_bytes());
+        let (cleaned, map) = preprocess_xml(xml.as_bytes()).unwrap();
 
         assert!(cleaned.contains("<IconID>48</IconID>"));
         assert!(cleaned.contains("<IsExpanded>True</IsExpanded>"));
