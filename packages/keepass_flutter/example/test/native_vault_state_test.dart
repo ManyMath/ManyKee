@@ -34,8 +34,13 @@ void main() {
 
     expect(state.isDirty, isTrue);
 
-    await state.saveDatabase(password: '');
+    await state.saveDatabase(password: 'demopass');
     expect(state.isDirty, isFalse);
+
+    expect(
+      () => state.saveDatabase(password: ''),
+      throwsA(isA<StateError>()),
+    );
 
     await state.lock();
     state.dispose();

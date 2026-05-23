@@ -14,10 +14,8 @@ class NativeVaultState extends VaultState {
   String? _lastFilePath;
   String? _lastKeyFilePath;
   String? _lastYubiKeySlot;
-  String? _retainedPassword;
 
   String? get lastFilePath => _lastFilePath;
-  String? get retainedPassword => _retainedPassword;
 
   @override
   Stream<int> get progress => _api.progress;
@@ -68,7 +66,6 @@ class NativeVaultState extends VaultState {
     _lastFilePath = filePath;
     _lastKeyFilePath = effectiveKeyFilePath;
     _lastYubiKeySlot = effectiveYubiKeySlot;
-    _retainedPassword = password;
     _storageProvider = LocalFileStorageProvider(initialPath: filePath);
     handleValue = handle;
     lastFilenameValue = filename ?? filePath;
@@ -94,7 +91,6 @@ class NativeVaultState extends VaultState {
     if (handle != null) {
       await _api.closeDatabase(handle!);
     }
-    _retainedPassword = null;
     resetBrowsingState();
   }
 
@@ -102,7 +98,6 @@ class NativeVaultState extends VaultState {
     _lastFilePath = null;
     _lastKeyFilePath = null;
     _lastYubiKeySlot = null;
-    _retainedPassword = null;
     _storageProvider = LocalFileStorageProvider();
     lastFilenameValue = null;
     clearError();
@@ -218,9 +213,12 @@ class NativeVaultState extends VaultState {
     required String password,
     List<int>? keyFileBytes,
   }) async {
+    if (password.isEmpty) {
+      throw StateError('A master password is required to save');
+    }
     final bytes = await _api.saveDatabase(
       _requireHandle(),
-      password: _resolveSavePassword(password),
+      password: password,
       keyFileBytes: keyFileBytes ?? await _loadRememberedKeyFileBytes(),
     );
     _storageProvider.rememberPath(_lastFilePath);
@@ -238,17 +236,6 @@ class NativeVaultState extends VaultState {
       throw StateError('Vault is locked');
     }
     return currentHandle;
-  }
-
-  String _resolveSavePassword(String password) {
-    if (password.isNotEmpty) {
-      return password;
-    }
-    final retained = _retainedPassword;
-    if (retained == null || retained.isEmpty) {
-      throw StateError('No in-memory password is available for save');
-    }
-    return retained;
   }
 
   Future<List<int>?> _loadRememberedKeyFileBytes() async {

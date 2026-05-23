@@ -136,8 +136,15 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
   }
 
   Future<void> _saveVault() async {
+    final password = await showPasswordPromptDialog(
+      context,
+      message: 'Re-enter your master password to save the vault.',
+    );
+    if (password == null) {
+      return;
+    }
     try {
-      await widget.vaultState.saveDatabase(password: '');
+      await widget.vaultState.saveDatabase(password: password);
       if (!mounted) {
         return;
       }

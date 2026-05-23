@@ -13,7 +13,6 @@ class WebVaultState extends VaultState {
 
   Uint8List? _lastDbBytes;
   Uint8List? _lastKeyFileBytes;
-  String? _retainedPassword;
 
   Uint8List? get lastDbBytes => _lastDbBytes;
 
@@ -52,7 +51,6 @@ class WebVaultState extends VaultState {
     lastFilenameValue = filename;
     _lastDbBytes = dbBytes;
     _lastKeyFileBytes = keyFileBytes;
-    _retainedPassword = password;
     _storageProvider.rememberName(filename);
     await loadRootGroupsUsing(_api.listGroups);
 
@@ -76,7 +74,6 @@ class WebVaultState extends VaultState {
     if (handle != null) {
       await _api.closeDatabase(handle!);
     }
-    _retainedPassword = null;
     resetBrowsingState();
   }
 
@@ -217,15 +214,13 @@ class WebVaultState extends VaultState {
     required String password,
     List<int>? keyFileBytes,
   }) async {
-    final effectivePassword =
-        password.isNotEmpty ? password : (_retainedPassword ?? '');
-    if (effectivePassword.isEmpty) {
-      throw StateError('No in-memory password is available for save');
+    if (password.isEmpty) {
+      throw StateError('A master password is required to save');
     }
 
     final bytes = await _api.saveDatabase(
       _requireHandle(),
-      password: effectivePassword,
+      password: password,
       keyFileBytes: keyFileBytes ?? _lastKeyFileBytes,
     );
     final saveName = _resolvedSaveName();
