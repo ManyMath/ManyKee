@@ -25,3 +25,4 @@ export 'src/widgets/search_bar.dart';
 export 'src/widgets/copy_button.dart';
 export 'src/widgets/password_field.dart';
 export 'src/widgets/entry_form_dialog.dart';
+export 'src/widgets/password_prompt_dialog.dart';
