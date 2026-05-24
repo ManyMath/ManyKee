@@ -5,6 +5,7 @@ import 'src/screens/lock_screen.dart';
 import 'src/screens/settings_screen.dart';
 import 'src/screens/unlock_screen.dart';
 import 'src/screens/vault_screen.dart';
+import 'src/services/screen_protection.dart';
 import 'src/state/native_idle_timer.dart';
 import 'src/state/native_vault_state.dart';
 import 'src/state/settings_state.dart';
@@ -31,19 +32,30 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
   final NativeVaultState _vaultState = NativeVaultState();
   late final NativeIdleTimer _idleTimer;
 
+  bool _lastIsLocked = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _idleTimer = NativeIdleTimer(timeout: widget.settings.autoLockTimeout);
+    _lastIsLocked = _vaultState.isLocked;
+    _vaultState.addListener(_onVaultStateChanged);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _vaultState.removeListener(_onVaultStateChanged);
     _idleTimer.dispose();
     _vaultState.dispose();
     super.dispose();
+  }
+
+  void _onVaultStateChanged() {
+    if (_vaultState.isLocked == _lastIsLocked) return;
+    _lastIsLocked = _vaultState.isLocked;
+    ScreenProtection.setSecure(!_vaultState.isLocked);
   }
 
   @override
