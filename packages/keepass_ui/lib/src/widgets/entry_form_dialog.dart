@@ -39,12 +39,14 @@ Future<EntryFormResult?> showEntryFormDialog(
   required String submitLabel,
   Map<String, dynamic> initialFields = const <String, dynamic>{},
   Map<String, dynamic> customFields = const <String, dynamic>{},
+  Set<String> protectedCustomFields = const <String>{},
 }) {
   final content = EntryFormDialog(
     title: title,
     submitLabel: submitLabel,
     initialFields: initialFields,
     customFields: customFields,
+    protectedCustomFields: protectedCustomFields,
   );
 
   final isMobile = MediaQuery.sizeOf(context).width < 600;
@@ -152,12 +154,14 @@ class EntryFormDialog extends StatefulWidget {
     required this.submitLabel,
     this.initialFields = const <String, dynamic>{},
     this.customFields = const <String, dynamic>{},
+    this.protectedCustomFields = const <String>{},
   });
 
   final String title;
   final String submitLabel;
   final Map<String, dynamic> initialFields;
   final Map<String, dynamic> customFields;
+  final Set<String> protectedCustomFields;
 
   @override
   State<EntryFormDialog> createState() => _EntryFormDialogState();
@@ -171,6 +175,7 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
   late final TextEditingController _urlController;
   late final TextEditingController _notesController;
   bool _passwordVisible = false;
+  final Set<String> _visibleCustomFields = <String>{};
 
   @override
   void initState() {
@@ -318,19 +323,53 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
                 ),
               )
             else
-              ...widget.customFields.entries.map(
-                (entry) => Padding(
+              ...widget.customFields.entries.map((entry) {
+                final isProtected =
+                    widget.protectedCustomFields.contains(entry.key);
+                final isVisible =
+                    !isProtected || _visibleCustomFields.contains(entry.key);
+                return Padding(
                   padding: const EdgeInsets.only(bottom: Spacing.sm),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(entry.key, style: theme.textTheme.labelMedium),
                       const SizedBox(height: Spacing.xs),
-                      SelectableText(entry.value.toString()),
+                      if (isProtected)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SelectableText(
+                                isVisible
+                                    ? entry.value.toString()
+                                    : '•' * entry.value.toString().length,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: isVisible ? 'Hide value' : 'Show value',
+                              onPressed: () {
+                                setState(() {
+                                  if (isVisible) {
+                                    _visibleCustomFields.remove(entry.key);
+                                  } else {
+                                    _visibleCustomFields.add(entry.key);
+                                  }
+                                });
+                              },
+                              icon: Icon(
+                                isVisible
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        SelectableText(entry.value.toString()),
                     ],
                   ),
-                ),
-              ),
+                );
+              }),
           ],
         ),
       ),

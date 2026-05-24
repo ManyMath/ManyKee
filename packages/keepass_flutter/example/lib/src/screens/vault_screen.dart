@@ -128,12 +128,24 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
         'Notes',
         'Tags',
         'custom_data',
+        'protected',
       }.contains(entry.key)) {
         continue;
       }
       customFields[entry.key] = entry.value;
     }
     return customFields;
+  }
+
+  Set<String> _extractProtectedCustomFields(Map<String, dynamic> fields) {
+    final protected = fields['protected'];
+    if (protected is! Map) {
+      return const <String>{};
+    }
+    return protected.entries
+        .where((entry) => entry.value == true)
+        .map((entry) => entry.key.toString())
+        .toSet();
   }
 
   void _showActionError(Object error) {
@@ -184,6 +196,7 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
         submitLabel: 'Save Entry',
         initialFields: fields,
         customFields: _extractCustomFields(fields),
+        protectedCustomFields: _extractProtectedCustomFields(fields),
       );
       if (result == null) {
         return;
