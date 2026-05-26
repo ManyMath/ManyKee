@@ -14,8 +14,8 @@ pub mod yubikey;
 
 pub use database::{open_bytes, save_atomic, save_bytes};
 pub use entry::{
-    move_entry, read_entry_fields, read_entry_totp_at, update_entry, EntryExt, EntryFieldExt,
-    EntryReadFields, EntryTotp,
+    move_entry, read_entry_field, read_entry_fields, read_entry_totp_at, update_entry, EntryExt,
+    EntryFieldExt, EntryReadFields, EntryTotp,
 };
 pub use group::{create_group, move_group, rename_group, GroupExt};
 pub use recycle_bin::{delete_entry, delete_group, get_or_create_recycle_bin};

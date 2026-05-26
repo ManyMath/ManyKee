@@ -381,6 +381,26 @@ fn test_entry_not_found() {
     close_db(handle).unwrap();
 }
 
+#[wasm_bindgen_test]
+fn test_read_entry_field_fetches_single_value() {
+    install_panic_hook();
+    let handle = open_handle(TEST_DB_AES, PASSWORD);
+    let entries = list_entries_json(handle, "");
+    let entry_uuid = entries[0]["uuid"].as_str().unwrap();
+
+    let title = read_entry_field(handle, entry_uuid, "Title");
+    assert!(
+        title.is_ok(),
+        "reading an existing field should succeed: {}",
+        js_err_string(title.unwrap_err())
+    );
+
+    let missing = read_entry_field(handle, entry_uuid, "NoSuchField");
+    assert!(missing.is_err(), "should fail for a field that doesn't exist");
+
+    close_db(handle).unwrap();
+}
+
 //: Cross-surface smoke for the official KeePassXC 2.7.12 fixtures.
 // These tests run under `wasm-pack test --chrome --headless rust/keepassxc-wasm`
 // (CI exercises this; locally requires a headless Chrome binary on PATH).

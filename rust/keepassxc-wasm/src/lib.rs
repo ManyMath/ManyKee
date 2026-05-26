@@ -8,8 +8,8 @@ use keepassxc::{
     create_group as create_group_in_db, delete_entry as delete_entry_from_db,
     delete_group as delete_group_from_db, extract_challenge as extract_core_challenge,
     move_entry as move_entry_in_db, move_group as move_group_in_db, open_bytes,
-    read_entry_fields as read_entry_payload, read_entry_totp_at,
-    rename_group as rename_group_in_db, save_bytes,
+    read_entry_field as read_entry_field_value, read_entry_fields as read_entry_payload,
+    read_entry_totp_at, rename_group as rename_group_in_db, save_bytes,
     serialization::{EntryFields, EntryInfo, GroupInfo, MergeInfo, TotpInfo},
     update_entry, Database, Entry, EntryExt, EntryFieldExt, GroupExt,
 };
@@ -246,6 +246,23 @@ pub fn list_entries(handle: u32, group_uuid: &str) -> Result<String, JsValue> {
     })
 }
 
+/// Clears the value of every field `EntryFields.protected` marks as
+/// protected (e.g. Password, or a custom field marked `Protected="True"`),
+/// leaving the key present with an empty string so callers can still see
+/// *that* a protected field exists (and its protected status) without its
+/// plaintext crossing the WASM/JS boundary on every read. Callers that need
+/// the actual value (e.g. the user clicked "reveal" or "copy") fetch it
+/// on demand via `read_entry_field` instead.
+fn scrub_protected_values(fields: &mut EntryFields) {
+    for (key, is_protected) in &fields.protected {
+        if *is_protected {
+            if let Some(value) = fields.fields.get_mut(key) {
+                value.clear();
+            }
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValue> {
     let uuid_owned = entry_uuid.to_string();
@@ -255,9 +272,34 @@ pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValu
                 err_json("NOT_FOUND", &format!("Entry not found: {}", uuid_owned))
             })?;
             let payload = read_entry_payload(entry);
-            let fields = EntryFields::from(payload);
+            let mut fields = EntryFields::from(payload);
+            scrub_protected_values(&mut fields);
             Ok(serde_json::to_string(&fields)
                 .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
+        })?
+    })
+}
+
+/// Fetches a single field's plaintext value on demand, instead of the whole
+/// entry via `read_entry_fields`. Lets callers avoid pulling protected
+/// values (e.g. Password) across the WASM/JS boundary until the caller
+/// actually needs one, e.g. when a user clicks "reveal" or "copy", rather
+/// than every time the entry is opened for viewing or editing.
+#[wasm_bindgen]
+pub fn read_entry_field(handle: u32, entry_uuid: &str, field_name: &str) -> Result<String, JsValue> {
+    let uuid_owned = entry_uuid.to_string();
+    let field_name = field_name.to_string();
+    catch_unwind_result(|| {
+        with_database(handle, |db| {
+            let entry = find_entry(&db.root, &uuid_owned).ok_or_else(|| {
+                err_json("NOT_FOUND", &format!("Entry not found: {}", uuid_owned))
+            })?;
+            read_entry_field_value(entry, &field_name).ok_or_else(|| {
+                err_json(
+                    "NOT_FOUND",
+                    &format!("Field '{}' not found on entry {}", field_name, uuid_owned),
+                )
+            })
         })?
     })
 }
@@ -547,6 +589,56 @@ mod tests {
             payload["custom_data"]["otp"].as_str(),
             Some("otpauth://totp/ManyKee:wasm?secret=DEF")
         );
+
+        close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn wasm_read_entry_fields_scrubs_protected_values_but_keeps_status() {
+        let handle = open_test_handle();
+        let entries_json = list_entries(handle, "").unwrap();
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&entries_json).unwrap();
+        let entry_uuid = entries[0]["uuid"].as_str().unwrap();
+
+        set_entry_field(handle, entry_uuid, fields::PASSWORD, "hunter2", true).unwrap();
+
+        let payload = read_entry_fields(handle, entry_uuid).unwrap();
+        let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(payload["fields"]["Password"].as_str(), Some(""));
+        assert_eq!(payload["protected"]["Password"].as_bool(), Some(true));
+        // Non-protected fields are unaffected.
+        assert_eq!(payload["fields"]["Title"].as_str(), Some("WASM Entry"));
+
+        // The scrubbed value is still fetchable on demand.
+        assert_eq!(
+            read_entry_field(handle, entry_uuid, fields::PASSWORD).unwrap(),
+            "hunter2"
+        );
+
+        close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn wasm_read_entry_field_fetches_single_field_on_demand() {
+        let handle = open_test_handle();
+        let entries_json = list_entries(handle, "").unwrap();
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&entries_json).unwrap();
+        let entry_uuid = entries[0]["uuid"].as_str().unwrap();
+
+        assert_eq!(
+            read_entry_field(handle, entry_uuid, fields::TITLE).unwrap(),
+            "WASM Entry"
+        );
+        assert_eq!(
+            read_entry_field(handle, entry_uuid, "otp").unwrap(),
+            "otpauth://totp/ManyKee:wasm?secret=DEF"
+        );
+
+        // The not-found path returns `Err(JsValue)`, and constructing a
+        // `JsValue` panics ("function not implemented") outside a real
+        // wasm32 target -- exercised instead by
+        // `test_read_entry_field_not_found` in `tests/wasm_tests.rs`, which
+        // runs under `wasm-pack test` in an actual JS/wasm runtime.
 
         close_db(handle).unwrap();
     }

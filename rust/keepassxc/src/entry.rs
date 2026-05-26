@@ -79,6 +79,25 @@ pub fn read_entry_fields(entry: &Entry) -> EntryReadFields {
     }
 }
 
+/// Read a single field's value by name, checking standard fields (Title,
+/// UserName, Password, ...) before custom data (e.g. `otp`). Lets callers
+/// fetch one value on demand instead of the full [`read_entry_fields`]
+/// payload, so a protected value only needs to cross a process/IPC boundary
+/// when it's actually requested rather than every time an entry is read.
+pub fn read_entry_field(entry: &Entry, field_name: &str) -> Option<String> {
+    if let Some(value) = entry.fields.get(field_name) {
+        return Some(value.get().clone());
+    }
+    entry
+        .custom_data
+        .get(field_name)
+        .and_then(|item| item.value.as_ref())
+        .map(|value| match value {
+            CustomDataValue::String(value) => value.clone(),
+            CustomDataValue::Binary(bytes) => encode_hex(bytes),
+        })
+}
+
 /// Read the live TOTP payload for an entry at a fixed unix timestamp.
 pub fn read_entry_totp_at(entry: &Entry, now: u64) -> Result<Option<EntryTotp>, String> {
     let Some(raw_otp) = entry
@@ -506,6 +525,35 @@ mod tests {
         );
         assert_eq!(payload.protected.get(fields::TITLE), Some(&false));
         assert_eq!(payload.protected.get(fields::PASSWORD), Some(&true));
+    }
+
+    #[test]
+    fn read_entry_field_reads_standard_and_custom_data_fields() {
+        let mut entry = Entry::new();
+        entry.set_unprotected(fields::TITLE, "OTP");
+        entry.set_protected(fields::PASSWORD, "hunter2");
+        entry.custom_data.insert(
+            "otp".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("otpauth://totp/x".to_string())),
+                last_modification_time: None,
+                unknown_xml: Vec::new(),
+            },
+        );
+
+        assert_eq!(
+            read_entry_field(&entry, fields::TITLE),
+            Some("OTP".to_string())
+        );
+        assert_eq!(
+            read_entry_field(&entry, fields::PASSWORD),
+            Some("hunter2".to_string())
+        );
+        assert_eq!(
+            read_entry_field(&entry, "otp"),
+            Some("otpauth://totp/x".to_string())
+        );
+        assert_eq!(read_entry_field(&entry, "NoSuchField"), None);
     }
 
     #[test]
