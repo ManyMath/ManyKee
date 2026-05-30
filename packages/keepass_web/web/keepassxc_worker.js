@@ -13,6 +13,7 @@ const methods = {
   'list_groups': (params) => wasm.list_groups(params[0], params[1]),
   'list_entries': (params) => wasm.list_entries(params[0], params[1]),
   'read_entry_fields': (params) => wasm.read_entry_fields(params[0], params[1]),
+  'read_entry_field': (params) => wasm.read_entry_field(params[0], params[1], params[2]),
   'get_totp': (params) => wasm.get_totp(params[0], params[1]),
   'create_entry': (params) => wasm.create_entry(params[0], params[1], params[2] || ''),
   'set_entry_field': (params) => wasm.set_entry_field(params[0], params[1], params[2], params[3], params[4] || false),

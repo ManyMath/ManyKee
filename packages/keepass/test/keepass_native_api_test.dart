@@ -118,6 +118,15 @@ void main() {
       expect(fields['Title'], 'Phase 21 Entry');
       expect(fields['Password'], 'super-secret');
 
+      expect(
+        await api.readEntryField(handle, entryUuid, 'Password'),
+        'super-secret',
+      );
+      expect(
+        await api.readEntryField(handle, entryUuid, 'NoSuchField'),
+        isNull,
+      );
+
       await api.moveEntry(handle, entryUuid, targetGroupUuid);
       final movedEntries = await api.listEntries(handle, targetGroupUuid);
       expect(

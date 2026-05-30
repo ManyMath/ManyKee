@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:keepass/keepass.dart';
 
 import 'worker_bridge.dart';
+import 'worker_error.dart';
 
 class KeePassWebApi implements KeePassApi {
   final WorkerBridge _bridge = WorkerBridge();
@@ -93,7 +94,26 @@ class KeePassWebApi implements KeePassApi {
       'custom_data':
           (payload['custom_data'] as Map?)?.cast<String, dynamic>() ??
               <String, dynamic>{},
+      'protected':
+          (payload['protected'] as Map?)?.cast<String, dynamic>() ??
+              <String, dynamic>{},
     };
+  }
+
+  @override
+  Future<String?> readEntryField(
+    int handle,
+    String entryUuid,
+    String fieldName,
+  ) async {
+    try {
+      return await _bridge.call(
+        'read_entry_field',
+        [handle, entryUuid, fieldName],
+      );
+    } on KeePassWebError {
+      return null;
+    }
   }
 
   @override

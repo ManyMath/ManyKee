@@ -147,6 +147,23 @@ class KeePassNativeApi implements KeePassApi {
   }
 
   @override
+  Future<String?> readEntryField(
+    int handle,
+    String entryUuid,
+    String fieldName,
+  ) async {
+    final result = await _invoke(
+      'readEntryField',
+      <String, Object?>{
+        'handle': handle,
+        'entryUuid': entryUuid,
+        'fieldName': fieldName,
+      },
+    );
+    return result as String?;
+  }
+
+  @override
   Future<String> createEntry(int handle, String groupUuid) async {
     final result = await _invoke(
       'createEntry',
@@ -454,6 +471,7 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
           'listGroups' => _workerListGroups(databases, args),
           'listEntries' => _workerListEntries(databases, args),
           'readEntryFields' => _workerReadEntryFields(databases, args),
+          'readEntryField' => _workerReadEntryField(databases, args),
           'getTotpCode' => _workerGetTotpCode(databases, args),
           'createEntry' => _workerCreateEntry(databases, args),
           'setEntryField' => _workerSetEntryField(databases, args),
@@ -592,6 +610,15 @@ Map<String, dynamic> _workerReadEntryFields(
   final database = _workerGetDatabase(databases, args['handle']! as int);
   final entry = Entry(database, args['entryUuid']! as String);
   return entry.readFields();
+}
+
+String? _workerReadEntryField(
+  Map<int, Database> databases,
+  Map<String, Object?> args,
+) {
+  final database = _workerGetDatabase(databases, args['handle']! as int);
+  final entry = Entry(database, args['entryUuid']! as String);
+  return entry.getField(args['fieldName']! as String);
 }
 
 Map<String, dynamic>? _workerGetTotpCode(

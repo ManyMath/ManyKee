@@ -41,7 +41,20 @@ abstract class KeePassApi {
 
   /// Read all fields of an entry.
   /// Returns map: {"Title": "...", "UserName": "...", "Password": "...", ...}
+  ///
+  /// On the web implementation, protected field values (e.g. Password) come
+  /// back as an empty string here -- only [readEntryField] fetches their
+  /// plaintext, so it only crosses the WASM/JS boundary when a caller
+  /// actually needs it (e.g. the user clicked "reveal" or "copy").
   Future<Map<String, dynamic>> readEntryFields(int handle, String entryUuid);
+
+  /// Read a single field's plaintext value on demand (standard field or
+  /// custom data key). Returns null if the entry or field doesn't exist.
+  Future<String?> readEntryField(
+    int handle,
+    String entryUuid,
+    String fieldName,
+  );
 
   /// Create a new entry in [groupUuid] and return its UUID.
   Future<String> createEntry(int handle, String groupUuid);
