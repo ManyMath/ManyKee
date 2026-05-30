@@ -71,8 +71,7 @@ class _VaultScreenState extends State<VaultScreen> {
   }
 
   Future<String> _fetchPassword(String entryUuid) async {
-    final fields = await widget.vaultState.readEntryFields(entryUuid);
-    return fields['Password'] as String? ?? '';
+    return await widget.vaultState.readEntryField(entryUuid, 'Password') ?? '';
   }
 
   void _onGroupSelected(VaultGroup group) {
@@ -197,6 +196,8 @@ class _VaultScreenState extends State<VaultScreen> {
         initialFields: fields,
         customFields: _extractCustomFields(fields),
         protectedCustomFields: _extractProtectedCustomFields(fields),
+        fetchFieldValue: (fieldKey) =>
+            widget.vaultState.readEntryField(entry.uuid, fieldKey),
       );
       if (result == null) {
         return;

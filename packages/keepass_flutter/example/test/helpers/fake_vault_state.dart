@@ -110,6 +110,14 @@ class FakeVaultState extends VaultState {
   }
 
   @override
+  Future<String?> readEntryField(String entryUuid, String fieldName) async {
+    final fields = _fieldsByEntry[entryUuid];
+    if (fields == null) return null;
+    final value = fields[fieldName];
+    return value?.toString();
+  }
+
+  @override
   Future<Map<String, dynamic>?> getTotpCode(String entryUuid) async {
     if (entryUuid != 'e1') {
       return null;

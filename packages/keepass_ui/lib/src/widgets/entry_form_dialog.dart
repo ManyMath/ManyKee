@@ -40,6 +40,7 @@ Future<EntryFormResult?> showEntryFormDialog(
   Map<String, dynamic> initialFields = const <String, dynamic>{},
   Map<String, dynamic> customFields = const <String, dynamic>{},
   Set<String> protectedCustomFields = const <String>{},
+  Future<String?> Function(String fieldKey)? fetchFieldValue,
 }) {
   final content = EntryFormDialog(
     title: title,
@@ -47,6 +48,7 @@ Future<EntryFormResult?> showEntryFormDialog(
     initialFields: initialFields,
     customFields: customFields,
     protectedCustomFields: protectedCustomFields,
+    fetchFieldValue: fetchFieldValue,
   );
 
   final isMobile = MediaQuery.sizeOf(context).width < 600;
@@ -155,6 +157,7 @@ class EntryFormDialog extends StatefulWidget {
     this.initialFields = const <String, dynamic>{},
     this.customFields = const <String, dynamic>{},
     this.protectedCustomFields = const <String>{},
+    this.fetchFieldValue,
   });
 
   final String title;
@@ -162,6 +165,15 @@ class EntryFormDialog extends StatefulWidget {
   final Map<String, dynamic> initialFields;
   final Map<String, dynamic> customFields;
   final Set<String> protectedCustomFields;
+
+  /// Fetches a protected field's plaintext value on demand, keyed by field
+  /// name (e.g. `'Password'`, or a custom field's key). Some backends (the
+  /// web/WASM implementation) omit protected values from [initialFields]/
+  /// [customFields] entirely -- their plaintext only crosses the WASM/JS
+  /// boundary once the user actually reveals a value, via this callback,
+  /// rather than every time the entry is opened for editing. Null on the
+  /// "Create Entry" flow, where there's nothing to fetch yet.
+  final Future<String?> Function(String fieldKey)? fetchFieldValue;
 
   @override
   State<EntryFormDialog> createState() => _EntryFormDialogState();
@@ -175,7 +187,10 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
   late final TextEditingController _urlController;
   late final TextEditingController _notesController;
   bool _passwordVisible = false;
+  bool _passwordFetchAttempted = false;
   final Set<String> _visibleCustomFields = <String>{};
+  final Map<String, String> _fetchedCustomFieldValues = <String, String>{};
+  final Set<String> _customFieldFetchesAttempted = <String>{};
 
   @override
   void initState() {
@@ -219,6 +234,45 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
         notes: _notesController.text,
       ),
     );
+  }
+
+  /// Reveals the password field, fetching its real value first if the
+  /// backend scrubbed it from [EntryFormDialog.initialFields] (see
+  /// [EntryFormDialog.fetchFieldValue]). Only fetches once, and only if the
+  /// field is still exactly as it was populated at dialog-open time --
+  /// otherwise a fetch after the user started typing a new password would
+  /// clobber their edit.
+  Future<void> _revealPassword() async {
+    final fetch = widget.fetchFieldValue;
+    if (!_passwordFetchAttempted &&
+        fetch != null &&
+        _passwordController.text.isEmpty) {
+      _passwordFetchAttempted = true;
+      final value = await fetch('Password');
+      if (!mounted) return;
+      if (value != null && _passwordController.text.isEmpty) {
+        _passwordController.text = value;
+      }
+    }
+    setState(() => _passwordVisible = true);
+  }
+
+  /// Mirrors [_revealPassword] for a protected custom field: fetches its
+  /// real value on first reveal if the backend scrubbed it, otherwise just
+  /// shows the value already present in [EntryFormDialog.customFields].
+  Future<void> _revealCustomField(String key, String currentValue) async {
+    final fetch = widget.fetchFieldValue;
+    if (!_customFieldFetchesAttempted.contains(key) &&
+        fetch != null &&
+        currentValue.isEmpty) {
+      _customFieldFetchesAttempted.add(key);
+      final value = await fetch(key);
+      if (!mounted) return;
+      if (value != null) {
+        _fetchedCustomFieldValues[key] = value;
+      }
+    }
+    setState(() => _visibleCustomFields.add(key));
   }
 
   void _generatePassword() {
@@ -283,9 +337,11 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
                       tooltip:
                           _passwordVisible ? 'Hide password' : 'Show password',
                       onPressed: () {
-                        setState(() {
-                          _passwordVisible = !_passwordVisible;
-                        });
+                        if (_passwordVisible) {
+                          setState(() => _passwordVisible = false);
+                        } else {
+                          _revealPassword();
+                        }
                       },
                       icon: Icon(
                         _passwordVisible
@@ -328,6 +384,9 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
                     widget.protectedCustomFields.contains(entry.key);
                 final isVisible =
                     !isProtected || _visibleCustomFields.contains(entry.key);
+                final rawValue = entry.value.toString();
+                final revealedValue =
+                    _fetchedCustomFieldValues[entry.key] ?? rawValue;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: Spacing.sm),
                   child: Column(
@@ -340,21 +399,25 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
                           children: [
                             Expanded(
                               child: SelectableText(
-                                isVisible
-                                    ? entry.value.toString()
-                                    : '•' * entry.value.toString().length,
+                                // Some backends omit the plaintext of a
+                                // protected value from `customFields`
+                                // entirely (see `fetchFieldValue`), so the
+                                // hidden mask can't be sized to the real
+                                // value's length -- use a fixed width.
+                                isVisible ? revealedValue : '••••••••',
                               ),
                             ),
                             IconButton(
                               tooltip: isVisible ? 'Hide value' : 'Show value',
                               onPressed: () {
-                                setState(() {
-                                  if (isVisible) {
-                                    _visibleCustomFields.remove(entry.key);
-                                  } else {
-                                    _visibleCustomFields.add(entry.key);
-                                  }
-                                });
+                                if (isVisible) {
+                                  setState(
+                                    () => _visibleCustomFields
+                                        .remove(entry.key),
+                                  );
+                                } else {
+                                  _revealCustomField(entry.key, rawValue);
+                                }
                               },
                               icon: Icon(
                                 isVisible
@@ -365,7 +428,7 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
                           ],
                         )
                       else
-                        SelectableText(entry.value.toString()),
+                        SelectableText(rawValue),
                     ],
                   ),
                 );

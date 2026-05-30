@@ -119,6 +119,11 @@ class NativeVaultState extends VaultState {
   }
 
   @override
+  Future<String?> readEntryField(String entryUuid, String fieldName) async {
+    return _api.readEntryField(handle!, entryUuid, fieldName);
+  }
+
+  @override
   Future<Map<String, dynamic>?> getTotpCode(String entryUuid) async {
     return _api.getTotpCode(_requireHandle(), entryUuid);
   }

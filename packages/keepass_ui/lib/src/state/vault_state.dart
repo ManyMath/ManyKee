@@ -98,6 +98,12 @@ abstract class VaultState extends ChangeNotifier {
   Future<void> lock();
   Future<void> selectGroup(VaultGroup group);
   Future<Map<String, dynamic>> readEntryFields(String entryUuid);
+
+  /// Fetches a single field's plaintext value on demand (standard field or
+  /// custom data key). On backends that scrub protected values out of
+  /// [readEntryFields] (see its doc comment), this is how a caller
+  /// retrieves one after the user actually asks for it (reveal/copy).
+  Future<String?> readEntryField(String entryUuid, String fieldName);
   Future<Map<String, dynamic>?> getTotpCode(String entryUuid);
   Future<String> createEntry(String groupUuid);
   Future<void> updateEntry(
