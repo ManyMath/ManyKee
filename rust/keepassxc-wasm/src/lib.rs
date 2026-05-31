@@ -15,21 +15,37 @@ use keepassxc::{
 };
 use serde_json::json;
 use wasm_bindgen::prelude::*;
+use zeroize::Zeroizing;
 
 thread_local! {
  static DATABASES: RefCell<BTreeMap<u32, Database>> = RefCell::new(BTreeMap::new());
  static NEXT_HANDLE: RefCell<u32> = RefCell::new(1);
 }
 
-fn store_database(db: Database) -> u32 {
-    let handle = NEXT_HANDLE.with(|h| {
+/// Allocates the next handle from `current`, or `None` once every `u32`
+/// value has been handed out, split out from `store_database` so the
+/// overflow check itself is testable without constructing a `JsValue`,
+/// which panics outside a real wasm32 target (see this module's other
+/// `JsValue`-avoiding tests).
+fn next_handle(current: u32) -> Option<u32> {
+    current.checked_add(1)
+}
+
+fn store_database(db: Database) -> Result<u32, JsValue> {
+    let handle = NEXT_HANDLE.with(|h| -> Result<u32, JsValue> {
         let mut h = h.borrow_mut();
         let id = *h;
-        *h += 1;
-        id
-    });
+        let next = next_handle(id).ok_or_else(|| {
+            err_json(
+                "HANDLE_EXHAUSTED",
+                "No more database handles available in this session",
+            )
+        })?;
+        *h = next;
+        Ok(id)
+    })?;
     DATABASES.with(|dbs| dbs.borrow_mut().insert(handle, db));
-    handle
+    Ok(handle)
 }
 
 fn with_database<F, R>(handle: u32, f: F) -> Result<R, JsValue>
@@ -128,6 +144,7 @@ pub fn open_db(
     password: &str,
     key_file_bytes: Option<Vec<u8>>,
 ) -> Result<String, JsValue> {
+    let key_file_bytes = key_file_bytes.map(Zeroizing::new);
     catch_unwind_result(|| {
         let mut key = DatabaseKey::new();
 
@@ -144,7 +161,7 @@ pub fn open_db(
         let db =
             open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
 
-        let handle = store_database(db);
+        let handle = store_database(db)?;
         Ok(json!({"handle": handle}).to_string())
     })
 }
@@ -167,7 +184,7 @@ pub fn open_db_with_key_file(
         let db =
             open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
 
-        let handle = store_database(db);
+        let handle = store_database(db)?;
         Ok(json!({"handle": handle}).to_string())
     })
 }
@@ -193,7 +210,7 @@ pub fn open_db_with_challenge_response(
         let db =
             open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
 
-        let handle = store_database(db);
+        let handle = store_database(db)?;
         Ok(json!({"handle": handle}).to_string())
     })
 }
@@ -462,7 +479,8 @@ pub fn save_db(
     password: &str,
     key_file_bytes: Option<Vec<u8>>,
 ) -> Result<String, JsValue> {
-    let password = password.to_string();
+    let password = Zeroizing::new(password.to_string());
+    let key_file_bytes = key_file_bytes.map(Zeroizing::new);
     catch_unwind_result(|| {
         with_database_mut(handle, |db| {
             let mut key = DatabaseKey::new();
@@ -574,6 +592,12 @@ mod tests {
             .any(|group| group["uuid"] == target_uuid.to_string()));
 
         handle
+    }
+
+    #[test]
+    fn next_handle_rejects_at_u32_max() {
+        assert_eq!(next_handle(u32::MAX - 1), Some(u32::MAX));
+        assert_eq!(next_handle(u32::MAX), None);
     }
 
     #[test]
