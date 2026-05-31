@@ -76,6 +76,12 @@ pub(crate) fn catch_unwind<T>(default: T, f: impl FnOnce() -> T + std::panic::Un
             } else {
                 "unknown panic".to_string()
             };
+            // `msg` is forwarded verbatim into `kpxc_last_error()`. Panic
+            // messages bypass whatever logging/redaction review normal error
+            // paths get, so no panic site anywhere in the call graph
+            // (including keepass-rs/keepassxc) should ever interpolate
+            // secret material (passwords, keys, decrypted field values) into
+            // a panic!()/unwrap()/expect() message.
             set_last_error(&format!("internal panic: {}", msg));
             default
         }
