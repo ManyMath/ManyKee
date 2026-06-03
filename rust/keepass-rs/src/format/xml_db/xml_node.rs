@@ -851,8 +851,13 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
                 // identity is "owner_identity:item_key", see the `Item`
                 // handling in `preprocess_xml`. `owner_identity` is empty for
                 // Meta, a UUID base64 string for Group/Entry, or
-                // "uuid_base64:revision_index" for a history revision.
-                let Some((owner_identity, item_key)) = identity.split_once(':') else {
+                // "uuid_base64:revision_index" for a history revision, the
+                // latter already contains a colon, so this must split on the
+                // *last* colon (assuming, as the rest of this key scheme
+                // does, that `item_key` itself has none) rather than the
+                // first, or a history revision's owner_identity gets cut
+                // short and its CustomData item unknowns are never resolved.
+                let Some((owner_identity, item_key)) = identity.rsplit_once(':') else {
                     continue;
                 };
                 let custom_data = match tag.as_str() {
@@ -1055,6 +1060,7 @@ struct EntryUnknowns<'a> {
     custom_data: &'a std::collections::HashMap<String, crate::db::CustomDataItem>,
     times: &'a [XmlNode],
     autotype: Option<&'a [XmlNode]>,
+    history: Option<&'a crate::db::History>,
 }
 
 #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
@@ -1078,6 +1084,7 @@ fn inject_and_advance(
         close_pos += inject_container_unknowns(xml, uuid_pos, close_pos, "AutoType", at_unknowns);
     }
     close_pos += inject_custom_data_unknowns(xml, uuid_pos, close_pos, unknowns.custom_data);
+    close_pos += inject_history_unknowns(xml, uuid_pos, close_pos, unknowns.history);
     let unknown_xml = unknowns.own;
     if unknown_xml.is_empty() {
         return close_pos + close_tag.len();
@@ -1085,6 +1092,79 @@ fn inject_and_advance(
     let s: String = unknown_xml.iter().map(|n| n.to_xml_string()).collect();
     xml.insert_str(close_pos, &s);
     close_pos + s.len() + close_tag.len()
+}
+
+/// Inject each history revision's preserved Times/AutoType/CustomData/own
+/// `unknown_xml` into its own serialized `<Entry>` inside the live entry's
+/// `<History>...</History>` block, searching only within
+/// `[region_start, region_end)`, the live entry's own span. Unlike the live
+/// entry (or a Group/top-level Entry), history-revision `<Entry>` elements
+/// share the live entry's UUID, so they can't be located by UUID lookup the
+/// way `inject_and_advance`/`inject_group_unknowns` locate everything else -
+/// instead this walks `<Entry>` occurrences inside `<History>` in document
+/// order, which lines up with `history.entries`' index since both parsing
+/// (`preprocess_xml`'s `history_revision_index`, `Entry::xml_to_db_handle`'s
+/// `h.entries.into_iter()...collect()`) and serialization
+/// (`Entry::db_to_xml`'s `h.entries.iter()`) preserve that same order.
+/// History revisions never have their own nested `<History>` (`he.history
+/// = None` is enforced when a revision is captured), so no depth-tracking
+/// beyond `find_own_close_tag`'s existing nested-`<Entry>`-immune scan is
+/// needed. Returns the number of bytes inserted.
+#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+fn inject_history_unknowns(
+    xml: &mut String,
+    region_start: usize,
+    region_end: usize,
+    history: Option<&crate::db::History>,
+) -> usize {
+    let Some(history) = history else {
+        return 0;
+    };
+    if history.entries.is_empty() {
+        return 0;
+    }
+    let Some(hist_start) = xml[region_start..region_end].find("<History>").map(|i| region_start + i) else {
+        return 0;
+    };
+    let Some(mut hist_end) = xml[hist_start..region_end].find("</History>").map(|i| hist_start + i) else {
+        return 0;
+    };
+
+    let mut cursor = hist_start + "<History>".len();
+    let mut total_inserted = 0usize;
+    for revision in &history.entries {
+        let Some(entry_open) = xml[cursor..hist_end].find("<Entry>").map(|i| cursor + i) else {
+            break;
+        };
+        // `find_own_close_tag` expects `from` to be a position *inside* the
+        // element (its depth-tracking starts at 1, assuming the element's
+        // own open tag has already been consumed), passing `entry_open`
+        // itself would let the scan re-match this same `<Entry>` as if it
+        // were a nested child, one depth level too deep, and return the
+        // live entry's own close tag instead of this revision's.
+        let content_start = entry_open + "<Entry>".len();
+        let Some(entry_close) = find_own_close_tag(xml, content_start, "<Entry>", "</Entry>") else {
+            break;
+        };
+
+        let mut close_pos = entry_close;
+        close_pos += inject_container_unknowns(xml, entry_open, close_pos, "Times", &revision.times.unknown_xml);
+        if let Some(at) = revision.autotype.as_ref() {
+            close_pos += inject_container_unknowns(xml, entry_open, close_pos, "AutoType", &at.unknown_xml);
+        }
+        close_pos += inject_custom_data_unknowns(xml, entry_open, close_pos, &revision.custom_data);
+        if !revision.unknown_xml.is_empty() {
+            let s: String = revision.unknown_xml.iter().map(|n| n.to_xml_string()).collect();
+            xml.insert_str(close_pos, &s);
+            close_pos += s.len();
+        }
+
+        let this_round_inserted = close_pos - entry_close;
+        total_inserted += this_round_inserted;
+        hist_end += this_round_inserted;
+        cursor = close_pos + "</Entry>".len();
+    }
+    total_inserted
 }
 
 #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
@@ -1124,6 +1204,7 @@ fn inject_group_unknowns(xml: &mut String, group: &crate::db::Group, cursor: &mu
                 custom_data: &entry.custom_data,
                 times: &entry.times.unknown_xml,
                 autotype: entry.autotype.as_ref().map(|at| at.unknown_xml.as_slice()),
+                history: entry.history.as_ref(),
             },
             "<Entry>",
             "</Entry>",
@@ -1921,6 +2002,74 @@ mod tests {
         assert!(entry.autotype.as_ref().unwrap().unknown_xml[0]
             .inner_xml
             .contains("entry-autotype"));
+    }
+
+    #[test]
+    fn test_history_revision_unknown_children_round_trip_through_save() {
+        // Times/AutoType/CustomData/own unknown_xml on a history revision
+        // were captured on parse (per `test_history_revisions_keep_distinct_unknowns`)
+        // but silently dropped on save, since `inject_and_advance`/
+        // `inject_group_unknowns` never descended into `entry.history.entries`.
+        let mut db = crate::db::Database::new(Default::default());
+
+        let mut entry = crate::db::Entry::new();
+        entry.unknown_xml = vec![XmlNode {
+            name: "LiveEntryUnknown".to_string(),
+            inner_xml: "live".to_string(),
+        }];
+
+        let mut revision = crate::db::Entry::new();
+        revision.uuid = entry.uuid;
+        revision.unknown_xml = vec![XmlNode {
+            name: "RevisionUnknown".to_string(),
+            inner_xml: "revision-own".to_string(),
+        }];
+        revision.times.unknown_xml = vec![XmlNode {
+            name: "FutureTimeFlag".to_string(),
+            inner_xml: "revision-times".to_string(),
+        }];
+        revision.autotype = Some(crate::db::AutoType {
+            enabled: true,
+            unknown_xml: vec![XmlNode {
+                name: "FutureAutoTypeFlag".to_string(),
+                inner_xml: "revision-autotype".to_string(),
+            }],
+            ..Default::default()
+        });
+        revision.custom_data.insert(
+            "revkey".to_string(),
+            crate::db::CustomDataItem {
+                value: Some(crate::db::CustomDataValue::String("revvalue".to_string())),
+                last_modification_time: None,
+                unknown_xml: vec![XmlNode {
+                    name: "FutureCustomDataFlag".to_string(),
+                    inner_xml: "revision-customdata".to_string(),
+                }],
+            },
+        );
+        entry.history = Some(crate::db::History::default());
+        entry.history.as_mut().unwrap().add_entry(revision);
+        db.root.entries.push(entry);
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let (xml_bytes, _) = crate::format::xml_db::to_xml(&db, &mut cipher).unwrap();
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let reparsed = crate::format::xml_db::parse_xml(&xml_bytes, &[], &mut cipher).unwrap();
+
+        let entry = &reparsed.root.entries[0];
+        assert_eq!(entry.unknown_xml[0].name, "LiveEntryUnknown");
+
+        let revision = &entry.history.as_ref().unwrap().entries[0];
+        assert_eq!(revision.unknown_xml[0].name, "RevisionUnknown");
+        assert!(revision.unknown_xml[0].inner_xml.contains("revision-own"));
+        assert!(revision.times.unknown_xml[0].inner_xml.contains("revision-times"));
+        assert!(revision.autotype.as_ref().unwrap().unknown_xml[0]
+            .inner_xml
+            .contains("revision-autotype"));
+        assert!(revision.custom_data.get("revkey").unwrap().unknown_xml[0]
+            .inner_xml
+            .contains("revision-customdata"));
     }
 
     #[test]
