@@ -113,7 +113,7 @@ impl Entry {
         target.previous_parent_group = self.previous_parent_group.map(|u| u.0);
         target.tags = self
             .tags
-            .map(|t| t.split(',').map(|s| s.to_string()).collect())
+            .map(|t| t.split(';').map(|s| s.to_string()).collect())
             .unwrap_or_default();
 
         target.times = self.times.map(|t| t.into()).unwrap_or_default();
@@ -265,7 +265,7 @@ impl Entry {
             override_url: db.override_url.clone(),
             quality_check: db.quality_check,
             previous_parent_group: db.previous_parent_group.map(UUID),
-            tags: db.tags.iter().cloned().reduce(|a, b| format!("{a},{b}")),
+            tags: db.tags.iter().cloned().reduce(|a, b| format!("{a};{b}")),
             times: Some(db.times.clone().into()),
             string_fields,
             binary_fields,
@@ -710,6 +710,39 @@ mod tests {
         assert!(target.fields.get(fields::OTP).is_none());
         assert_eq!(target.get_raw_otp_value(), Some(otp));
         assert!(target.custom_data.contains_key(fields::OTP));
+    }
+
+    #[test]
+    fn test_xml_to_db_handle_splits_tags_on_semicolon_per_kdbx_spec() {
+        let xml = "<Entry><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><Tags>tag1;tag2</Tags></Entry>";
+        let xml_entry: Test<Entry> = quick_xml::de::from_str(xml).unwrap();
+
+        let mut target = crate::db::Entry::new();
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        xml_entry
+            .0
+            .xml_to_db_handle(&mut target, &[], &HashMap::new(), &mut cipher)
+            .unwrap();
+
+        assert_eq!(target.tags, vec!["tag1".to_string(), "tag2".to_string()]);
+    }
+
+    #[test]
+    fn test_db_to_xml_joins_tags_with_semicolon_and_round_trips() {
+        let mut entry = crate::db::Entry::new();
+        entry.tags = vec!["tag1".to_string(), "tag2".to_string()];
+
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        let mut attachments = Vec::new();
+        let mut custom_icons = HashMap::new();
+        let xml_entry = Entry::db_to_xml(&entry, &mut cipher, &mut attachments, &mut custom_icons).unwrap();
+        assert_eq!(xml_entry.tags.as_deref(), Some("tag1;tag2"));
+
+        let mut round_tripped = crate::db::Entry::new();
+        xml_entry
+            .xml_to_db_handle(&mut round_tripped, &[], &HashMap::new(), &mut cipher)
+            .unwrap();
+        assert_eq!(round_tripped.tags, entry.tags);
     }
 
     #[test]
