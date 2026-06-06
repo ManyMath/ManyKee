@@ -45,6 +45,14 @@ pub fn get_or_create_recycle_bin(db: &mut Database) -> Result<Uuid, KeePassXcErr
 }
 
 pub fn delete_entry(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), KeePassXcError> {
+    // Resolve (or create) the recycle bin *before* unlinking the entry, so a
+    // disabled recycle bin errors out without having removed anything.
+    let bin_uuid = if soft {
+        Some(get_or_create_recycle_bin(db)?)
+    } else {
+        None
+    };
+
     let entry = db
         .root
         .remove_entry(uuid)
@@ -53,8 +61,7 @@ pub fn delete_entry(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), Kee
     let now = Times::now();
     db.deleted_objects.insert(uuid, Some(now));
 
-    if soft {
-        let bin_uuid = get_or_create_recycle_bin(db)?;
+    if let Some(bin_uuid) = bin_uuid {
         let bin = db
             .root
             .find_group_by_uuid_mut(bin_uuid)
@@ -70,7 +77,9 @@ pub fn delete_group(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), Kee
         return Err(KeePassXcError::GroupNotFound(uuid));
     }
 
-    if soft {
+    // Resolve (or create) the recycle bin *before* unlinking the group, so a
+    // disabled recycle bin errors out without having removed anything.
+    let bin_uuid = if soft {
         if let Some(bin_uuid) = db.meta.recyclebin_uuid {
             if !bin_uuid.is_nil() {
                 let target = db
@@ -84,7 +93,10 @@ pub fn delete_group(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), Kee
                 }
             }
         }
-    }
+        Some(get_or_create_recycle_bin(db)?)
+    } else {
+        None
+    };
 
     let removed = db
         .root
@@ -95,8 +107,7 @@ pub fn delete_group(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), Kee
 
     db.deleted_objects.insert(uuid, Some(now));
 
-    if soft {
-        let bin_uuid = get_or_create_recycle_bin(db)?;
+    if let Some(bin_uuid) = bin_uuid {
         let bin = db
             .root
             .find_group_by_uuid_mut(bin_uuid)
@@ -387,6 +398,38 @@ mod tests {
 
         let deletion_time = db.deleted_objects[&uuid].unwrap();
         assert!(deletion_time >= before);
+    }
+
+    #[test]
+    fn soft_delete_entry_with_recycle_bin_disabled_does_not_lose_entry() {
+        let mut db = Database::new(DatabaseConfig::default());
+        db.meta.recyclebin_enabled = Some(false);
+        let entry = make_entry("ToDelete");
+        let uuid = entry.uuid;
+        db.root.entries.push(entry);
+
+        let result = delete_entry(&mut db, uuid, true);
+        assert!(result.is_err());
+
+        // The entry must still be intact in the tree, not silently lost.
+        assert!(db.root.entries.iter().any(|e| e.uuid == uuid));
+        assert!(!db.deleted_objects.contains_key(&uuid));
+    }
+
+    #[test]
+    fn soft_delete_group_with_recycle_bin_disabled_does_not_lose_group() {
+        let mut db = Database::new(DatabaseConfig::default());
+        db.meta.recyclebin_enabled = Some(false);
+        let group = Group::new("ToDelete");
+        let group_uuid = group.uuid;
+        db.root.groups.push(group);
+
+        let result = delete_group(&mut db, group_uuid, true);
+        assert!(result.is_err());
+
+        // The group must still be intact in the tree, not silently lost.
+        assert!(db.root.find_group_by_uuid(group_uuid).is_some());
+        assert!(!db.deleted_objects.contains_key(&group_uuid));
     }
 
     #[test]
