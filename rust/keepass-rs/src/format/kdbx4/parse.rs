@@ -342,6 +342,11 @@ fn parse_inner_header(
             }
 
             INNER_HEADER_BINARY_ATTACHMENTS => {
+                // `Attachment::from` indexes the first byte as the flags
+                // byte; a crafted zero-length entry would otherwise panic.
+                if entry_buffer.is_empty() {
+                    return Err(Kdbx4InnerHeaderError::EmptyAttachmentEntry);
+                }
                 let header_attachment = Attachment::from(entry_buffer);
                 header_attachments.push(header_attachment);
             }
@@ -380,6 +385,9 @@ pub enum Kdbx4InnerHeaderError {
 
     #[error("inner header truncated at entry start")]
     UnexpectedEof,
+
+    #[error("binary attachment inner header entry has no flags byte")]
+    EmptyAttachmentEntry,
 }
 
 #[derive(Debug, Error)]
@@ -428,6 +436,25 @@ mod inner_header_negative {
             Err(Kdbx4InnerHeaderError::UnexpectedEof) => {}
             Err(other) => panic!("expected UnexpectedEof, got {:?}", other),
             Ok(_) => panic!("oversized attachment entry must not parse"),
+        }
+    }
+
+    #[test]
+    fn zero_length_attachment_entry_does_not_panic() {
+        let mut buf: Vec<u8> = Vec::new();
+        buf.push(INNER_HEADER_RANDOM_STREAM_ID);
+        buf.extend_from_slice(&4u32.to_le_bytes());
+        buf.extend_from_slice(&0x02u32.to_le_bytes());
+
+        // A binary-attachment entry with a declared length of 0 has no
+        // flags byte for `Attachment::from` to read.
+        buf.push(INNER_HEADER_BINARY_ATTACHMENTS);
+        buf.extend_from_slice(&0u32.to_le_bytes());
+
+        match parse_inner_header(&buf) {
+            Err(Kdbx4InnerHeaderError::EmptyAttachmentEntry) => {}
+            Err(other) => panic!("expected EmptyAttachmentEntry, got {:?}", other),
+            Ok(_) => panic!("zero-length attachment entry must not parse"),
         }
     }
 }
