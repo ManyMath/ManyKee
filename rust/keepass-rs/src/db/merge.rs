@@ -448,7 +448,16 @@ impl Database {
 
             // does the group exist in the destination database?
             if let Some(existing_group) = self.root.group_by_uuid(other_group.uuid) {
-                let existing_parent = self.root.find_group_parent(other_group.uuid).unwrap();
+                // `group_by_uuid` matches the root against itself, but
+                // `find_group_parent` only ever finds parents of *children* -
+                // it can never return a parent for the root. A malformed
+                // source database where a non-root group shares the
+                // destination's root UUID would otherwise panic here instead
+                // of failing the merge cleanly.
+                let existing_parent = self
+                    .root
+                    .find_group_parent(other_group.uuid)
+                    .ok_or(MergeError::FindGroupError(other_group.uuid))?;
 
                 if current_group.uuid != existing_parent {
                     // we might have to relocate the entry, but we first check timestamps
@@ -954,6 +963,7 @@ mod merge_tests {
     use uuid::{uuid, Uuid};
 
     use crate::db::{fields, Entry, Group, History, Times};
+    use crate::db::merge::MergeError;
     use crate::Database;
 
     fn get_all_groups(parent: &Group) -> Vec<&Group> {
@@ -1989,6 +1999,27 @@ mod merge_tests {
             .unwrap();
         assert_eq!(modified_group.custom_icon_uuid, Some(icon_uuid));
         assert_eq!(modified_group.custom_icon_data, Some(icon_data));
+    }
+
+    #[test]
+    fn test_merge_errors_instead_of_panicking_on_group_uuid_colliding_with_destination_root() {
+        let mut destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+
+        // Craft a malformed source database where a non-root group shares its
+        // UUID with the *destination's* root group. `group_by_uuid` matches
+        // the destination root against itself, but `find_group_parent` can
+        // never resolve a parent for the root, so this used to unwrap a
+        // `None` and panic instead of failing the merge with an error.
+        let colliding_uuid = destination_db.root.uuid;
+        source_db
+            .root
+            .group_by_path_mut(&["group1"])
+            .unwrap()
+            .uuid = colliding_uuid;
+
+        let result = destination_db.merge(&source_db);
+        assert!(matches!(result, Err(MergeError::FindGroupError(uuid)) if uuid == colliding_uuid));
     }
 
     #[test]
