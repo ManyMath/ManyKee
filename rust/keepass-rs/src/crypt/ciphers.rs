@@ -113,7 +113,10 @@ impl Cipher for TwofishCipher {
         let cipher = TwofishCbcDecryptor::new_from_slices(&self.key, &self.iv)?;
 
         let mut buf = ciphertext.to_vec();
-        cipher.decrypt_padded_mut::<twofish::cipher::block_padding::Pkcs7>(&mut buf)?;
+        let len = cipher
+            .decrypt_padded_mut::<twofish::cipher::block_padding::Pkcs7>(&mut buf)?
+            .len();
+        buf.truncate(len);
         Ok(buf)
     }
 
@@ -256,5 +259,23 @@ mod tests {
     #[test]
     fn salsa20_cipher_new_accepts_32_byte_key() {
         assert!(Salsa20Cipher::new(&[0u8; 32]).is_ok());
+    }
+
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    #[test]
+    fn twofish_cipher_decrypt_strips_pkcs7_padding() {
+        use super::{Cipher, TwofishCipher};
+
+        let key = [0x11u8; 32];
+        let iv = [0x22u8; 16];
+        let plaintext = b"hello world, this is not block-aligned";
+
+        let mut encryptor = TwofishCipher::new(&key, &iv).unwrap();
+        let ciphertext = encryptor.encrypt(plaintext).unwrap();
+
+        let mut decryptor = TwofishCipher::new(&key, &iv).unwrap();
+        let decrypted = decryptor.decrypt(&ciphertext).unwrap();
+
+        assert_eq!(decrypted, plaintext);
     }
 }
