@@ -77,7 +77,91 @@ impl Database {
         log.append(&self.merge_group(&other.root, false)?);
         log.append(&self.merge_deletions(other)?);
         self.merge_custom_icons(other);
+        self.merge_meta(other);
         Ok(log)
+    }
+
+    /// Merge `other`'s `Meta` into `self`'s, field by field. Fields that
+    /// carry their own "last changed" timestamp (name, description, default
+    /// username, recycle bin settings, entry templates group) take whichever
+    /// side is newer. Fields with no timestamp of their own (generator,
+    /// memory protection, history limits, maintenance/master-key settings,
+    /// preserved unknown XML) are governed by `settings_changed`, mirroring
+    /// how KeePassXC itself scopes that timestamp. `custom_data` is unioned,
+    /// with same-key collisions resolved per item by
+    /// `last_modification_time`.
+    fn merge_meta(&mut self, other: &Database) {
+        fn newer(self_time: Option<NaiveDateTime>, other_time: Option<NaiveDateTime>) -> bool {
+            match (self_time, other_time) {
+                (Some(s), Some(o)) => o > s,
+                (None, Some(_)) => true,
+                _ => false,
+            }
+        }
+
+        let self_meta = &mut self.meta;
+        let other_meta = &other.meta;
+
+        if newer(self_meta.database_name_changed, other_meta.database_name_changed) {
+            self_meta.database_name = other_meta.database_name.clone();
+            self_meta.database_name_changed = other_meta.database_name_changed;
+        }
+
+        if newer(
+            self_meta.database_description_changed,
+            other_meta.database_description_changed,
+        ) {
+            self_meta.database_description = other_meta.database_description.clone();
+            self_meta.database_description_changed = other_meta.database_description_changed;
+        }
+
+        if newer(self_meta.default_username_changed, other_meta.default_username_changed) {
+            self_meta.default_username = other_meta.default_username.clone();
+            self_meta.default_username_changed = other_meta.default_username_changed;
+        }
+
+        if newer(self_meta.recyclebin_changed, other_meta.recyclebin_changed) {
+            self_meta.recyclebin_enabled = other_meta.recyclebin_enabled;
+            self_meta.recyclebin_uuid = other_meta.recyclebin_uuid;
+            self_meta.recyclebin_changed = other_meta.recyclebin_changed;
+        }
+
+        if newer(
+            self_meta.entry_templates_group_changed,
+            other_meta.entry_templates_group_changed,
+        ) {
+            self_meta.entry_templates_group = other_meta.entry_templates_group;
+            self_meta.entry_templates_group_changed = other_meta.entry_templates_group_changed;
+        }
+
+        if newer(self_meta.settings_changed, other_meta.settings_changed) {
+            self_meta.generator = other_meta.generator.clone();
+            self_meta.maintenance_history_days = other_meta.maintenance_history_days;
+            self_meta.color = other_meta.color.clone();
+            self_meta.master_key_changed = other_meta.master_key_changed;
+            self_meta.master_key_change_rec = other_meta.master_key_change_rec;
+            self_meta.master_key_change_force = other_meta.master_key_change_force;
+            self_meta.memory_protection = other_meta.memory_protection.clone();
+            self_meta.history_max_items = other_meta.history_max_items;
+            self_meta.history_max_size = other_meta.history_max_size;
+            self_meta.last_selected_group = other_meta.last_selected_group;
+            self_meta.last_top_visible_group = other_meta.last_top_visible_group;
+            self_meta.unknown_xml = other_meta.unknown_xml.clone();
+            self_meta.settings_changed = other_meta.settings_changed;
+        }
+
+        for (key, other_item) in &other_meta.custom_data {
+            match self_meta.custom_data.get(key) {
+                Some(self_item)
+                    if !newer(self_item.last_modification_time, other_item.last_modification_time) =>
+                {
+                    // Destination's item is at least as new; keep it.
+                }
+                _ => {
+                    self_meta.custom_data.insert(key.clone(), other_item.clone());
+                }
+            }
+        }
     }
 
     /// Union custom icons from both databases.
@@ -2223,6 +2307,113 @@ mod merge_tests {
         assert_eq!(
             destination.entries[0].uuid, ENTRY1_ID,
             "destination entries are seen before source entries, so destination should win"
+        );
+    }
+
+    #[test]
+    fn test_merge_takes_newer_side_for_each_timestamped_meta_field() {
+        let mut destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+
+        thread::sleep(time::Duration::from_secs(1));
+        let later = Times::now();
+
+        // Destination is newer for the database name...
+        destination_db.meta.database_name = Some("destination name".to_string());
+        destination_db.meta.database_name_changed = Some(later);
+        source_db.meta.database_name = Some("source name".to_string());
+        source_db.meta.database_name_changed = Some(Times::now() - chrono::Duration::seconds(10));
+
+        // ...but the source is newer for the description.
+        source_db.meta.database_description = Some("source description".to_string());
+        source_db.meta.database_description_changed = Some(later);
+        destination_db.meta.database_description = Some("destination description".to_string());
+        destination_db.meta.database_description_changed = Some(Times::now() - chrono::Duration::seconds(10));
+
+        destination_db.merge(&source_db).unwrap();
+
+        assert_eq!(destination_db.meta.database_name, Some("destination name".to_string()));
+        assert_eq!(
+            destination_db.meta.database_description,
+            Some("source description".to_string())
+        );
+    }
+
+    #[test]
+    fn test_merge_takes_settings_changed_side_for_unclaimed_meta_fields() {
+        let mut destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+
+        destination_db.meta.settings_changed = Some(Times::now() - chrono::Duration::seconds(10));
+        destination_db.meta.history_max_items = Some(5);
+
+        thread::sleep(time::Duration::from_secs(1));
+        source_db.meta.settings_changed = Some(Times::now());
+        source_db.meta.history_max_items = Some(50);
+
+        destination_db.merge(&source_db).unwrap();
+
+        assert_eq!(destination_db.meta.history_max_items, Some(50));
+        assert_eq!(destination_db.meta.settings_changed, source_db.meta.settings_changed);
+    }
+
+    #[test]
+    fn test_merge_unions_meta_custom_data_keeping_newer_item_on_key_collision() {
+        use crate::db::CustomDataItem;
+        use crate::db::CustomDataValue;
+
+        let mut destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+
+        destination_db.meta.custom_data.insert(
+            "only_in_destination".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("dest-only".to_string())),
+                last_modification_time: Some(Times::now()),
+                unknown_xml: Vec::new(),
+            },
+        );
+        destination_db.meta.custom_data.insert(
+            "shared".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("stale".to_string())),
+                last_modification_time: Some(Times::now() - chrono::Duration::seconds(10)),
+                unknown_xml: Vec::new(),
+            },
+        );
+
+        thread::sleep(time::Duration::from_secs(1));
+        source_db.meta.custom_data.insert(
+            "shared".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("fresh".to_string())),
+                last_modification_time: Some(Times::now()),
+                unknown_xml: Vec::new(),
+            },
+        );
+        source_db.meta.custom_data.insert(
+            "only_in_source".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("source-only".to_string())),
+                last_modification_time: Some(Times::now()),
+                unknown_xml: Vec::new(),
+            },
+        );
+
+        destination_db.merge(&source_db).unwrap();
+
+        assert_eq!(destination_db.meta.custom_data.len(), 3);
+        assert_eq!(
+            destination_db.meta.custom_data["shared"].value,
+            Some(CustomDataValue::String("fresh".to_string()))
+        );
+        assert_eq!(
+            destination_db.meta.custom_data["only_in_destination"].value,
+            Some(CustomDataValue::String("dest-only".to_string()))
+        );
+        assert_eq!(
+            destination_db.meta.custom_data["only_in_source"].value,
+            Some(CustomDataValue::String("source-only".to_string()))
         );
     }
 }
