@@ -15,7 +15,7 @@ use keepassxc::{
 };
 use serde_json::json;
 use wasm_bindgen::prelude::*;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 thread_local! {
  static DATABASES: RefCell<BTreeMap<u32, Database>> = RefCell::new(BTreeMap::new());
@@ -274,7 +274,12 @@ fn scrub_protected_values(fields: &mut EntryFields) {
     for (key, is_protected) in &fields.protected {
         if *is_protected {
             if let Some(value) = fields.fields.get_mut(key) {
-                value.clear();
+                // `String::clear()` alone only truncates the length; the
+                // plaintext bytes stay live in the WASM heap until the
+                // allocation is reused. Zero them first, matching the
+                // zeroization discipline used everywhere else this crate
+                // handles secret material.
+                value.zeroize();
             }
         }
     }
@@ -615,6 +620,32 @@ mod tests {
         );
 
         close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn scrub_protected_values_zeroizes_underlying_bytes_not_just_length() {
+        let mut fields = EntryFields {
+            fields: BTreeMap::from([("Password".to_string(), "hunter2".to_string())]),
+            custom_data: BTreeMap::new(),
+            protected: BTreeMap::from([("Password".to_string(), true)]),
+        };
+
+        let value = fields.fields.get("Password").unwrap();
+        let ptr = value.as_ptr();
+        let original_len = value.len();
+
+        scrub_protected_values(&mut fields);
+
+        assert_eq!(fields.fields.get("Password").unwrap(), "");
+        // The allocation backing the string is untouched by `clear`/zeroize
+        // (same pointer, capacity retained), so the bytes it used to hold
+        // are still readable here, they must have actually been
+        // overwritten, not just logically truncated.
+        let leftover = unsafe { std::slice::from_raw_parts(ptr, original_len) };
+        assert!(
+            leftover.iter().all(|&b| b == 0),
+            "scrubbed plaintext bytes must be zeroed, not merely truncated"
+        );
     }
 
     #[test]
