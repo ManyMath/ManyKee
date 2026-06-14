@@ -76,7 +76,11 @@ mod entry_tests {
         assert_eq!(e.get_username(), Some("ghj"));
         assert_eq!(e.get_password(), Some("klmno"));
         assert_eq!(e.get_url(), Some("https://example.com"));
-        assert_eq!(e.tags, vec!["keepass-rs".to_string(), "test".to_string()]);
+        // The fixture's <Tags> element is the single literal string
+        // "keepass-rs,test" (a comma-containing tag, not two semicolon-separated
+        // tags, KDBX's actual tag delimiter is ';', not ','; see the Entry
+        // Tags delimiter fix in ROADMAP.md's Done section).
+        assert_eq!(e.tags, vec!["keepass-rs,test".to_string()]);
         assert_eq!(e.times.expires, Some(true));
 
         if let Some(t) = e.times.expiry {
