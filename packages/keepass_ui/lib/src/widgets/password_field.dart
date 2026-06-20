@@ -9,10 +9,21 @@ class PasswordField extends StatefulWidget {
   final String value;
   final ClipboardManager clipboardManager;
 
+  /// Fetches the real value on demand (e.g. via `readEntryField`), for
+  /// backends that scrub protected values from the bulk read this widget's
+  /// [value] came from. Called at most once, the first time the value is
+  /// needed (reveal or copy); if it returns a non-null value, that value is
+  /// used in place of [value] from then on.
+  final Future<String?> Function()? onFetchValue;
+
+  final String copyTooltip;
+
   const PasswordField({
     super.key,
     required this.value,
     required this.clipboardManager,
+    this.onFetchValue,
+    this.copyTooltip = 'Copy password',
   });
 
   @override
@@ -21,6 +32,8 @@ class PasswordField extends StatefulWidget {
 
 class _PasswordFieldState extends State<PasswordField> {
   bool _revealed = false;
+  bool _fetchAttempted = false;
+  String? _fetchedValue;
   Timer? _autoHideTimer;
 
   @override
@@ -29,7 +42,27 @@ class _PasswordFieldState extends State<PasswordField> {
     super.dispose();
   }
 
-  void _toggleReveal() {
+  String get _value => _fetchedValue ?? widget.value;
+
+  Future<void> _ensureValueFetched() async {
+    final fetch = widget.onFetchValue;
+    if (_fetchAttempted || fetch == null) {
+      return;
+    }
+    _fetchAttempted = true;
+    final value = await fetch();
+    if (mounted && value != null) {
+      setState(() => _fetchedValue = value);
+    }
+  }
+
+  Future<void> _toggleReveal() async {
+    if (!_revealed) {
+      await _ensureValueFetched();
+    }
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _revealed = !_revealed;
     });
@@ -51,7 +84,7 @@ class _PasswordFieldState extends State<PasswordField> {
       children: [
         Expanded(
           child: Text(
-            _revealed ? widget.value : '\u2022' * widget.value.length,
+            _revealed ? _value : '\u2022' * _value.length,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontFamily: _revealed ? 'monospace' : null,
               fontSize: 14,
@@ -68,9 +101,15 @@ class _PasswordFieldState extends State<PasswordField> {
           splashRadius: 20,
         ),
         CopyButton(
-          value: widget.value,
+          value: widget.onFetchValue == null ? _value : null,
+          fetchValue: widget.onFetchValue == null
+              ? null
+              : () async {
+                  await _ensureValueFetched();
+                  return _value;
+                },
           clipboardManager: widget.clipboardManager,
-          tooltip: 'Copy password',
+          tooltip: widget.copyTooltip,
         ),
       ],
     );

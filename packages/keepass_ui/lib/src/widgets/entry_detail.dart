@@ -47,6 +47,7 @@ class _EntryDetailState extends State<EntryDetail> {
     'URL',
     'Notes',
     'Tags',
+    'protected',
   };
 
   @override
@@ -184,6 +185,11 @@ class _EntryDetailState extends State<EntryDetail> {
     }
 
     final fields = _fields!;
+    final rawProtected = fields['protected'];
+    final protected = rawProtected is Map
+        ? rawProtected.map((k, v) => MapEntry(k.toString(), v == true))
+        : const <String, bool>{};
+
     final title = fields['Title'] as String? ?? widget.entry.title;
     final username = fields['UserName'] as String? ?? '';
     final password = fields['Password'] as String? ?? '';
@@ -302,11 +308,17 @@ class _EntryDetailState extends State<EntryDetail> {
             ),
             const SizedBox(height: Spacing.lg),
           ],
-          if (password.isNotEmpty) ...[
+          if (fields.containsKey('Password')) ...[
             _FieldLabel(label: 'Password'),
             PasswordField(
               value: password,
               clipboardManager: widget.clipboardManager,
+              onFetchValue: password.isEmpty
+                  ? () => widget.vaultState.readEntryField(
+                        widget.entry.uuid,
+                        'Password',
+                      )
+                  : null,
             ),
             const SizedBox(height: Spacing.lg),
           ],
@@ -356,21 +368,34 @@ class _EntryDetailState extends State<EntryDetail> {
           ],
           for (final entry in customFields.entries) ...[
             _FieldLabel(label: entry.key),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    entry.value,
-                    style: textTheme.bodyMedium,
+            if (protected[entry.key] == true)
+              PasswordField(
+                value: entry.value,
+                clipboardManager: widget.clipboardManager,
+                copyTooltip: 'Copy ${entry.key}',
+                onFetchValue: entry.value.isEmpty
+                    ? () => widget.vaultState.readEntryField(
+                          widget.entry.uuid,
+                          entry.key,
+                        )
+                    : null,
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      entry.value,
+                      style: textTheme.bodyMedium,
+                    ),
                   ),
-                ),
-                CopyButton(
-                  value: entry.value,
-                  clipboardManager: widget.clipboardManager,
-                  tooltip: 'Copy ${entry.key}',
-                ),
-              ],
-            ),
+                  CopyButton(
+                    value: entry.value,
+                    clipboardManager: widget.clipboardManager,
+                    tooltip: 'Copy ${entry.key}',
+                  ),
+                ],
+              ),
             const SizedBox(height: Spacing.lg),
           ],
           if (tags.isNotEmpty) ...[
