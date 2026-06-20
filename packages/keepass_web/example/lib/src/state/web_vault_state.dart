@@ -13,6 +13,9 @@ class WebVaultState extends VaultState {
   final WebFileStorageProvider _storageProvider = WebFileStorageProvider();
 
   Uint8List? _lastDbBytes;
+  // Retained for the unlocked session so saveDatabase() can re-save without
+  // re-prompting for the keyfile (there's no filesystem path to re-read from
+  // on web, unlike NativeVaultState). Zeroized and cleared on lock().
   Uint8List? _lastKeyFileBytes;
 
   Uint8List? get lastDbBytes => _lastDbBytes;
@@ -76,6 +79,8 @@ class WebVaultState extends VaultState {
     if (handle != null) {
       await _api.closeDatabase(handle!);
     }
+    _lastKeyFileBytes?.fillRange(0, _lastKeyFileBytes!.length, 0);
+    _lastKeyFileBytes = null;
     resetBrowsingState();
     // _lastDbBytes is kept for re-lock screen.
   }
