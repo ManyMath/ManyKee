@@ -9,8 +9,9 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use cipher::generic_array::GenericArray;
 use thiserror::Error;
+use zeroize::Zeroizing;
 
-use std::{collections::HashMap, convert::TryInto, str};
+use std::{collections::HashMap, str};
 
 #[derive(Debug)]
 struct KDBHeader {
@@ -62,6 +63,24 @@ fn ensure_length(field_type: u16, field_size: u32, expected_field_size: u32) -> 
     }
 }
 
+/// Reads one type-length-value record from the front of `data`, bounds-checking
+/// against the buffer's actual remaining length instead of trusting the
+/// attacker-controlled `field_size` the way a raw `&data[6..6 + field_size]`
+/// slice would. Returns `(field_type, field_size, field_value, record_len)`,
+/// where `record_len` is the number of bytes (header + value) to advance past.
+fn read_field(data: &[u8]) -> Result<(u16, u32, &[u8], usize), KdbOpenError> {
+    if data.len() < 6 {
+        return Err(KdbOpenError::UnexpectedEof);
+    }
+    let field_type = LittleEndian::read_u16(&data[0..2]);
+    let field_size = LittleEndian::read_u32(&data[2..6]);
+    let record_len = 6usize
+        .checked_add(field_size as usize)
+        .ok_or(KdbOpenError::UnexpectedEof)?;
+    let field_value = data.get(6..record_len).ok_or(KdbOpenError::UnexpectedEof)?;
+    Ok((field_type, field_size, field_value, record_len))
+}
+
 fn entry_name(field_type: u16) -> &'static str {
     match field_type {
         0x0004 => "Title",
@@ -100,9 +119,7 @@ fn parse_groups(root: &mut Group, header_num_groups: u32, data: &mut &[u8]) -> R
     let mut num_groups = 0; // the total number of parsed groups
     while num_groups < header_num_groups as usize {
         // Read group TLV
-        let field_type = LittleEndian::read_u16(&data[0..]);
-        let field_size = LittleEndian::read_u32(&data[2..]);
-        let field_value = &data[6..6 + field_size as usize];
+        let (field_type, field_size, field_value, record_len) = read_field(data)?;
 
         match field_type {
             0x0000 => {} // KeePass ignores this field type
@@ -166,7 +183,7 @@ fn parse_groups(root: &mut Group, header_num_groups: u32, data: &mut &[u8]) -> R
             }
         }
 
-        *data = &data[6 + field_size as usize..];
+        *data = &data[record_len..];
     }
 
     if gid.is_some() {
@@ -192,9 +209,7 @@ fn parse_entries(
     let mut num_entries = 0;
     while num_entries < header_num_entries {
         // Read entry TLV
-        let field_type = LittleEndian::read_u16(&data[0..]);
-        let field_size = LittleEndian::read_u32(&data[2..]);
-        let field_value = &data[6..6 + field_size as usize];
+        let (field_type, field_size, field_value, record_len) = read_field(data)?;
 
         match field_type {
             0x0000 => {} // KeePass ignores this field type
@@ -275,7 +290,7 @@ fn parse_entries(
             }
         }
 
-        *data = &data[6 + field_size as usize..];
+        *data = &data[record_len..];
     }
 
     if gid.is_some() {
@@ -312,23 +327,34 @@ pub(crate) fn parse_kdb(data: &[u8], db_key: &DatabaseKey) -> Result<Database, D
     // derive master key from composite key, transform_seed, transform_rounds and master_seed
     let key_elements = db_key.get_key_elements()?;
     let key_elements: Vec<&[u8]> = key_elements.iter().map(|v| &v[..]).collect();
-    let composite_key = if key_elements.len() == 1 {
-        let key_element: [u8; 32] = key_elements[0].try_into().unwrap();
-        GenericArray::from(key_element) // single pass of SHA256, already done before the call to parse()
+    let composite_key: Zeroizing<Vec<u8>> = if key_elements.len() == 1 {
+        // single pass of SHA256, already done before the call to parse()
+        Zeroizing::new(key_elements[0].to_vec())
     } else {
-        calculate_sha256(&key_elements) // second pass of SHA256
+        Zeroizing::new(calculate_sha256(&key_elements).to_vec()) // second pass of SHA256
     };
 
-    // KDF is always AES
+    // KDF is always AES. `transform_rounds` is a plaintext, attacker-controlled
+    // header field read before any authentication check, so it must be capped
+    // the same way kdbx3/kdbx4 already cap it, or a crafted file with rounds
+    // near u32::MAX hangs the opening thread for an unbounded duration.
+    crate::config::validate_aes_kdf_rounds(u64::from(header.transform_rounds)).map_err(|e| {
+        DatabaseOpenError::Format(DatabaseFormatError::Kdb(KdbOpenError::from(e)))
+    })?;
     let kdf_config = KdfConfig::Aes {
         rounds: u64::from(header.transform_rounds),
     };
 
-    let transformed_key = kdf_config
-        .get_kdf_seeded(&header.transform_seed)
-        .transform_key(&composite_key)?;
+    let transformed_key: Zeroizing<Vec<u8>> = Zeroizing::new(
+        kdf_config
+            .get_kdf_seeded(&header.transform_seed)
+            .transform_key(GenericArray::from_slice(&composite_key))?
+            .to_vec(),
+    );
 
-    let master_key = calculate_sha256(&[&header.master_seed, &transformed_key]);
+    let master_key: Zeroizing<Vec<u8>> = Zeroizing::new(
+        calculate_sha256(&[&header.master_seed, &transformed_key]).to_vec(),
+    );
 
     let outer_cipher_config = if header.flags & 2 != 0 {
         OuterCipherConfig::AES256
@@ -340,20 +366,24 @@ pub(crate) fn parse_kdb(data: &[u8], db_key: &DatabaseKey) -> Result<Database, D
         )));
     };
 
-    // Decrypt payload
-    let payload_padded = outer_cipher_config
+    // Decrypt payload. `Cipher::decrypt` (both AES256/Twofish impls) already
+    // strips PKCS7 padding itself via `decrypt_padded_{b2b_,}mut`, returning
+    // just the unpadded plaintext, applying a second, manual PKCS7-style
+    // strip on top of that (as this used to do, treating the last already-
+    // unpadded plaintext byte as a padding length) silently truncated real
+    // trailing payload bytes whenever they didn't happen to end in 0x00, and
+    // could underflow/panic if the truly-empty-payload case was hit.
+    let payload = outer_cipher_config
         .get_cipher(&master_key, header.encryption_iv.as_ref())?
         .decrypt(payload_encrypted)?;
-    let padlen = payload_padded[payload_padded.len() - 1] as usize;
-    let payload = &payload_padded[..payload_padded.len() - padlen];
 
     // Check if we decrypted correctly
-    let hash = calculate_sha256(&[payload]);
+    let hash = calculate_sha256(&[&payload]);
     if header.contents_hash != hash.as_slice() {
         return Err(DatabaseKeyError::IncorrectKey.into());
     }
 
-    let root_group = parse_db(&header, payload)?;
+    let root_group = parse_db(&header, &payload)?;
 
     let config = DatabaseConfig {
         version,
@@ -405,4 +435,121 @@ pub enum KdbOpenError {
 
     #[error("Invalid fixed cipher ID: {0}")]
     InvalidFixedCipherID(u32),
+
+    #[error("Unexpected end of file while parsing a group/entry field")]
+    UnexpectedEof,
+
+    #[error(transparent)]
+    KdfConfig(#[from] crate::config::KdfConfigError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::key::DatabaseKey;
+
+    fn write_u32(buf: &mut [u8], offset: usize, value: u32) {
+        buf[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    #[test]
+    fn parse_kdb_rejects_transform_rounds_above_cap_before_running_kdf() {
+        // transform_rounds is a plaintext header field, read (and previously
+        // used unbounded) before any password/HMAC check. A crafted value
+        // near u32::MAX must be rejected up front instead of running AES-KDF
+        // billions of times.
+        let mut data = vec![0u8; HEADER_SIZE];
+        write_u32(&mut data, 8, 2); // AES256 outer cipher flag
+        write_u32(&mut data, 120, (crate::config::MAX_AES_KDF_ROUNDS + 1) as u32);
+
+        let db_key = DatabaseKey::new().with_password("hunter2");
+        let result = parse_kdb(&data, &db_key);
+        assert!(matches!(
+            result,
+            Err(DatabaseOpenError::Format(DatabaseFormatError::Kdb(
+                KdbOpenError::KdfConfig(_)
+            )))
+        ));
+    }
+
+    #[test]
+    fn read_field_rejects_field_size_exceeding_remaining_buffer() {
+        // field_type = 0x0002 (GroupName), field_size = u32::MAX, no value bytes present.
+        let data: &[u8] = &[0x02, 0x00, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(matches!(read_field(data), Err(KdbOpenError::UnexpectedEof)));
+    }
+
+    #[test]
+    fn read_field_rejects_truncated_record_header() {
+        let data: &[u8] = &[0x02, 0x00, 0x01]; // fewer than the 6-byte type+size header
+        assert!(matches!(read_field(data), Err(KdbOpenError::UnexpectedEof)));
+    }
+
+    #[test]
+    fn read_field_reads_valid_record_and_computes_advance_length() {
+        // field_type=1, field_size=4, value=[9,9,9,9], plus one trailing byte
+        // belonging to the next record (must not be consumed).
+        let data: &[u8] = &[0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 9, 9, 9, 9, 0xAA];
+        let (field_type, field_size, field_value, record_len) = read_field(data).unwrap();
+        assert_eq!(field_type, 1);
+        assert_eq!(field_size, 4);
+        assert_eq!(field_value, &[9, 9, 9, 9]);
+        assert_eq!(record_len, 10);
+    }
+
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    #[test]
+    fn parse_kdb_does_not_corrupt_or_panic_on_payload_with_nonzero_trailing_plaintext_byte() {
+        // Regression test: parse_kdb used to apply a second, manual
+        // PKCS7-style strip on top of Cipher::decrypt's own (correct)
+        // unpadding, treating the already-unpadded plaintext's last byte as
+        // a padding length. That silently truncated real trailing payload
+        // data whenever it wasn't 0x00, and could underflow/panic outright
+        // if the resulting truncation exceeded the buffer. This payload's
+        // real last byte is non-zero, which the old code would have
+        // misread as a large padding length.
+        let password = "hunter2";
+        let master_seed = [1u8; 16];
+        let encryption_iv = [2u8; 16];
+        let transform_seed = [3u8; 32];
+        let transform_rounds: u32 = 1;
+
+        let key_elements = DatabaseKey::new()
+            .with_password(password)
+            .get_key_elements()
+            .unwrap();
+        let composite_key = key_elements[0].clone();
+
+        let kdf_config = KdfConfig::Aes {
+            rounds: u64::from(transform_rounds),
+        };
+        let transformed_key = kdf_config
+            .get_kdf_seeded(&transform_seed)
+            .transform_key(GenericArray::from_slice(&composite_key))
+            .unwrap();
+        let master_key = calculate_sha256(&[&master_seed, &transformed_key]);
+
+        let plaintext = b"kdb1-payload-ending-in-z".to_vec();
+        assert_ne!(*plaintext.last().unwrap(), 0);
+
+        let contents_hash = calculate_sha256(&[&plaintext]);
+        let mut cipher = OuterCipherConfig::AES256
+            .get_cipher(&master_key, &encryption_iv)
+            .unwrap();
+        let ciphertext = cipher.encrypt(&plaintext).unwrap();
+
+        let mut data = vec![0u8; HEADER_SIZE];
+        write_u32(&mut data, 8, 2); // AES256 outer cipher flag
+        data[16..32].copy_from_slice(&master_seed);
+        data[32..48].copy_from_slice(&encryption_iv);
+        // num_groups/num_entries left at 0 - no group/entry TLVs to parse.
+        data[56..88].copy_from_slice(&contents_hash);
+        data[88..120].copy_from_slice(&transform_seed);
+        write_u32(&mut data, 120, transform_rounds);
+        data.extend_from_slice(&ciphertext);
+
+        let db_key = DatabaseKey::new().with_password(password);
+        let db = parse_kdb(&data, &db_key).expect("payload should decrypt and verify correctly");
+        assert_eq!(db.root.name, "Root");
+    }
 }
