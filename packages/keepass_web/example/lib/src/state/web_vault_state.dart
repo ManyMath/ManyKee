@@ -90,7 +90,11 @@ class WebVaultState extends VaultState {
   Future<void> selectGroup(VaultGroup group) async {
     selectedGroupValue = group;
     selectedEntryValue = null;
+    final generation = beginGroupSelection();
     final maps = await _api.listEntries(handle!, group.uuid);
+    if (!isCurrentGroupSelection(generation)) {
+      return;
+    }
     entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
     notifyListeners();
   }

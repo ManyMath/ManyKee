@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -43,6 +44,86 @@ class _FakeVaultState extends VaultState {
     fetchedFields.add(fieldName);
     return readEntryFieldValues[fieldName];
   }
+
+  @override
+  Future<Map<String, dynamic>?> getTotpCode(String entryUuid) async => null;
+
+  @override
+  Future<String> createEntry(String groupUuid) async => '';
+
+  @override
+  Future<void> updateEntry(
+    String entryUuid,
+    Map<String, String?> fields, {
+    Set<String> protectedFields = const <String>{},
+  }) async {}
+
+  @override
+  Future<void> deleteEntry(String entryUuid) async {}
+
+  @override
+  Future<void> moveEntry(String entryUuid, String targetGroupUuid) async {}
+
+  @override
+  Future<String> createGroup(String parentGroupUuid, String name) async => '';
+
+  @override
+  Future<void> renameGroup(String groupUuid, String name) async {}
+
+  @override
+  Future<void> deleteGroup(String groupUuid) async {}
+
+  @override
+  Future<void> moveGroup(String groupUuid, String targetParentUuid) async {}
+
+  @override
+  Future<List<int>> saveDatabase({
+    required String password,
+    List<int>? keyFileBytes,
+  }) async =>
+      const [];
+}
+
+/// A [VaultState] whose `readEntryFields` completion order per entry UUID is
+/// controlled by the test via [gateFor], so a race between an older and a
+/// newer `_loadFields()` call can be reproduced deterministically.
+class _RaceVaultState extends VaultState {
+  _RaceVaultState(this.fieldsByUuid);
+
+  final Map<String, Map<String, dynamic>> fieldsByUuid;
+  final Map<String, Completer<void>> _gates = {};
+
+  Completer<void> gateFor(String uuid) =>
+      _gates.putIfAbsent(uuid, () => Completer<void>());
+
+  @override
+  Stream<int> get progress => const Stream.empty();
+
+  @override
+  Future<void> unlock({
+    Uint8List? dbBytes,
+    String? filePath,
+    required String password,
+    Uint8List? keyFileBytes,
+    String? challengeResponseHex,
+    String? filename,
+  }) async {}
+
+  @override
+  Future<void> lock() async {}
+
+  @override
+  Future<void> selectGroup(VaultGroup group) async {}
+
+  @override
+  Future<Map<String, dynamic>> readEntryFields(String entryUuid) async {
+    await gateFor(entryUuid).future;
+    return fieldsByUuid[entryUuid]!;
+  }
+
+  @override
+  Future<String?> readEntryField(String entryUuid, String fieldName) async =>
+      null;
 
   @override
   Future<Map<String, dynamic>?> getTotpCode(String entryUuid) async => null;
@@ -203,5 +284,70 @@ void main() {
     await _pumpEntryDetail(tester, vaultState);
 
     expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a stale in-flight fetch from a previously-selected entry does not '
+      'overwrite the currently-selected entry after switching quickly',
+      (tester) async {
+    final vaultState = _RaceVaultState({
+      'entry-1': const {
+        'Title': 'First',
+        'UserName': 'user-one',
+        'Password': 'pw-one',
+        'URL': '',
+        'Notes': '',
+      },
+      'entry-2': const {
+        'Title': 'Second',
+        'UserName': 'user-two',
+        'Password': 'pw-two',
+        'URL': '',
+        'Notes': '',
+      },
+    });
+
+    final entry1 = VaultEntry(
+      uuid: 'entry-1',
+      title: 'First',
+      username: 'user-one',
+      url: '',
+    );
+    final entry2 = VaultEntry(
+      uuid: 'entry-2',
+      title: 'Second',
+      username: 'user-two',
+      url: '',
+    );
+
+    Widget buildFor(VaultEntry entry) => MaterialApp(
+          home: Scaffold(
+            body: EntryDetail(
+              entry: entry,
+              vaultState: vaultState,
+              clipboardManager: ClipboardManager(),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(buildFor(entry1));
+    await tester.pump(); // entry-1's readEntryFields is now in flight
+
+    await tester.pumpWidget(buildFor(entry2));
+    await tester.pump(); // entry-2's readEntryFields is now in flight too
+
+    // entry-2 (the currently-selected entry) resolves first.
+    vaultState.gateFor('entry-2').complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('user-two'), findsOneWidget);
+
+    // entry-1's stale fetch resolves after entry-2 is already showing; it
+    // must not clobber the currently-displayed entry.
+    vaultState.gateFor('entry-1').complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('user-two'), findsOneWidget);
+    expect(find.text('user-one'), findsNothing);
   });
 }

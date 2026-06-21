@@ -39,6 +39,7 @@ class _EntryDetailState extends State<EntryDetail> {
   bool _loading = true;
   String? _error;
   Timer? _totpTimer;
+  int _loadGeneration = 0;
 
   static const _standardFields = {
     'Title',
@@ -72,6 +73,7 @@ class _EntryDetailState extends State<EntryDetail> {
 
   Future<void> _loadFields() async {
     _totpTimer?.cancel();
+    final generation = ++_loadGeneration;
     setState(() {
       _loading = true;
       _error = null;
@@ -88,16 +90,16 @@ class _EntryDetailState extends State<EntryDetail> {
       } catch (_) {
         totp = null;
       }
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _fields = fields;
           _totp = totp;
           _loading = false;
         });
-        _scheduleTotpRefresh();
+        _scheduleTotpRefresh(generation);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _error = e.toString();
           _loading = false;
@@ -106,14 +108,14 @@ class _EntryDetailState extends State<EntryDetail> {
     }
   }
 
-  void _scheduleTotpRefresh() {
+  void _scheduleTotpRefresh(int generation) {
     _totpTimer?.cancel();
     if (_totp == null) {
       return;
     }
 
     _totpTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (!mounted) {
+      if (!mounted || generation != _loadGeneration) {
         timer.cancel();
         return;
       }
@@ -130,15 +132,15 @@ class _EntryDetailState extends State<EntryDetail> {
           final refreshedTotp = await widget.vaultState.getTotpCode(
             widget.entry.uuid,
           );
-          if (!mounted) {
+          if (!mounted || generation != _loadGeneration) {
             return;
           }
           setState(() {
             _totp = refreshedTotp;
           });
-          _scheduleTotpRefresh();
+          _scheduleTotpRefresh(generation);
         } catch (_) {
-          if (!mounted) {
+          if (!mounted || generation != _loadGeneration) {
             return;
           }
           setState(() {

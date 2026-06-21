@@ -20,6 +20,7 @@ abstract class VaultState extends ChangeNotifier {
   String? _lastFilename;
   String? _errorMessage;
   String? _errorCode;
+  int _groupSelectionGeneration = 0;
 
   int? get handle => _handle;
   List<VaultGroup> get groups => _groups;
@@ -85,6 +86,19 @@ abstract class VaultState extends ChangeNotifier {
   set lastFilenameValue(String? v) {
     _lastFilename = v;
   }
+
+  /// Marks the start of a new group-selection/entry-list fetch, invalidating
+  /// any in-flight fetch from a previous call. Subclasses' `selectGroup`
+  /// implementations must call this before their async entry-list fetch and
+  /// check [isCurrentGroupSelection] before applying the result, so a slower
+  /// earlier fetch can't clobber a faster later one's `entriesValue` (races
+  /// when the user switches groups faster than `listEntries` resolves).
+  @protected
+  int beginGroupSelection() => ++_groupSelectionGeneration;
+
+  @protected
+  bool isCurrentGroupSelection(int generation) =>
+      generation == _groupSelectionGeneration;
 
   Future<void> unlock({
     Uint8List? dbBytes,
