@@ -234,6 +234,19 @@ impl Database {
                     }
                 }
             }
+            // Also backfill history revisions, mirroring collect_custom_icons
+            // above, which already harvests icon data from them.
+            if let Some(history) = &mut entry.history {
+                for h_entry in &mut history.entries {
+                    if let Some((uuid, data)) = &h_entry.custom_icon {
+                        if data.is_empty() {
+                            if let Some(source_data) = icons.get(uuid) {
+                                h_entry.custom_icon = Some((*uuid, source_data.clone()));
+                            }
+                        }
+                    }
+                }
+            }
         }
         for child in &mut group.groups {
             Self::apply_custom_icons(child, icons);
@@ -2083,6 +2096,53 @@ mod merge_tests {
             .unwrap();
         assert_eq!(modified_group.custom_icon_uuid, Some(icon_uuid));
         assert_eq!(modified_group.custom_icon_data, Some(icon_data));
+    }
+
+    #[test]
+    fn test_merge_backfills_history_revision_custom_icon_data_from_source() {
+        let mut destination_db = create_test_database();
+
+        let icon_uuid = Uuid::new_v4();
+        let icon_data = vec![5, 6, 7, 8];
+
+        // entry2 (group1/subgroup1) has a history revision referencing a
+        // custom icon but missing its data (e.g. assigned before the icon
+        // bytes synced down). collect_custom_icons already harvests icon
+        // data from history revisions, but apply_custom_icons never
+        // backfilled *into* one - only into live entries/groups.
+        let subgroup1 = destination_db
+            .root
+            .group_by_path_mut(&["group1", "subgroup1"])
+            .unwrap();
+        let mut history_revision = subgroup1.entries[0].clone();
+        history_revision.custom_icon = Some((icon_uuid, vec![]));
+        subgroup1.entries[0].history = Some(History {
+            entries: vec![history_revision],
+        });
+
+        // Cloned after entry2's history is set, so entry2 is identical on
+        // both sides and entry-content merging leaves it alone - isolating
+        // this test to apply_custom_icons's history-backfill specifically.
+        let mut source_db = destination_db.clone();
+        // Source carries the actual icon bytes on root's entry1, which
+        // collect_custom_icons visits before it recurses into subgroups, so
+        // this real data is what ends up in its uuid -> data map (entry2's
+        // own empty-data placeholder for the same uuid, visited later,
+        // doesn't get a chance to overwrite it either way).
+        source_db.root.entries[0].custom_icon = Some((icon_uuid, icon_data.clone()));
+
+        destination_db.merge(&source_db).unwrap();
+
+        let merged_entry2 = &destination_db
+            .root
+            .group_by_path(&["group1", "subgroup1"])
+            .unwrap()
+            .entries[0];
+        let history = merged_entry2
+            .history
+            .as_ref()
+            .expect("history should survive merge");
+        assert_eq!(history.entries[0].custom_icon, Some((icon_uuid, icon_data)));
     }
 
     #[test]
