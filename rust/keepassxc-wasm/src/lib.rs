@@ -170,14 +170,22 @@ pub fn open_db(
 pub fn open_db_with_key_file(
     db_bytes: &[u8],
     password: &str,
-    key_file_bytes: &[u8],
+    key_file_bytes: Vec<u8>,
 ) -> Result<String, JsValue> {
+    // Owned `Vec<u8>` (not `&[u8]`), matching open_db/save_db: wasm-bindgen's
+    // generated glue for a `Vec<u8>` parameter hands over the real owned
+    // buffer backing the WASM-linear-memory copy the JS side made, so
+    // wrapping it in Zeroizing actually zeroes those bytes before dealloc.
+    // A `&[u8]` parameter's backing buffer is instead owned/dropped by
+    // wasm-bindgen's own generated wrapper with no way for this function to
+    // reach in and zero it first.
+    let key_file_bytes = Zeroizing::new(key_file_bytes);
     catch_unwind_result(|| {
         let mut key = DatabaseKey::new();
         if !password.is_empty() {
             key = key.with_password(password);
         }
-        key = key.with_keyfile(&mut &key_file_bytes[..]).map_err(|e| {
+        key = key.with_keyfile(&mut key_file_bytes.as_slice()).map_err(|e| {
             err_json("KEY_FILE_ERROR", &format!("Failed to read key file: {}", e))
         })?;
 
