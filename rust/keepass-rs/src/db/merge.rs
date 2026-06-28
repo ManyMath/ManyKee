@@ -51,6 +51,20 @@ pub enum MergeError {
 
     #[error("Groups with UUID {0} have the same modification time but have diverged.")]
     GroupModificationTimeNotUpdated(String),
+
+    #[error(
+        "Entry UUID {0} is used by more than one entry in {1}; merging a database with duplicate \
+         entry UUIDs is not supported, since the merge algorithm can only ever see/affect the first \
+         occurrence of a given UUID."
+    )]
+    DuplicateEntryUuid(Uuid, &'static str),
+
+    #[error(
+        "Group UUID {0} is used by more than one group in {1}; merging a database with duplicate \
+         group UUIDs is not supported, since the merge algorithm can only ever see/affect the first \
+         occurrence of a given UUID."
+    )]
+    DuplicateGroupUuid(Uuid, &'static str),
 }
 
 impl MergeLog {
@@ -74,6 +88,9 @@ impl Database {
     /// This function will use the UUIDs to detect that entries and groups are
     /// the same.
     pub fn merge(&mut self, other: &Database) -> Result<MergeLog, MergeError> {
+        Self::check_no_duplicate_uuids(&self.root, "the destination database")?;
+        Self::check_no_duplicate_uuids(&other.root, "the source database")?;
+
         let mut log = MergeLog::default();
         log.append(&self.merge_group(&other.root, false)?);
         log.append(&self.merge_deletions(other)?);
@@ -81,6 +98,51 @@ impl Database {
         self.merge_meta(other);
         log.append(&self.merge_config(other));
         Ok(log)
+    }
+
+    /// Reject a merge upfront if `root` (or any of its subgroups) contains
+    /// two live (non-history) Groups or Entries sharing the same UUID.
+    ///
+    /// `merge_group`/`remove_entry`/`remove_group`/`relocate_entry`/
+    /// `relocate_group` all resolve nodes purely by UUID via
+    /// `entry_by_uuid`/`entry_by_uuid_mut`/`group_by_uuid`/`group_by_uuid_mut`,
+    /// which only ever reach the first pre-order match. A
+    /// malformed-but-parseable file with duplicate-UUID siblings would
+    /// otherwise merge silently: every operation only ever sees/affects the
+    /// first occurrence, and the second is permanently invisible, never
+    /// updated even if its real counterpart diverges on the other side,
+    /// never removed even if that UUID is later added to `deleted_objects`.
+    /// Fixing the algorithm itself to be occurrence-aware (like the
+    /// unknown-XML round-trip layer already is) would mean threading
+    /// occurrence indices through the whole merge algorithm, since merge
+    /// (unlike XML injection) mutates tree structure, not just re-splices
+    /// preserved text, a much larger change reserved for if a real need for
+    /// it ever surfaces. Refusing with a clear error instead of silently
+    /// corrupting/losing data is the safe default in the meantime.
+    fn check_no_duplicate_uuids(root: &Group, database_label: &'static str) -> Result<(), MergeError> {
+        fn walk(
+            group: &Group,
+            seen_groups: &mut std::collections::HashSet<Uuid>,
+            seen_entries: &mut std::collections::HashSet<Uuid>,
+            database_label: &'static str,
+        ) -> Result<(), MergeError> {
+            if !seen_groups.insert(group.uuid) {
+                return Err(MergeError::DuplicateGroupUuid(group.uuid, database_label));
+            }
+            for entry in &group.entries {
+                if !seen_entries.insert(entry.uuid) {
+                    return Err(MergeError::DuplicateEntryUuid(entry.uuid, database_label));
+                }
+            }
+            for child in &group.groups {
+                walk(child, seen_groups, seen_entries, database_label)?;
+            }
+            Ok(())
+        }
+
+        let mut seen_groups = std::collections::HashSet::new();
+        let mut seen_entries = std::collections::HashSet::new();
+        walk(root, &mut seen_groups, &mut seen_entries, database_label)
     }
 
     /// Union `other`'s `config.public_custom_data` into `self`'s.
@@ -2197,10 +2259,15 @@ mod merge_tests {
         let mut source_db = destination_db.clone();
 
         // Craft a malformed source database where a non-root group shares its
-        // UUID with the *destination's* root group. `group_by_uuid` matches
-        // the destination root against itself, but `find_group_parent` can
-        // never resolve a parent for the root, so this used to unwrap a
-        // `None` and panic instead of failing the merge with an error.
+        // UUID with the destination's root group (which, being a clone of the
+        // same database, source's own root also still shares), a
+        // within-tree duplicate UUID on the source side. `group_by_uuid`
+        // matches the destination root against itself, but
+        // `find_group_parent` can never resolve a parent for the root, so
+        // this used to unwrap a `None` and panic instead of failing the
+        // merge with an error. Now caught earlier still, by the upfront
+        // duplicate-UUID check (see `check_no_duplicate_uuids`), with a more
+        // specific error.
         let colliding_uuid = destination_db.root.uuid;
         source_db
             .root
@@ -2209,7 +2276,7 @@ mod merge_tests {
             .uuid = colliding_uuid;
 
         let result = destination_db.merge(&source_db);
-        assert!(matches!(result, Err(MergeError::FindGroupError(uuid)) if uuid == colliding_uuid));
+        assert!(matches!(result, Err(MergeError::DuplicateGroupUuid(uuid, _)) if uuid == colliding_uuid));
     }
 
     #[test]
@@ -2574,5 +2641,51 @@ mod merge_tests {
         assert!(merge_log.warnings.is_empty());
         let merged = destination_db.config.public_custom_data.unwrap();
         assert_eq!(merged.get::<String>("only_in_source").unwrap(), "value");
+    }
+
+    #[test]
+    fn test_merge_rejects_duplicate_entry_uuid_within_destination() {
+        let mut destination_db = create_test_database();
+        let source_db = destination_db.clone();
+
+        // Two sibling entries under different parents sharing a UUID.
+        let mut duplicate_entry = Entry::new();
+        duplicate_entry.uuid = ENTRY1_ID;
+        destination_db
+            .root
+            .group_by_path_mut(&["group2"])
+            .unwrap()
+            .entries
+            .push(duplicate_entry);
+
+        let result = destination_db.merge(&source_db);
+        assert!(matches!(result, Err(MergeError::DuplicateEntryUuid(uuid, _)) if uuid == ENTRY1_ID));
+    }
+
+    #[test]
+    fn test_merge_rejects_duplicate_group_uuid_within_source() {
+        let destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+
+        // Two sibling groups under different parents sharing a UUID.
+        let mut duplicate_group = Group::new("duplicate");
+        duplicate_group.uuid = SUBGROUP1_ID;
+        source_db
+            .root
+            .group_by_path_mut(&["group2"])
+            .unwrap()
+            .groups
+            .push(duplicate_group);
+
+        let result = destination_db.clone().merge(&source_db);
+        assert!(matches!(result, Err(MergeError::DuplicateGroupUuid(uuid, _)) if uuid == SUBGROUP1_ID));
+    }
+
+    #[test]
+    fn test_merge_succeeds_when_no_duplicate_uuids_present() {
+        let mut destination_db = create_test_database();
+        let source_db = destination_db.clone();
+
+        assert!(destination_db.merge(&source_db).is_ok());
     }
 }
