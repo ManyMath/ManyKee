@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::db::{Database, Entry, Group, History, Times};
+use crate::format::variant_dictionary::VariantDictionary;
 use chrono::NaiveDateTime;
 use thiserror::Error;
 use uuid::Uuid;
@@ -78,7 +79,52 @@ impl Database {
         log.append(&self.merge_deletions(other)?);
         self.merge_custom_icons(other);
         self.merge_meta(other);
+        log.append(&self.merge_config(other));
         Ok(log)
+    }
+
+    /// Union `other`'s `config.public_custom_data` into `self`'s.
+    ///
+    /// Unlike every `Meta` field, `DatabaseConfig::public_custom_data`
+    /// (KDBX4-header-level plugin/port custom data, a bare
+    /// `VariantDictionary`) has no "last changed" timestamp of its own to
+    /// arbitrate a merge direction, `settings_changed` only governs
+    /// `Meta`, not `DatabaseConfig`. So this unions same-named entries by
+    /// key: a key present on only one side is kept; a key present on both
+    /// sides with the same value is a no-op; a key present on both sides
+    /// with *different* values keeps the destination's value (arbitrary but
+    /// deterministic) and records a `MergeLog` warning instead of silently
+    /// dropping the source's differing value with no trace.
+    fn merge_config(&mut self, other: &Database) -> MergeLog {
+        let mut log = MergeLog::default();
+
+        let Some(other_data) = &other.config.public_custom_data else {
+            return log;
+        };
+
+        let self_data = self
+            .config
+            .public_custom_data
+            .get_or_insert_with(VariantDictionary::default);
+
+        for (key, other_value) in &other_data.data {
+            match self_data.data.get(key) {
+                None => {
+                    self_data.data.insert(key.clone(), other_value.clone());
+                }
+                Some(self_value) if self_value == other_value => {
+                    // Same value on both sides; nothing to do.
+                }
+                Some(_) => {
+                    log.warnings.push(format!(
+                        "Public custom data key '{}' differs between databases; keeping destination's value.",
+                        key
+                    ));
+                }
+            }
+        }
+
+        log
     }
 
     /// Merge `other`'s `Meta` into `self`'s, field by field. Fields that
@@ -2475,5 +2521,58 @@ mod merge_tests {
             destination_db.meta.custom_data["only_in_source"].value,
             Some(CustomDataValue::String("source-only".to_string()))
         );
+    }
+
+    #[test]
+    fn test_merge_unions_public_custom_data_keeping_destination_on_conflict_and_warning() {
+        use crate::format::variant_dictionary::VariantDictionary;
+
+        let mut destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+
+        let mut dest_vd = VariantDictionary::default();
+        dest_vd.set("only_in_destination", 1u32);
+        dest_vd.set("shared", "destination-value".to_string());
+        destination_db.config.public_custom_data = Some(dest_vd);
+
+        let mut source_vd = VariantDictionary::default();
+        source_vd.set("shared", "source-value".to_string());
+        source_vd.set("only_in_source", 2u32);
+        source_db.config.public_custom_data = Some(source_vd);
+
+        let merge_log = destination_db.merge(&source_db).unwrap();
+
+        let merged = destination_db.config.public_custom_data.unwrap();
+        assert_eq!(merged.get::<u32>("only_in_destination").unwrap(), &1);
+        assert_eq!(merged.get::<u32>("only_in_source").unwrap(), &2);
+        assert_eq!(
+            merged.get::<String>("shared").unwrap(),
+            "destination-value",
+            "destination's value should win on conflict"
+        );
+        assert_eq!(
+            merge_log.warnings.len(),
+            1,
+            "the differing 'shared' key should surface a warning instead of silently dropping the source's value"
+        );
+    }
+
+    #[test]
+    fn test_merge_public_custom_data_from_empty_destination_takes_all_of_source() {
+        use crate::format::variant_dictionary::VariantDictionary;
+
+        let mut destination_db = create_test_database();
+        let mut source_db = destination_db.clone();
+        assert!(destination_db.config.public_custom_data.is_none());
+
+        let mut source_vd = VariantDictionary::default();
+        source_vd.set("only_in_source", "value".to_string());
+        source_db.config.public_custom_data = Some(source_vd);
+
+        let merge_log = destination_db.merge(&source_db).unwrap();
+
+        assert!(merge_log.warnings.is_empty());
+        let merged = destination_db.config.public_custom_data.unwrap();
+        assert_eq!(merged.get::<String>("only_in_source").unwrap(), "value");
     }
 }
