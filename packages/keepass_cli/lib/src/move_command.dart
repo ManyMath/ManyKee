@@ -24,26 +24,32 @@ class MoveCommand extends BaseCommand {
       String type = '';
       String name = '';
 
-      // Try as group
+      // Resolve which kind of object this UUID refers to first, so a real
+      // failure from .move() itself isn't misreported as "not found" by
+      // falling through to the entry branch.
+      String? resolvedType;
+      final group = Group(db, uuid);
       try {
-        final group = Group(db, uuid);
-        name = group.name; // This will throw if it's not a valid group UUID
-        group.move(targetParentUuid);
-        moved = true;
-        type = 'group';
-      } catch (e) {
-        // Not a group, try as entry
+        name = group.name; // Throws if not a valid group UUID.
+        resolvedType = 'group';
+      } catch (_) {
+        final entry = Entry(db, uuid);
         try {
-          final entry = Entry(db, uuid);
-          name = entry.title ?? 'Untitled'; // This will throw if it's not a valid entry UUID
-          entry.move(targetParentUuid);
-          moved = true;
-          type = 'entry';
-        } catch (e2) {
+          name = entry.title ?? 'Untitled'; // Throws if not a valid entry UUID.
+          resolvedType = 'entry';
+        } catch (_) {
           stderr.writeln('Error: UUID $uuid not found as group or entry');
           exit(1);
         }
       }
+
+      if (resolvedType == 'group') {
+        group.move(targetParentUuid);
+      } else {
+        Entry(db, uuid).move(targetParentUuid);
+      }
+      moved = true;
+      type = resolvedType;
 
       if (moved) {
         saveDatabase(db, dbPath);

@@ -28,26 +28,32 @@ class RmCommand extends BaseCommand {
       String type = '';
       String name = '';
 
-      // Try as group
+      // Resolve which kind of object this UUID refers to first, so a real
+      // failure from .delete() itself (e.g. deleting the root group) isn't
+      // misreported as "not found" by falling through to the entry branch.
+      String? resolvedType;
+      final group = Group(db, uuid);
       try {
-        final group = Group(db, uuid);
-        name = group.name; // This will throw if it's not a valid group UUID
-        group.delete(permanent: permanent);
-        deleted = true;
-        type = 'group';
-      } catch (e) {
-        // Not a group, try as entry
+        name = group.name; // Throws if not a valid group UUID.
+        resolvedType = 'group';
+      } catch (_) {
+        final entry = Entry(db, uuid);
         try {
-          final entry = Entry(db, uuid);
-          name = entry.title ?? 'Untitled'; // This will throw if it's not a valid entry UUID
-          entry.delete(permanent: permanent);
-          deleted = true;
-          type = 'entry';
-        } catch (e2) {
+          name = entry.title ?? 'Untitled'; // Throws if not a valid entry UUID.
+          resolvedType = 'entry';
+        } catch (_) {
           stderr.writeln('Error: UUID $uuid not found as group or entry');
           exit(1);
         }
       }
+
+      if (resolvedType == 'group') {
+        group.delete(permanent: permanent);
+      } else {
+        Entry(db, uuid).delete(permanent: permanent);
+      }
+      deleted = true;
+      type = resolvedType;
 
       if (deleted) {
         saveDatabase(db, dbPath);

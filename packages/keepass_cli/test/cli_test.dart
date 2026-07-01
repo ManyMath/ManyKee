@@ -428,6 +428,53 @@ void main() {
     expect(mergeData['total_changes'], isA<int>());
   });
 
+  test('merge rejects unsupported --keyfile flag', () async {
+    final outputPath = p.join(tempVault.parent.path, 'merged.kdbx');
+    final result = await runCli([
+      'merge',
+      '--db1',
+      tempVault.path,
+      '--db2',
+      mergeVault.path,
+      '--out',
+      outputPath,
+      '--password1',
+      password,
+      '--password2',
+      password,
+      '--keyfile',
+      '/nonexistent.key',
+    ]);
+
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('does not support --keyfile'));
+    expect(File(outputPath).existsSync(), isFalse);
+  });
+
+  test('rm of the root group surfaces the real error instead of "not found"',
+      () async {
+    final infoResult = await runCli(
+        ['info', tempVault.path, '--password', password, '--json']);
+    expect(infoResult.exitCode, 0, reason: infoResult.stderr.toString());
+    final rootUuid =
+        (json.decode(infoResult.stdout as String) as Map<String, dynamic>)
+            ['root_uuid'] as String;
+
+    final result = await runCli([
+      'rm',
+      tempVault.path,
+      '--password',
+      password,
+      rootUuid,
+      '--permanent',
+    ]);
+
+    // The root group is a real, valid group UUID, so the failure must be
+    // .delete()'s own error, not the generic "not found" fallback message.
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, isNot(contains('not found as group or entry')));
+  });
+
   test('invalid password returns error', () async {
     final result =
         await runCli(['info', tempVault.path, '--password', 'wrong-password']);

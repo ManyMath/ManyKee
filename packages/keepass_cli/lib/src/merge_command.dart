@@ -25,6 +25,24 @@ class MergeCommand extends BaseCommand {
     final db2Path = argResults!['db2'] as String;
     final outPath = argResults!['out'] as String;
 
+    // merge only supports password-protected databases (--password1/
+    // --password2 below); --password/--keyfile/--yubikey-slot/
+    // --yubikey-serial are inherited from BaseCommand's shared argParser but
+    // silently ignored by this command, so reject them explicitly instead of
+    // letting a key-file- or YubiKey-protected database fail open with a
+    // confusing decryption error.
+    if (argResults!['password'] != null) {
+      stderr.writeln(
+          'Error: --password is not used by merge; use --password1/--password2 instead.');
+      exit(1);
+    }
+    if (argResults!['keyfile'] != null ||
+        argResults!['yubikey-slot'] != null) {
+      stderr.writeln(
+          'Error: merge does not support --keyfile/--yubikey-slot; only password-protected databases can be merged.');
+      exit(1);
+    }
+
     if (!File(db1Path).existsSync()) {
       stderr.writeln('Error: File not found: $db1Path');
       exit(1);
