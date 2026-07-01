@@ -31,9 +31,17 @@ const methods = {
 self.onmessage = async (e) => {
   const { id, method, params } = e.data;
 
+  if (typeof method !== 'string') {
+    self.postMessage({
+      id,
+      error: { code: 'INVALID_REQUEST', message: `Invalid or missing method: ${method}` }
+    });
+    return;
+  }
+
   const isOpenOp = method.startsWith('open_db');
   if (isOpenOp) {
-    self.postMessage({ type: 'progress', percent: -1 });
+    self.postMessage({ id, type: 'progress', percent: -1 });
   }
 
   try {
@@ -59,7 +67,7 @@ self.onmessage = async (e) => {
     self.postMessage({ id, error });
   } finally {
     if (isOpenOp) {
-      self.postMessage({ type: 'progress', percent: 100 });
+      self.postMessage({ id, type: 'progress', percent: 100 });
     }
   }
 };
