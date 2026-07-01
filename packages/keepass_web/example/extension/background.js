@@ -3,6 +3,9 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id) {
+    return;
+  }
   if (message.action === 'openFullPage') {
     chrome.windows.getCurrent(async (window) => {
       try {
