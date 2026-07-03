@@ -32,7 +32,6 @@ Melos convenience wrappers:
 
 ```bash
 melos run verify:compat:official
-melos run verify:compat:fixtures
 ```
 
 Focused Rust harness:

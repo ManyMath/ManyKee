@@ -20,6 +20,12 @@ scripts:
   build:extension:
     run: bash $MELOS_ROOT_PATH/scripts/build_extension.sh
     description: Build Chrome MV3 extension from Flutter web output
+  verify:compat:official:
+    run: bash $MELOS_ROOT_PATH/scripts/verify_official_compat.sh
+    description: Run the official-tool compatibility workflow (required-mode)
+  verify:compat:parity:
+    run: bash $MELOS_ROOT_PATH/scripts/verify_bidirectional_parity.sh
+    description: Run the bidirectional KeePassXC CLI parity workflow (required-mode)
   test:e2e:
     run: cd $MELOS_ROOT_PATH/packages/keepass_web/example/test/e2e && npm install --silent && npm run test:only
     description: Run Puppeteer E2E tests against Chrome extension (requires build:extension first)
