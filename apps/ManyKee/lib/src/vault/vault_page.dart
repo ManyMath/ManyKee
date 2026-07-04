@@ -53,9 +53,9 @@ class VaultPage extends HookConsumerWidget {
                   mode == MThemeMode.dark ? MThemeMode.light : MThemeMode.dark;
             },
             semanticLabel: 'Toggle theme',
-            child: Text(ref.watch(themeModeProvider) == MThemeMode.dark
-                ? '\u2600'
-                : '\u263e'),
+            child: MIcon(ref.watch(themeModeProvider) == MThemeMode.dark
+                ? MIconData.sun
+                : MIconData.moon),
           ),
           const SizedBox(width: 8),
           MButton(
@@ -201,7 +201,14 @@ class _BackBar extends StatelessWidget {
             variant: MButtonVariant.ghost,
             size: MButtonSize.sm,
             onPressed: onBack,
-            child: const Text('‹ Back'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                MIcon(MIconData.chevronLeft, size: 14),
+                const SizedBox(width: 4),
+                const Text('Back'),
+              ],
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(

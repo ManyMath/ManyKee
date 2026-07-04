@@ -96,13 +96,15 @@ class _GroupRow extends StatelessWidget {
               onTap: onToggle,
               child: SizedBox(
                 width: 20,
-                child: Text(
-                  onToggle == null ? '' : (expanded ? '▾' : '▸'),
-                  style: theme.typography.bodySmall.copyWith(
-                    color: theme.colors.mutedForeground,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                child: onToggle == null
+                    ? null
+                    : Center(
+                        child: MIcon(
+                          expanded ? MIconData.chevronDown : MIconData.chevronRight,
+                          size: 14,
+                          color: theme.colors.mutedForeground,
+                        ),
+                      ),
               ),
             ),
             Expanded(
