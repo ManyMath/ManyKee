@@ -1,3 +1,6 @@
+use std::sync::mpsc;
+use std::time::Duration;
+
 use challenge_response::{
     config::{Config, Mode, Slot},
     ChallengeResponse,
@@ -8,6 +11,9 @@ use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::key::KeyElement;
+
+/// KeePassXC's own default wait for a YubiKey touch response.
+const CHALLENGE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 pub enum ChallengeResponseKey {
@@ -30,22 +36,36 @@ impl ChallengeResponseKey {
                 Ok(response)
             }
             ChallengeResponseKey::YubikeyChallenge(yubikey, slot_number) => {
-                let mut challenge_response_client = ChallengeResponse::new()?;
                 let slot = Slot::from_str(slot_number)
                     .ok_or(ChallengeResponseKeyError::InvalidSlot(slot_number.to_string()))?;
+                let serial_number = yubikey.serial_number;
+                let challenge = challenge.to_vec();
 
-                let device = challenge_response_client.find_device_from_serial(yubikey.serial_number)?;
+                // `challenge_response_hmac` blocks on a raw HID poll loop with
+                // no internal timeout: if the key is never touched (or the
+                // sandbox silently drops the USB read) it hangs forever. Run
+                // it on its own thread and give up after a bounded wait so
+                // the caller always gets a response.
+                let (tx, rx) = mpsc::channel();
+                std::thread::spawn(move || {
+                    let result = (|| {
+                        let mut challenge_response_client = ChallengeResponse::new()?;
+                        let device = challenge_response_client.find_device_from_serial(serial_number)?;
 
-                let mut config = Config::new_from(device);
-                config = config.set_variable_size(true);
-                config = config.set_mode(Mode::Sha1);
-                config = config.set_slot(slot);
+                        let mut config = Config::new_from(device);
+                        config = config.set_variable_size(true);
+                        config = config.set_mode(Mode::Sha1);
+                        config = config.set_slot(slot);
 
-                let key_element = challenge_response_client
-                    .challenge_response_hmac(challenge, config)?
-                    .to_vec();
+                        Ok(challenge_response_client
+                            .challenge_response_hmac(&challenge, config)?
+                            .to_vec())
+                    })();
+                    let _ = tx.send(result);
+                });
 
-                Ok(key_element)
+                rx.recv_timeout(CHALLENGE_RESPONSE_TIMEOUT)
+                    .map_err(|_| ChallengeResponseKeyError::Timeout)?
             }
         }
     }
@@ -114,4 +134,7 @@ pub enum ChallengeResponseKeyError {
 
     #[error("Challenge-response authentication was not performed")]
     NotPerformed,
+
+    #[error("Timed out waiting for the YubiKey (did you forget to touch it?)")]
+    Timeout,
 }

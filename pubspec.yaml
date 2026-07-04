@@ -13,3 +13,11 @@ workspace:
   - packages/keepass_flutter/example
   - apps/web
   - apps/native
+  - apps/ManyKee
+
+# The ManyKee app (apps/ManyKee) builds on the manyui library, developed in
+# lockstep from a sibling checkout (../ManyUI). manyui is not yet published,
+# so its packages' hosted self-references are overridden to the sibling paths.
+dependency_overrides:
+  manyui:
+    path: ../ManyUI/manyui
