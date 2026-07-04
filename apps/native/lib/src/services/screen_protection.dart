@@ -6,10 +6,12 @@ import 'package:flutter/services.dart';
 /// unlocked, so an unlocked vault never appears in the app switcher,
 /// screenshots, or screen recordings.
 ///
-/// Backed by `MainActivity.kt` (Android, `FLAG_SECURE`) and
-/// `AppDelegate.swift` (iOS/macOS, obscuring overlay on resign-active).
-/// A no-op on platforms without a native handler (desktop Linux/Windows,
-/// tests).
+/// Backed by `MainActivity.kt` (Android, `FLAG_SECURE`),
+/// `AppDelegate.swift` (iOS/macOS, obscuring overlay on resign-active), and
+/// `flutter_window.cpp` (Windows, `SetWindowDisplayAffinity` with
+/// `WDA_EXCLUDEFROMCAPTURE`). A no-op on platforms without a native handler
+/// (Linux, no universal per-window capture-exclusion API across X11/Wayland
+/// compositors, and tests).
 class ScreenProtection {
   ScreenProtection._();
 
@@ -17,7 +19,10 @@ class ScreenProtection {
       MethodChannel('com.manykee.native/screen_protection');
 
   static bool get _isSupportedPlatform =>
-      Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+      Platform.isAndroid ||
+      Platform.isIOS ||
+      Platform.isMacOS ||
+      Platform.isWindows;
 
   static Future<void> setSecure(bool enabled) async {
     if (!_isSupportedPlatform) return;

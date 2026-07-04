@@ -4,6 +4,14 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+#ifndef WDA_EXCLUDEFROMCAPTURE
+// Defined in winuser.h starting with the Windows 10 2004 (10.0.19041.0) SDK;
+// redefine here so this builds against older SDKs too. SetWindowDisplayAffinity
+// itself is a no-op returning FALSE on Windows versions that don't support this
+// value, so no runtime OS check is needed beyond that return-value check.
+#define WDA_EXCLUDEFROMCAPTURE 0x00000011
+#endif
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -26,6 +34,7 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+  RegisterScreenProtectionChannel();
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
@@ -68,4 +77,37 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
+}
+
+void FlutterWindow::RegisterScreenProtectionChannel() {
+  screen_protection_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "com.manykee.native/screen_protection",
+          &flutter::StandardMethodCodec::GetDefault());
+
+  screen_protection_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name().compare("setSecure") != 0) {
+          result->NotImplemented();
+          return;
+        }
+
+        bool enabled = false;
+        if (const auto* arguments =
+                std::get_if<flutter::EncodableMap>(call.arguments())) {
+          auto it = arguments->find(flutter::EncodableValue("enabled"));
+          if (it != arguments->end()) {
+            if (const auto* value = std::get_if<bool>(&it->second)) {
+              enabled = *value;
+            }
+          }
+        }
+
+        SetWindowDisplayAffinity(
+            GetHandle(), enabled ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE);
+        result->Success();
+      });
 }
