@@ -380,6 +380,7 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
     }
 
     return ListView.builder(
+      key: const Key('searchResultsList'),
       itemCount: results.length,
       itemBuilder: (context, index) {
         final entry = results[index];

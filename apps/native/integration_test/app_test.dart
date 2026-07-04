@@ -118,6 +118,34 @@ Finder _searchField() => find.byWidgetPredicate(
       description: 'search field',
     );
 
+/// Reads the plaintext value a `CopyButton` with the given [tooltip] would
+/// copy, by reading the widget's own `value` field directly instead of
+/// guessing at sibling `Text` widgets via ancestor/descendant traversal --
+/// both the entry list tile and the entry detail panel render their own
+/// "Copy username" button (`entry_list.dart`, `entry_detail.dart`), so
+/// `find.byTooltip('Copy username')` isn't guaranteed to match only one
+/// widget, and its nearest containing `Row` differs in shape between the
+/// two call sites (list tile: avatar + title/username column + two copy
+/// buttons; detail panel: just the value + one copy button). Both render
+/// the same underlying entry field though, so reading whichever matching
+/// `CopyButton`'s `value` is available is unambiguous.
+String _copyButtonValue(WidgetTester tester, String tooltip) {
+  final buttons = tester.widgetList<CopyButton>(
+    find.byWidgetPredicate(
+      (widget) => widget is CopyButton && widget.tooltip == tooltip,
+    ),
+  );
+  return buttons
+      .map((button) => button.value ?? '')
+      .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+}
+
+/// Reads the plaintext username currently shown for the selected entry, so a
+/// copy-to-clipboard test can assert against the actual value the UI
+/// displayed rather than merely "clipboard is non-empty".
+String _displayedUsername(WidgetTester tester) =>
+    _copyButtonValue(tester, 'Copy username');
+
 Future<void> _tapControl(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.tap(finder);
@@ -547,12 +575,20 @@ void main() {
       );
       expect(usernameFound, isTrue);
 
+      final expectedUsername = _displayedUsername(tester);
+
       await tester.tap(find.byTooltip('Copy username').first);
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       final data = await Clipboard.getData('text/plain');
       expect(data?.text, isNotNull);
       expect(data!.text, isNotEmpty);
+      expect(
+        data.text,
+        expectedUsername,
+        reason: 'Copied text should be the username actually shown in the '
+            'detail panel, not some other field',
+      );
       expect(find.text('Copied to clipboard (clears in 30s)'), findsOneWidget);
     });
   });
@@ -567,9 +603,6 @@ void main() {
       // VaultSearchBar renders a TextField with hint 'Search entries...'.
       final searchField = _searchField();
       if (searchField.evaluate().isNotEmpty) {
-        // Count entries before search.
-        final beforeCount = find.byType(CircleAvatar).evaluate().length;
-
         // Focus the actual search TextField rather than its hint text.
         await _tapControl(tester, searchField.first);
         await tester.pumpAndSettle();
@@ -580,13 +613,49 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         await tester.pumpAndSettle(const Duration(seconds: 3));
 
-        // Search should either change entry count or show empty state.
-        final afterCount = find.byType(CircleAvatar).evaluate().length;
-        final hasEmptyState = find.text('No entries').evaluate().isNotEmpty ||
-            find.text('No matches').evaluate().isNotEmpty;
-        final searchChanged = afterCount != beforeCount || hasEmptyState;
-        expect(searchChanged, isTrue,
-            reason: 'Search should filter entries or show no matches');
+        // Once a query is active, VaultScreen._buildEntryListPanel swaps to
+        // an entirely different widget (a plain ListView keyed
+        // 'searchResultsList', not EntryList) -- CircleAvatar/CopyButton
+        // don't exist in that tree at all, so this test has to scope
+        // against that widget instead, not EntryList. Note search is
+        // database-wide, not scoped to the currently selected group, so
+        // its result count isn't bounded by what that one group showed
+        // before the query -- only content is worth asserting on here.
+        final searchResultsList = find.byKey(const Key('searchResultsList'));
+        final afterRows = find
+            .descendant(of: searchResultsList, matching: find.byType(InkWell))
+            .evaluate();
+        final hasEmptyState = find.text('No matches').evaluate().isNotEmpty;
+
+        // Search should either narrow the list to entries that actually
+        // match the query, or show an explicit no-matches state -- a search
+        // that silently ignores the query and re-renders the same list must
+        // fail here even if the count happens to differ.
+        if (hasEmptyState) {
+          expect(searchResultsList.evaluate(), isEmpty,
+              reason: 'A no-matches state should mean the search results '
+                  'list is not rendered at all');
+        } else {
+          expect(afterRows, isNotEmpty,
+              reason: 'Search should filter entries or show no matches');
+
+          // Verify the remaining results actually match the query, rather
+          // than the list just happening to show unrelated entries.
+          final visibleText = tester
+              .widgetList<Text>(find.descendant(
+                of: searchResultsList,
+                matching: find.byType(Text),
+              ))
+              .map((text) => text.data ?? '')
+              .join(' ')
+              .toLowerCase();
+          expect(
+            visibleText.contains('test'),
+            isTrue,
+            reason: 'Visible search results "$visibleText" should match '
+                'query "test"',
+          );
+        }
       } else {
         debugPrint('Search field not found -- search test inconclusive');
       }
@@ -1191,9 +1260,19 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
 
+      final expectedUsername = _displayedUsername(tester);
+
       await _tapControl(tester, find.byTooltip('Copy username').first);
       await tester.pumpAndSettle();
       expect(find.text('Copied to clipboard (clears in 10s)'), findsOneWidget);
+
+      final data = await Clipboard.getData('text/plain');
+      expect(
+        data?.text,
+        expectedUsername,
+        reason: 'Copied text should be the username actually shown in the '
+            'detail panel, not some other field',
+      );
 
       final reloadedSettings = SettingsState();
       await reloadedSettings.init();
