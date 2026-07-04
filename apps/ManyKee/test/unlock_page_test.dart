@@ -158,6 +158,12 @@ void main() {
     expect(state.isLocked, isTrue);
   });
 
+  testWidgets('unlock page exposes a merge-databases entry point',
+      (tester) async {
+    await tester.pumpWidget(appWith(FakeVaultState()));
+    expect(find.text('Merge databases…'), findsOneWidget);
+  });
+
   testWidgets('successful unlock opens the vault browser', (tester) async {
     final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
     await tester.pumpWidget(appWith(state));

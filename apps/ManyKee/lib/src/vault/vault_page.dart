@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 
+import '../merge/merge_page.dart';
 import '../state/vault_state_provider.dart';
 import '../theme.dart';
 import 'entry_detail.dart';
@@ -45,6 +46,13 @@ class VaultPage extends HookConsumerWidget {
             ),
           ],
           const Spacer(),
+          MButton(
+            variant: MButtonVariant.ghost,
+            onPressed: () => showMergeDatabasesPage(context),
+            semanticLabel: 'Merge databases',
+            child: const Text('Merge databases…'),
+          ),
+          const SizedBox(width: 8),
           MButton(
             variant: MButtonVariant.ghost,
             onPressed: () {
