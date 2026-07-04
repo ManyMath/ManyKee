@@ -6,8 +6,28 @@ Pod::Spec.new do |s|
   s.license          = { :type => 'MIT' }
   s.author           = { 'ManyKee' => 'dev@manykee.com' }
   s.source           = { :path => '.' }
+  s.source_files     = 'Classes/**/*'
   s.dependency 'Flutter'
+
+  # Build the keepass_flutter_native Rust crate (static lib) via cargokit
+  # and force-link it into the plugin framework. Mirrors the proven pattern
+  # in pose_detector/packages/pose_flutter and soundboard's sound/microphone
+  # plugins -- keeps cargokit itself unmodified.
+  s.script_phase = {
+    :name => 'Build keepass_flutter_native',
+    :script => 'sh "$PODS_TARGET_SRCROOT/../cargokit/build_pod.sh" ../rust keepass_flutter_native',
+    :execution_position => :before_compile,
+    :input_files => ['${BUILT_PRODUCTS_DIR}/cargokit_phony'],
+    :output_files => ['${BUILT_PRODUCTS_DIR}/libkeepass_flutter_native.a'],
+  }
+
   s.platform = :ios, '12.0'
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+
+  # Flutter.framework does not contain a i386 slice.
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
+    'OTHER_LDFLAGS' => '-force_load ${BUILT_PRODUCTS_DIR}/libkeepass_flutter_native.a',
+  }
   s.swift_version = '5.0'
 end

@@ -75,6 +75,19 @@ DynamicLibrary _loadLibrary() {
     }
   }
 
+  // macOS/iOS force-load the static lib directly into the app/plugin
+  // framework binary (see macos/ios keepass_flutter.podspec's
+  // OTHER_LDFLAGS), so no standalone .dylib is ever produced there --
+  // the symbols are already resident in the running process image.
+  if (Platform.isMacOS || Platform.isIOS) {
+    try {
+      return DynamicLibrary.process();
+    } catch (error) {
+      attempted.add('<process image>');
+      lastError = error;
+    }
+  }
+
   throw ArgumentError(
     'Failed to load native library. Tried: ${libraryFileNames.join(', ')}\n'
     'Resolved executable: ${Platform.resolvedExecutable}\n'
