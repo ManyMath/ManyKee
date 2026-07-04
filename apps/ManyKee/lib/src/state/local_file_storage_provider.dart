@@ -1,0 +1,82 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:keepass_ui/keepass_ui.dart';
+
+/// [StorageProvider] backed by a plain filesystem path (desktop/mobile).
+class LocalFileStorageProvider implements StorageProvider {
+  LocalFileStorageProvider({String? initialPath}) : _currentPath = initialPath;
+
+  String? _currentPath;
+
+  String? get currentPath => _currentPath;
+
+  void rememberPath(String? path) {
+    _currentPath = path;
+  }
+
+  @override
+  Future<List<StorageItem>> list() async {
+    final path = _currentPath;
+    if (path == null) {
+      return const <StorageItem>[];
+    }
+
+    final file = File(path);
+    if (!await file.exists()) {
+      return const <StorageItem>[];
+    }
+
+    final stat = await file.stat();
+    return <StorageItem>[
+      StorageItem(
+        name: file.uri.pathSegments.isEmpty ? path : file.uri.pathSegments.last,
+        lastModified: stat.modified,
+        path: path,
+      ),
+    ];
+  }
+
+  @override
+  Future<StorageOpenResult> open() async {
+    final path = _currentPath;
+    if (path == null) {
+      throw const StorageProviderUnavailableError('No file selected');
+    }
+
+    try {
+      final bytes = await File(path).readAsBytes();
+      final name = File(path).uri.pathSegments.isEmpty
+          ? path
+          : File(path).uri.pathSegments.last;
+      return StorageOpenResult(bytes: bytes, name: name);
+    } on FileSystemException catch (error) {
+      throw _mapFileError(error);
+    }
+  }
+
+  @override
+  Future<void> save(Uint8List bytes, {required String name}) async {
+    final path = _currentPath;
+    if (path == null) {
+      throw const StorageNotFoundError('No file path is available for save');
+    }
+
+    try {
+      await File(path).writeAsBytes(bytes, flush: true);
+    } on FileSystemException catch (error) {
+      throw _mapFileError(error);
+    }
+  }
+
+  StorageError _mapFileError(FileSystemException error) {
+    final message = error.message.toLowerCase();
+    if (message.contains('permission') || message.contains('denied')) {
+      return StoragePermissionDeniedError(error.message);
+    }
+    if (message.contains('not found') || message.contains('no such file')) {
+      return StorageNotFoundError(error.message);
+    }
+    return StorageProviderUnavailableError(error.message);
+  }
+}

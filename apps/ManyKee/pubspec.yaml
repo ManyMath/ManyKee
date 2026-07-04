@@ -1,0 +1,37 @@
+name: manykee
+description: ManyKee, a cross-platform KeePass client built on manyui.
+publish_to: none
+resolution: workspace
+version: 0.1.0
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.38.0"
+
+dependencies:
+  file_picker: ^10.2.0
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.0
+  flutter_hooks: ^0.20.5
+  hooks_riverpod: ^2.5.0
+  keepass:
+    path: ../../packages/keepass
+  keepass_flutter:
+    path: ../../packages/keepass_flutter
+  keepass_ui:
+    path: ../../packages/keepass_ui
+  manyui:
+    path: ../../../ManyUI/manyui
+  manyui_hooks:
+    path: ../../../ManyUI/manyui_hooks
+  manyui_riverpod:
+    path: ../../../ManyUI/manyui_riverpod
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: false
