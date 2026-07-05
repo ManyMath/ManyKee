@@ -29,6 +29,7 @@ class VaultPage extends HookConsumerWidget {
     final narrowPane = useState(_NarrowPane.groups);
 
     final filename = vault.lastFilename;
+    final currentFilePath = vault.lastFilePath;
 
     return MScaffold(
       header: Row(
@@ -48,7 +49,12 @@ class VaultPage extends HookConsumerWidget {
           const Spacer(),
           MButton(
             variant: MButtonVariant.ghost,
-            onPressed: () => showMergeDatabasesPage(context),
+            onPressed: currentFilePath == null
+                ? null
+                : () => showMergeDatabasesPage(
+                      context,
+                      currentFilePath: currentFilePath,
+                    ),
             semanticLabel: 'Merge databases',
             child: const Text('Merge databases…'),
           ),

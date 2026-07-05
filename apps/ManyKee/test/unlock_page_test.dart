@@ -158,10 +158,12 @@ void main() {
     expect(state.isLocked, isTrue);
   });
 
-  testWidgets('unlock page exposes a merge-databases entry point',
+  testWidgets(
+      'unlock page does NOT expose a merge-databases entry point '
+      '(gated to an already-open vault, see vault_page_test.dart)',
       (tester) async {
     await tester.pumpWidget(appWith(FakeVaultState()));
-    expect(find.text('Merge databases…'), findsOneWidget);
+    expect(find.text('Merge databases…'), findsNothing);
   });
 
   testWidgets('successful unlock opens the vault browser', (tester) async {

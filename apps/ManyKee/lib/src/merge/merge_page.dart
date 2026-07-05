@@ -9,13 +9,21 @@ import 'merge_service.dart';
 
 /// Pushes [MergeDatabasesPage] onto the navigator.
 ///
-/// Reachable from the unlock page: deliberately *not* gated behind an
-/// already-open vault, since merging is a standalone operation over two
-/// source databases the current vault (if any) isn't involved in.
-Future<void> showMergeDatabasesPage(BuildContext context) {
+/// Gated to an already-open vault: only reachable from `vault_page.dart`,
+/// never from the unlock page. [currentFilePath] is the currently-open
+/// vault's file, the merge always uses it as database A (re-proved via
+/// its own independent password entry, not silently trusted), and only
+/// prompts the user to pick database B (a divergent copy of the same
+/// database, e.g. synced from another device, see `preview()`'s
+/// doc comment on what the Rust merge engine actually supports).
+Future<void> showMergeDatabasesPage(
+  BuildContext context, {
+  required String currentFilePath,
+}) {
   return Navigator.of(context).push(
     PageRouteBuilder<void>(
-      pageBuilder: (context, _, __) => const MergeDatabasesPage(),
+      pageBuilder: (context, _, __) =>
+          MergeDatabasesPage(currentFilePath: currentFilePath),
     ),
   );
 }
@@ -26,8 +34,10 @@ enum _MergeStep { openA, openB, confirm, done }
 ///
 /// Required safety shape (see ROADMAP.md's ManyKee "Merge-databases UI"
 /// item, do not simplify away any of these steps):
-///  1. Open source database A through a full unlock (password/keyfile) and
-///     reject the whole operation if it fails to open/decrypt.
+///  1. Open source database A (the currently-open vault's own file) through
+///     a full independent unlock and reject the whole operation if it fails
+///     to open/decrypt: never trust the already-open vault's in-memory
+///     state as proof the file on disk still opens.
 ///  2. Do the same for source database B, independently.
 ///  3. Only once both are confirmed openable, show a merge preview (counts
 ///     from the `MergeResult` the Rust layer returns) and require explicit
@@ -36,7 +46,9 @@ enum _MergeStep { openA, openB, confirm, done }
 ///     picks, since `saveDatabase`/in-place editing isn't implemented yet
 ///     (see `ManyKeeVaultState`).
 class MergeDatabasesPage extends HookConsumerWidget {
-  const MergeDatabasesPage({super.key});
+  const MergeDatabasesPage({super.key, required this.currentFilePath});
+
+  final String currentFilePath;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -78,10 +90,13 @@ class MergeDatabasesPage extends HookConsumerWidget {
                 padding: const EdgeInsets.all(24),
                 child: switch (step.value) {
                   _MergeStep.openA => _OpenSourceStep(
-                      label: 'A',
+                      label: 'A (your open vault)',
                       description:
-                          'Choose the first database. It must open on its '
-                          'own before anything else happens.',
+                          'This is the vault you currently have open, at '
+                          '$currentFilePath. Enter its password again to '
+                          'independently prove it still opens before '
+                          'anything else happens.',
+                      fixedFilePath: currentFilePath,
                       onOpened: (filePath, password) async {
                         errorMessage.value = null;
                         try {
@@ -97,9 +112,13 @@ class MergeDatabasesPage extends HookConsumerWidget {
                   _MergeStep.openB => _OpenSourceStep(
                       label: 'B',
                       description:
-                          'Choose the second database. It must also open on '
-                          'its own, independently of database A, before '
-                          'the merge preview is shown.',
+                          'Choose the other copy of this database (e.g. '
+                          'synced from another device). It must also open '
+                          'on its own, independently of database A, '
+                          'before the merge preview is shown. The merge '
+                          'engine can only merge divergent copies of the '
+                          'same original database, not two unrelated '
+                          'databases.',
                       onOpened: (filePath, password) async {
                         errorMessage.value = null;
                         try {
@@ -145,17 +164,22 @@ class _OpenSourceStep extends HookWidget {
     required this.label,
     required this.description,
     required this.onOpened,
+    this.fixedFilePath,
   });
 
   final String label;
   final String description;
   final Future<void> Function(String filePath, String password) onOpened;
 
+  /// When set, this step uses this exact file (no picker shown), used for
+  /// database A, which is always the currently-open vault's own file.
+  final String? fixedFilePath;
+
   @override
   Widget build(BuildContext context) {
     final theme = MTheme.of(context);
-    final filePath = useState<String?>(null);
-    final filename = useState<String?>(null);
+    final filePath = useState<String?>(fixedFilePath);
+    final filename = useState<String?>(fixedFilePath);
     final password = useState('');
     final passwordController = useMemoized(() => MController<String>(''));
     useEffect(() => passwordController.dispose, <Object?>[passwordController]);
@@ -203,14 +227,17 @@ class _OpenSourceStep extends HookWidget {
         const SizedBox(height: 24),
         MLabel('Database $label'),
         const SizedBox(height: 8),
-        MButton(
-          variant: MButtonVariant.outline,
-          onPressed: opening.value ? null : pickDatabase,
-          child: Text(
-            filename.value ?? 'Choose file…',
-            overflow: TextOverflow.ellipsis,
+        if (fixedFilePath != null)
+          Text(fixedFilePath!, overflow: TextOverflow.ellipsis)
+        else
+          MButton(
+            variant: MButtonVariant.outline,
+            onPressed: opening.value ? null : pickDatabase,
+            child: Text(
+              filename.value ?? 'Choose file…',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
         const SizedBox(height: 16),
         const MLabel('Master password'),
         const SizedBox(height: 8),
