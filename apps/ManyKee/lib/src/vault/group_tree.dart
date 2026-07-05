@@ -30,12 +30,13 @@ class GroupTree extends HookWidget {
 
     final rows = <Widget>[];
     void addGroup(VaultGroup group, int depth) {
-      rows.add(_GroupRow(
-        group: group,
+      rows.add(MTreeListTile(
+        title: Text(group.name, overflow: TextOverflow.ellipsis),
         depth: depth,
         selected: group.uuid == selectedUuid,
         expanded: !collapsed.value.contains(group.uuid),
-        onSelect: () => onSelect(group),
+        semanticLabel: group.name,
+        onTap: () => onSelect(group),
         onToggle: group.children.isEmpty ? null : () => toggle(group.uuid),
       ));
       if (!collapsed.value.contains(group.uuid)) {
@@ -52,71 +53,6 @@ class GroupTree extends HookWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: rows,
-    );
-  }
-}
-
-class _GroupRow extends StatelessWidget {
-  const _GroupRow({
-    required this.group,
-    required this.depth,
-    required this.selected,
-    required this.expanded,
-    required this.onSelect,
-    required this.onToggle,
-  });
-
-  final VaultGroup group;
-  final int depth;
-  final bool selected;
-  final bool expanded;
-  final VoidCallback onSelect;
-  final VoidCallback? onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-    final foreground =
-        selected ? theme.colors.accentForeground : theme.colors.foreground;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onSelect,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-        padding: EdgeInsets.only(left: 8.0 + depth * 16, top: 6, bottom: 6),
-        decoration: BoxDecoration(
-          color: selected ? theme.colors.accent : null,
-          borderRadius: BorderRadius.circular(theme.radius),
-        ),
-        child: Row(
-          children: <Widget>[
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onToggle,
-              child: SizedBox(
-                width: 20,
-                child: onToggle == null
-                    ? null
-                    : Center(
-                        child: MIcon(
-                          expanded ? MIconData.chevronDown : MIconData.chevronRight,
-                          size: 14,
-                          color: theme.colors.mutedForeground,
-                        ),
-                      ),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                group.name,
-                style: theme.typography.body.copyWith(color: foreground),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -35,39 +35,16 @@ class EntryList extends StatelessWidget {
       itemBuilder: (context, index) {
         final entry = entries[index];
         final selected = entry.uuid == selectedUuid;
-        final foreground =
-            selected ? theme.colors.accentForeground : theme.colors.foreground;
-        final muted = selected
-            ? theme.colors.accentForeground
-            : theme.colors.mutedForeground;
+        final title = entry.title.isEmpty ? '(untitled)' : entry.title;
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        return MListTile(
+          title: Text(title, overflow: TextOverflow.ellipsis),
+          subtitle: entry.username.isNotEmpty
+              ? Text(entry.username, overflow: TextOverflow.ellipsis)
+              : null,
+          selected: selected,
           onTap: () => onSelect(entry),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: selected ? theme.colors.accent : null,
-              borderRadius: BorderRadius.circular(theme.radius),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  entry.title.isEmpty ? '(untitled)' : entry.title,
-                  style: theme.typography.body.copyWith(color: foreground),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (entry.username.isNotEmpty)
-                  Text(
-                    entry.username,
-                    style: theme.typography.bodySmall.copyWith(color: muted),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-          ),
+          semanticLabel: title,
         );
       },
     );
