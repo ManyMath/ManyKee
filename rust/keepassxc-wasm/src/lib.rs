@@ -11,7 +11,7 @@ use keepassxc::{
     read_entry_field as read_entry_field_value, read_entry_fields as read_entry_payload,
     read_entry_totp_at, rename_group as rename_group_in_db, save_bytes,
     serialization::{EntryFields, EntryInfo, GroupInfo, MergeInfo, TotpInfo},
-    update_entry, Database, Entry, EntryExt, EntryFieldExt, GroupExt,
+    update_entry, Database, DatabaseConfig, Entry, EntryExt, EntryFieldExt, GroupExt,
 };
 use serde_json::json;
 use wasm_bindgen::prelude::*;
@@ -136,6 +136,15 @@ fn parse_uuid(uuid_str: &str, kind: &str) -> Result<uuid::Uuid, JsValue> {
 #[wasm_bindgen]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[wasm_bindgen]
+pub fn create_db() -> Result<String, JsValue> {
+    catch_unwind_result(|| {
+        let db = Database::new(DatabaseConfig::default());
+        let handle = store_database(db)?;
+        Ok(json!({"handle": handle}).to_string())
+    })
 }
 
 #[wasm_bindgen]

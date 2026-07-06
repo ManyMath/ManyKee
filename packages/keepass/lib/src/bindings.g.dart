@@ -66,6 +66,24 @@ class KeePassXcFfiBindings {
       ffi.Pointer<KpxcDatabase> Function(
           ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// Create a new, empty KDBX4 database in memory (not yet saved to disk).
+  /// Mirrors the sensible-defaults `DatabaseConfig` (`keepass-rs`'s own
+  /// `Default` impl: KDBX4, AES256 outer cipher, ChaCha20 inner cipher,
+  /// Argon2 KDF) that `kpxc_database_save`'s own test coverage already
+  /// exercises -- this just exposes the same `Database::new` construction
+  /// as a public FFI entry point so a caller can create, then save, a fresh
+  /// database via the existing `kpxc_database_save`/`_with_keyfile`
+  /// functions rather than needing a template file to open first.
+  ffi.Pointer<KpxcDatabase> kpxc_database_create() {
+    return _kpxc_database_create();
+  }
+
+  late final _kpxc_database_createPtr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<KpxcDatabase> Function()>>(
+          'kpxc_database_create');
+  late final _kpxc_database_create = _kpxc_database_createPtr
+      .asFunction<ffi.Pointer<KpxcDatabase> Function()>();
+
   ffi.Pointer<KpxcDatabase> kpxc_database_open_with_keyfile(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -132,11 +150,8 @@ class KeePassXcFfiBindings {
               ffi.Pointer<ffi.Char>)>>('kpxc_database_save_with_keyfile');
   late final _kpxc_database_save_with_keyfile =
       _kpxc_database_save_with_keyfilePtr.asFunction<
-          int Function(
-              ffi.Pointer<KpxcDatabase>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>)>();
+          int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
   void kpxc_database_free(
     ffi.Pointer<KpxcDatabase> db,
@@ -573,3 +588,7 @@ const int KPXC_ERR_YUBIKEY = -6;
 const int KPXC_ERR_NULL_PTR = -7;
 
 const int KPXC_ERR_INVALID_UTF8 = -8;
+
+const int KPXC_ERR_PARSE = -9;
+
+const int KPXC_ERR_PANIC = -10;

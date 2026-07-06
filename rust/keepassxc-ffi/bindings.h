@@ -34,6 +34,18 @@
 
  struct KpxcDatabase *kpxc_database_open(const char *path, const char *password) ;
 
+/**
+ * Create a new, empty KDBX4 database in memory (not yet saved to disk).
+ * Mirrors the sensible-defaults `DatabaseConfig` (`keepass-rs`'s own
+ * `Default` impl: KDBX4, AES256 outer cipher, ChaCha20 inner cipher,
+ * Argon2 KDF) that `kpxc_database_save`'s own test coverage already
+ * exercises -- this just exposes the same `Database::new` construction
+ * as a public FFI entry point so a caller can create, then save, a fresh
+ * database via the existing `kpxc_database_save`/`_with_keyfile`
+ * functions rather than needing a template file to open first.
+ */
+ struct KpxcDatabase *kpxc_database_create(void) ;
+
 
 struct KpxcDatabase *kpxc_database_open_with_keyfile(const char *path,
                                                      const char *password,

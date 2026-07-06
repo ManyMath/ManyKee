@@ -7,6 +7,7 @@ async function initialize() {
 
 const methods = {
   'version': (params) => wasm.version(),
+  'create_db': (params) => wasm.create_db(),
   'open_db': (params) => wasm.open_db(params[0], params[1], params[2] || undefined),
   'open_db_with_challenge_response':(params) => wasm.open_db_with_challenge_response(params[0], params[1], params[2]),
   'close_db': (params) => { wasm.close_db(params[0]); return '{}'; },

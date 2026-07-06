@@ -80,4 +80,35 @@ void main() {
       db.close();
     }
   });
+
+  test('Database.create returns a fresh, empty, saveable database', () {
+    final db = Database.create();
+    try {
+      final root = db.rootGroup;
+      expect(root.uuid, isNotEmpty);
+      expect(root.groups, isEmpty);
+      expect(root.entries, isEmpty);
+
+      final bytes = db.saveBytes(password: 'a-new-password');
+      final reopenPath =
+          '${Directory.systemTemp.path}/manykee_test_created.kdbx';
+      File(reopenPath).writeAsBytesSync(bytes);
+      try {
+        final reopened =
+            Database.open(reopenPath, password: 'a-new-password');
+        try {
+          expect(reopened.rootGroup.uuid, root.uuid);
+        } finally {
+          reopened.close();
+        }
+      } finally {
+        final f = File(reopenPath);
+        if (f.existsSync()) {
+          f.deleteSync();
+        }
+      }
+    } finally {
+      db.close();
+    }
+  });
 }

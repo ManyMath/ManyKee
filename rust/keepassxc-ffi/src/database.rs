@@ -4,7 +4,7 @@ use std::ffi::{c_char, c_int, CString};
 use std::fs::File;
 use std::path::Path;
 
-use keepassxc::{save_atomic, Database, DatabaseKey};
+use keepassxc::{save_atomic, Database, DatabaseConfig, DatabaseKey};
 
 use crate::error::{
     check_live_db, check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
@@ -51,6 +51,22 @@ pub extern "C" fn kpxc_database_open(
                 std::ptr::null_mut()
             }
         }
+    })
+}
+
+/// Create a new, empty KDBX4 database in memory (not yet saved to disk).
+/// Mirrors the sensible-defaults `DatabaseConfig` (`keepass-rs`'s own
+/// `Default` impl: KDBX4, AES256 outer cipher, ChaCha20 inner cipher,
+/// Argon2 KDF) that `kpxc_database_save`'s own test coverage already
+/// exercises -- this just exposes the same `Database::new` construction
+/// as a public FFI entry point so a caller can create, then save, a fresh
+/// database via the existing `kpxc_database_save`/`_with_keyfile`
+/// functions rather than needing a template file to open first.
+#[no_mangle]
+pub extern "C" fn kpxc_database_create() -> *mut KpxcDatabase {
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())))
     })
 }
 
@@ -207,6 +223,30 @@ pub extern "C" fn kpxc_database_root_uuid(db: *mut KpxcDatabase) -> *mut c_char 
 mod tests {
     use super::*;
     use keepassxc::DatabaseConfig;
+
+    #[test]
+    fn kpxc_database_create_returns_a_saveable_empty_database() {
+        let db_ptr = kpxc_database_create();
+        assert!(!db_ptr.is_null());
+
+        let path = std::env::temp_dir().join(format!("ffi-create-{}.kdbx", uuid::Uuid::new_v4()));
+        let path_c = CString::new(path.to_string_lossy().as_ref()).unwrap();
+        let password = CString::new("test").unwrap();
+        let result = kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr());
+        assert_eq!(result, KPXC_OK);
+
+        let reopened = Database::open(
+            &mut File::open(&path).unwrap(),
+            DatabaseKey::new().with_password("test"),
+        )
+        .unwrap();
+        assert_eq!(reopened.root.name, "Root");
+        assert!(reopened.root.groups.is_empty());
+        assert!(reopened.root.entries.is_empty());
+        let _ = std::fs::remove_file(&path);
+
+        kpxc_database_free(db_ptr);
+    }
 
     #[test]
     fn database_save_uses_atomic_helper() {

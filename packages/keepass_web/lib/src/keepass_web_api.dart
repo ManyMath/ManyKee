@@ -17,6 +17,13 @@ class KeePassWebApi implements KeePassApi {
   Future<void> init() => _bridge.init();
 
   @override
+  Future<int> createDatabase() async {
+    final result = await _bridge.call('create_db', const []);
+    final json = jsonDecode(result) as Map<String, dynamic>;
+    return json['handle'] as int;
+  }
+
+  @override
   Future<int> openDatabase(List<int> dbBytes,
       {required String password}) async {
     final result = await _bridge.call('open_db', [

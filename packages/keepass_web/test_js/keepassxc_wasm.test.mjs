@@ -48,6 +48,29 @@ describe('keepassxc-wasm JS module', () => {
     expect(v.length).toBeGreaterThan(0);
   });
 
+  test('create_db returns a handle for a fresh empty database', () => {
+    const result = wasm.create_db();
+    const json = JSON.parse(result);
+    expect(json).toHaveProperty('handle');
+    expect(typeof json.handle).toBe('number');
+
+    const groups = JSON.parse(wasm.list_groups(json.handle, ''));
+    expect(groups).toEqual([]);
+
+    wasm.close_db(json.handle);
+  });
+
+  test('create_db output can be saved and reopened', () => {
+    const created = JSON.parse(wasm.create_db());
+    const hex = wasm.save_db(created.handle, 'a-new-password', undefined);
+    wasm.close_db(created.handle);
+
+    const bytes = new Uint8Array(hex.match(/.{1,2}/g).map((b) => parseInt(b, 16)));
+    const reopened = JSON.parse(wasm.open_db(bytes, 'a-new-password', undefined));
+    expect(typeof reopened.handle).toBe('number');
+    wasm.close_db(reopened.handle);
+  });
+
   test('open_db returns a handle for valid KDBX', () => {
     const result = wasm.open_db(new Uint8Array(TEST_DB_AES), 'demopass', undefined);
     const json = JSON.parse(result);

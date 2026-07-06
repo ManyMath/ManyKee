@@ -37,6 +37,17 @@ class Database implements Finalizable {
     return _handle;
   }
 
+  /// Create a new, empty KDBX4 database in memory, not yet saved to disk.
+  /// Call [save]/[saveWithKeyFile] to write it out once the caller has
+  /// picked a destination path and unlock credentials.
+  factory Database.create() {
+    final handle = bindings.kpxc_database_create();
+    if (handle == nullptr) {
+      throw KeePassError.fromLastError('Failed to create database');
+    }
+    return Database._(handle);
+  }
+
   /// Open a KDBX database with a password.
   factory Database.open(String path, {required String password}) {
     final pathPtr = toNativeString(path);

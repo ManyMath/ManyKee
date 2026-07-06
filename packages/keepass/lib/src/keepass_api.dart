@@ -9,6 +9,12 @@ import 'dart:async';
 /// The web implementation communicates with a WASM module via postMessage RPC.
 /// All methods are async because the web path involves Worker message passing.
 abstract class KeePassApi {
+  /// Create a new, empty KDBX4 database in memory (not yet saved anywhere).
+  /// Returns a database handle for subsequent operations -- call
+  /// [saveDatabase] once the caller has picked a destination and unlock
+  /// credentials.
+  Future<int> createDatabase();
+
   /// Open a KDBX database with a password.
   /// Returns a database handle for subsequent operations.
   /// [dbBytes] is the raw KDBX file content.

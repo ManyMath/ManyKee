@@ -234,6 +234,38 @@ void main() {
       await api.dispose();
     }
   });
+
+  test('createDatabase produces an empty database that can be saved and reopened',
+      () async {
+    final api = KeePassNativeApi();
+    final handle = await api.createDatabase();
+
+    try {
+      expect(handle, greaterThan(0));
+      final groups = await api.listGroups(handle, '');
+      expect(groups, isEmpty);
+
+      final entryUuid = await api.createEntry(handle, '');
+      await api.setEntryField(handle, entryUuid, 'Title', 'First entry');
+
+      final savedBytes = await api.saveDatabase(handle, password: 'fresh-pw');
+      final savedFile = await _writeTempDatabase(savedBytes, suffix: '.kdbx');
+      final reopenedHandle = await api.openFromPath(
+        savedFile.path,
+        password: 'fresh-pw',
+      );
+      try {
+        final entries = await api.listEntries(reopenedHandle, '');
+        expect(entries.any((entry) => entry['uuid'] == entryUuid), isTrue);
+      } finally {
+        await api.closeDatabase(reopenedHandle);
+        await savedFile.delete();
+      }
+    } finally {
+      await api.closeDatabase(handle);
+      await api.dispose();
+    }
+  });
 }
 
 String _firstExisting(List<String> candidates) {

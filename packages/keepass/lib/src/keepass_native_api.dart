@@ -26,6 +26,16 @@ class KeePassNativeApi implements KeePassApi {
   }
 
   @override
+  Future<int> createDatabase() async {
+    _progressController.add(-1);
+    try {
+      return await _invoke('createDatabase') as int;
+    } finally {
+      _progressController.add(100);
+    }
+  }
+
+  @override
   Future<int> openDatabase(
     List<int> dbBytes, {
     required String password,
@@ -462,6 +472,7 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
 
       try {
         final result = switch (method) {
+          'createDatabase' => _workerCreateDatabase(databases, nextHandle++),
           'openFromPath' => _workerOpenFromPath(databases, nextHandle++, args),
           'openFromPathWithKeyFile' =>
             _workerOpenFromPathWithKeyFile(databases, nextHandle++, args),
@@ -506,6 +517,11 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
       database.close();
     }
   }
+}
+
+int _workerCreateDatabase(Map<int, Database> databases, int handle) {
+  databases[handle] = Database.create();
+  return handle;
 }
 
 int _workerOpenFromPath(
