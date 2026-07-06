@@ -35,11 +35,14 @@ class EntryDetail extends HookConsumerWidget {
       fields.value = null;
       revealedPassword.value = null;
       var cancelled = false;
-      vault.readEntryFields(entry.uuid).then((value) {
-        if (!cancelled) fields.value = value;
-      }).catchError((Object _) {
-        if (!cancelled) fields.value = const <String, dynamic>{};
-      });
+      vault
+          .readEntryFields(entry.uuid)
+          .then((value) {
+            if (!cancelled) fields.value = value;
+          })
+          .catchError((Object _) {
+            if (!cancelled) fields.value = const <String, dynamic>{};
+          });
       return () => cancelled = true;
     }, <Object?>[entry.uuid]);
 
@@ -53,15 +56,14 @@ class EntryDetail extends HookConsumerWidget {
     final url = loaded['URL'] as String? ?? entry.url;
     final notes = loaded['Notes'] as String? ?? '';
 
-    Future<void> copyField(String label, String? value) async {
+    Future<void> copyField(String? value) async {
       if (value == null || value.isEmpty) return;
       final manager = ClipboardManager();
       final ok = await manager.copyWithAutoClear(value);
       if (!context.mounted) return;
       showMToast(
         context,
-        builder: (_) =>
-            Text(ok ? '$label copied' : 'Copy failed'),
+        builder: (_) => Text(ok ? manager.lastSuccessMessage : 'Copy failed'),
         duration: const Duration(seconds: 2),
       );
     }
@@ -69,9 +71,9 @@ class EntryDetail extends HookConsumerWidget {
     Future<void> copyPassword() async {
       final password =
           revealedPassword.value ??
-              await vault.readEntryField(entry.uuid, 'Password');
+          await vault.readEntryField(entry.uuid, 'Password');
       if (!context.mounted) return;
-      await copyField('Password', password);
+      await copyField(password);
     }
 
     Future<void> toggleReveal() async {
@@ -126,7 +128,7 @@ class EntryDetail extends HookConsumerWidget {
         _Field(
           label: 'Username',
           value: username,
-          onCopy: () => copyField('Username', username),
+          onCopy: () => copyField(username),
         ),
         _Field(
           label: 'Password',
@@ -140,16 +142,8 @@ class EntryDetail extends HookConsumerWidget {
             child: Text(revealedPassword.value == null ? 'Reveal' : 'Hide'),
           ),
         ),
-        _Field(
-          label: 'URL',
-          value: url,
-          onCopy: () => copyField('URL', url),
-        ),
-        _Field(
-          label: 'Notes',
-          value: notes,
-          multiline: true,
-        ),
+        _Field(label: 'URL', value: url, onCopy: () => copyField(url)),
+        _Field(label: 'Notes', value: notes, multiline: true),
       ],
     );
   }
@@ -179,7 +173,9 @@ class _Field extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final valueStyle = monospace ? theme.typography.code : theme.typography.body;
+    final valueStyle = monospace
+        ? theme.typography.code
+        : theme.typography.body;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -201,10 +197,7 @@ class _Field extends StatelessWidget {
                   overflow: multiline ? null : TextOverflow.ellipsis,
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: 8),
-                trailing!,
-              ],
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
               if (onCopy != null) ...[
                 const SizedBox(width: 8),
                 MButton(

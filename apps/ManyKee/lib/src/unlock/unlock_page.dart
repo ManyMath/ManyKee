@@ -5,7 +5,9 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 
+import '../settings/settings_page.dart';
 import '../state/recent_database.dart';
+import '../state/settings_state.dart';
 import '../state/unlock_error_mapper.dart';
 import '../state/vault_state_provider.dart';
 import '../theme.dart';
@@ -30,11 +32,15 @@ class UnlockPage extends HookConsumerWidget {
           const Spacer(),
           MButton(
             variant: MButtonVariant.ghost,
-            onPressed: () {
-              final mode = ref.read(themeModeProvider);
-              ref.read(themeModeProvider.notifier).state =
-                  mode == MThemeMode.dark ? MThemeMode.light : MThemeMode.dark;
-            },
+            onPressed: () => showSettingsPage(context),
+            child: const Text('Settings'),
+          ),
+          const SizedBox(width: 8),
+          MButton(
+            variant: MButtonVariant.ghost,
+            onPressed: () => ref
+                .read(manyKeeSettingsControllerProvider)
+                .toggleLightDarkTheme(),
             semanticLabel: 'Toggle theme',
             child: MIcon(
               ref.watch(themeModeProvider) == MThemeMode.dark

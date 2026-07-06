@@ -1,4 +1,8 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 
-final themeModeProvider = StateProvider<MThemeMode>((ref) => MThemeMode.system);
+import 'state/settings_state.dart';
+
+final themeModeProvider = Provider<MThemeMode>((ref) {
+  return ref.watch(manyKeeSettingsProvider).themeMode;
+});

@@ -6,7 +6,9 @@ import 'package:keepass_ui/keepass_ui.dart' show VaultGroup;
 import 'package:manyui/manyui.dart';
 
 import '../merge/merge_page.dart';
+import '../settings/settings_page.dart';
 import '../state/manykee_vault_state.dart';
+import '../state/settings_state.dart';
 import '../state/vault_state_provider.dart';
 import '../theme.dart';
 import 'confirm_dialog.dart';
@@ -320,13 +322,11 @@ class VaultPage extends HookConsumerWidget {
                       currentFilePath: currentFilePath,
                     ),
               onToggleTheme: () {
-                final mode = ref.read(themeModeProvider);
                 ref
-                    .read(themeModeProvider.notifier)
-                    .state = mode == MThemeMode.dark
-                    ? MThemeMode.light
-                    : MThemeMode.dark;
+                    .read(manyKeeSettingsControllerProvider)
+                    .toggleLightDarkTheme();
               },
+              onSettings: () => showSettingsPage(context),
               onLock: actions.lock,
             ),
           ),
@@ -354,6 +354,7 @@ class _VaultHeaderActions extends StatelessWidget {
     required this.onDiscard,
     required this.onMerge,
     required this.onToggleTheme,
+    required this.onSettings,
     required this.onLock,
   });
 
@@ -365,6 +366,7 @@ class _VaultHeaderActions extends StatelessWidget {
   final VoidCallback onDiscard;
   final VoidCallback? onMerge;
   final VoidCallback onToggleTheme;
+  final VoidCallback onSettings;
   final VoidCallback onLock;
 
   @override
@@ -412,6 +414,11 @@ class _VaultHeaderActions extends StatelessWidget {
           onPressed: onToggleTheme,
           semanticLabel: 'Toggle theme',
           child: MIcon(isDark ? MIconData.sun : MIconData.moon),
+        ),
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: onSettings,
+          child: const Text('Settings'),
         ),
         MButton(
           variant: MButtonVariant.outline,

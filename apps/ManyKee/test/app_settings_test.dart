@@ -1,0 +1,83 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:manyui/manyui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'unlock_page_test.dart' show FakeVaultState, appWith;
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('auto-lock locks the open vault after inactivity', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manykee.settings.autoLockMinutes': 1,
+    });
+    final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
+    await _unlockVault(tester, state);
+
+    await tester.pump(const Duration(minutes: 1));
+    await tester.pump();
+
+    expect(state.isLocked, isTrue);
+    expect(find.text('Vault locked'), findsOneWidget);
+  });
+
+  testWidgets('auto-lock does not discard unsaved vault changes', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manykee.settings.autoLockMinutes': 1,
+    });
+    final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
+    await _unlockVault(tester, state);
+    state.makeDirty();
+    await tester.pump();
+
+    await tester.pump(const Duration(minutes: 1));
+    await tester.pump();
+
+    expect(state.isLocked, isFalse);
+    expect(state.isDirty, isTrue);
+    expect(find.text('Unsaved changes'), findsOneWidget);
+  });
+
+  testWidgets('backgrounding locks the open vault when enabled', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manykee.settings.lockOnBackground': true,
+      'manykee.settings.autoLockMinutes': 0,
+    });
+    final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
+    await _unlockVault(tester, state);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+
+    expect(state.isLocked, isTrue);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(find.text('Vault locked'), findsOneWidget);
+  });
+}
+
+Future<void> _unlockVault(WidgetTester tester, FakeVaultState state) async {
+  await tester.pumpWidget(appWith(state));
+  await tester.pump();
+
+  await tester.tap(find.byType(MTextField));
+  await tester.pump();
+  await tester.enterText(find.byType(EditableText), 'correct');
+  await tester.pump();
+  await tester.tap(find.text('Unlock'));
+  await tester.pump();
+  await tester.pump();
+
+  expect(state.isLocked, isFalse);
+}
