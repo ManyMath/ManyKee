@@ -29,6 +29,8 @@ class FakeVaultState extends ManyKeeVaultState {
   String? createdDatabasePath;
   String? createdDatabasePassword;
   String? createdDatabaseFilename;
+  final List<String> savedPasswords = <String>[];
+  Object? saveError;
 
   @override
   String? get lastFilePath => _lastFilePath;
@@ -96,6 +98,24 @@ class FakeVaultState extends ManyKeeVaultState {
     selectedEntryValue = null;
     isLockedValue = false;
     notifyListeners();
+  }
+
+  void makeDirty() {
+    markDirty();
+  }
+
+  @override
+  Future<List<int>> saveDatabase({
+    required String password,
+    List<int>? keyFileBytes,
+  }) async {
+    savedPasswords.add(password);
+    final error = saveError;
+    if (error != null) {
+      throw error;
+    }
+    clearDirtyFlag();
+    return const <int>[];
   }
 
   @override

@@ -6,6 +6,7 @@ Future<bool> showDeleteConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
+  String submitLabel = 'Delete',
 }) async {
   final confirmed = await showMDialog<bool>(
     context,
@@ -33,7 +34,7 @@ Future<bool> showDeleteConfirmDialog(
                 MButton(
                   variant: MButtonVariant.destructive,
                   onPressed: () => Navigator.of(ctx).pop(true),
-                  child: const Text('Delete'),
+                  child: Text(submitLabel),
                 ),
               ],
             ),

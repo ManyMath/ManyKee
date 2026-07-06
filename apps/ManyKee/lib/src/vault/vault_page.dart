@@ -15,6 +15,8 @@ import 'entry_list.dart';
 import 'group_name_dialog.dart';
 import 'group_tree.dart';
 import 'move_dialog.dart';
+import 'save_password_dialog.dart';
+import 'unsaved_changes_dialog.dart';
 
 void _showActionError(BuildContext context, Object error) {
   if (!context.mounted) return;
@@ -33,6 +35,56 @@ class _VaultActions {
 
   final BuildContext context;
   final ManyKeeVaultState vault;
+
+  Future<bool> saveChanges() async {
+    final password = await showSavePasswordDialog(context);
+    if (password == null) return false;
+    try {
+      await vault.saveDatabase(password: password);
+      if (context.mounted) {
+        showMToast(
+          context,
+          builder: (_) => const Text('Changes saved.'),
+          duration: const Duration(seconds: 2),
+        );
+      }
+      return true;
+    } catch (error) {
+      if (context.mounted) _showActionError(context, error);
+      return false;
+    }
+  }
+
+  Future<void> discardAndLock() async {
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: 'Discard changes?',
+      message: 'Unsaved changes will be lost and the vault will lock.',
+      submitLabel: 'Discard',
+    );
+    if (!confirmed) return;
+    await vault.lock();
+  }
+
+  Future<void> lock() async {
+    if (!vault.isDirty) {
+      await vault.lock();
+      return;
+    }
+
+    final action = await showUnsavedChangesDialog(context);
+    if (action == null) return;
+    switch (action) {
+      case UnsavedChangesAction.save:
+        if (await saveChanges()) {
+          await vault.lock();
+        }
+        break;
+      case UnsavedChangesAction.discard:
+        await vault.lock();
+        break;
+    }
+  }
 
   Future<void> createEntry() async {
     final groupUuid = vault.selectedGroup?.uuid;
@@ -162,8 +214,7 @@ class _VaultActions {
     final confirmed = await showDeleteConfirmDialog(
       context,
       title: 'Delete group?',
-      message:
-          '${group.name} and everything inside it will be deleted.',
+      message: '${group.name} and everything inside it will be deleted.',
     );
     if (!confirmed) return;
     try {
@@ -191,6 +242,7 @@ class VaultPage extends HookConsumerWidget {
     final theme = MTheme.of(context);
     final vault = ref.watch(vaultStateProvider);
     final narrowPane = useState(_NarrowPane.groups);
+    final actions = _VaultActions(context, vault);
 
     final filename = vault.lastFilename;
     final currentFilePath = vault.lastFilePath;
@@ -204,42 +256,37 @@ class VaultPage extends HookConsumerWidget {
             Flexible(
               child: Text(
                 filename,
-                style: theme.typography.bodySmall
-                    .copyWith(color: theme.colors.mutedForeground),
+                style: theme.typography.bodySmall.copyWith(
+                  color: theme.colors.mutedForeground,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
           const Spacer(),
-          MButton(
-            variant: MButtonVariant.ghost,
-            onPressed: currentFilePath == null
-                ? null
-                : () => showMergeDatabasesPage(
+          Flexible(
+            child: _VaultHeaderActions(
+              isDirty: vault.isDirty,
+              canMerge: currentFilePath != null,
+              isDark: ref.watch(themeModeProvider) == MThemeMode.dark,
+              onSave: actions.saveChanges,
+              onDiscard: actions.discardAndLock,
+              onMerge: currentFilePath == null
+                  ? null
+                  : () => showMergeDatabasesPage(
                       context,
                       currentFilePath: currentFilePath,
                     ),
-            semanticLabel: 'Merge databases',
-            child: const Text('Merge databases…'),
-          ),
-          const SizedBox(width: 8),
-          MButton(
-            variant: MButtonVariant.ghost,
-            onPressed: () {
-              final mode = ref.read(themeModeProvider);
-              ref.read(themeModeProvider.notifier).state =
-                  mode == MThemeMode.dark ? MThemeMode.light : MThemeMode.dark;
-            },
-            semanticLabel: 'Toggle theme',
-            child: MIcon(ref.watch(themeModeProvider) == MThemeMode.dark
-                ? MIconData.sun
-                : MIconData.moon),
-          ),
-          const SizedBox(width: 8),
-          MButton(
-            variant: MButtonVariant.outline,
-            onPressed: () => vault.lock(),
-            child: const Text('Lock'),
+              onToggleTheme: () {
+                final mode = ref.read(themeModeProvider);
+                ref
+                    .read(themeModeProvider.notifier)
+                    .state = mode == MThemeMode.dark
+                    ? MThemeMode.light
+                    : MThemeMode.dark;
+              },
+              onLock: actions.lock,
+            ),
           ),
         ],
       ),
@@ -251,6 +298,78 @@ class VaultPage extends HookConsumerWidget {
           return _NarrowLayout(pane: narrowPane);
         },
       ),
+    );
+  }
+}
+
+class _VaultHeaderActions extends StatelessWidget {
+  const _VaultHeaderActions({
+    required this.isDirty,
+    required this.canMerge,
+    required this.isDark,
+    required this.onSave,
+    required this.onDiscard,
+    required this.onMerge,
+    required this.onToggleTheme,
+    required this.onLock,
+  });
+
+  final bool isDirty;
+  final bool canMerge;
+  final bool isDark;
+  final VoidCallback onSave;
+  final VoidCallback onDiscard;
+  final VoidCallback? onMerge;
+  final VoidCallback onToggleTheme;
+  final VoidCallback onLock;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = MTheme.of(context);
+    return Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        if (isDirty)
+          Text(
+            'Unsaved changes',
+            style: theme.typography.caption.copyWith(
+              color: theme.colors.mutedForeground,
+            ),
+          ),
+        if (isDirty)
+          MButton(
+            size: MButtonSize.sm,
+            onPressed: onSave,
+            child: const Text('Save changes'),
+          ),
+        if (isDirty)
+          MButton(
+            variant: MButtonVariant.destructive,
+            size: MButtonSize.sm,
+            onPressed: onDiscard,
+            child: const Text('Discard'),
+          ),
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: canMerge ? onMerge : null,
+          semanticLabel: 'Merge databases',
+          child: const Text('Merge databases…'),
+        ),
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: onToggleTheme,
+          semanticLabel: 'Toggle theme',
+          child: MIcon(isDark ? MIconData.sun : MIconData.moon),
+        ),
+        MButton(
+          variant: MButtonVariant.outline,
+          onPressed: onLock,
+          child: const Text('Lock'),
+        ),
+      ],
     );
   }
 }
@@ -294,8 +413,9 @@ class _WideLayout extends ConsumerWidget {
               narrowPane.value = _NarrowPane.detail;
               vault.selectEntry(entry);
             },
-            onCreateEntry:
-                vault.selectedGroup == null ? null : actions.createEntry,
+            onCreateEntry: vault.selectedGroup == null
+                ? null
+                : actions.createEntry,
           ),
         ),
         const MDivider(orientation: MDividerOrientation.vertical),
@@ -355,8 +475,9 @@ class _NarrowLayout extends ConsumerWidget {
                   vault.selectEntry(entry);
                   pane.value = _NarrowPane.detail;
                 },
-                onCreateEntry:
-                    vault.selectedGroup == null ? null : actions.createEntry,
+                onCreateEntry: vault.selectedGroup == null
+                    ? null
+                    : actions.createEntry,
               ),
             ),
           ],
@@ -436,8 +557,9 @@ class _EmptyDetail extends StatelessWidget {
     return Center(
       child: Text(
         'Select an entry',
-        style: theme.typography.bodySmall
-            .copyWith(color: theme.colors.mutedForeground),
+        style: theme.typography.bodySmall.copyWith(
+          color: theme.colors.mutedForeground,
+        ),
       ),
     );
   }
