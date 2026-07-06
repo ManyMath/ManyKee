@@ -55,6 +55,17 @@ abstract class ManyKeeVaultState extends VaultState {
   /// YubiKey support (web) or when none are plugged in.
   Future<List<Map<String, dynamic>>> listYubiKeys();
 
+  /// Creates a new database, saves it at [filePath], and opens it as the
+  /// current vault.
+  ///
+  /// Password-only creation is the first app UI slice. Key-file/YubiKey
+  /// creation can build on this once combined-credential creation is designed.
+  Future<void> createDatabaseAtPath({
+    required String filePath,
+    required String password,
+    String? filename,
+  }) => throw UnimplementedError('database creation lands in a later phase');
+
   /// Forgets [lastFilePath] and any remembered key file so the unlock page
   /// returns to the full "choose a database" view.
   void openDifferentFile();
@@ -62,16 +73,15 @@ abstract class ManyKeeVaultState extends VaultState {
   // TODO(manykee): web support (see WebVaultState).
 
   @override
-  Future<String> createEntry(String groupUuid) => throw UnimplementedError(
-      'editing lands in a later phase');
+  Future<String> createEntry(String groupUuid) =>
+      throw UnimplementedError('editing lands in a later phase');
 
   @override
   Future<void> updateEntry(
     String entryUuid,
     Map<String, String?> fields, {
     Set<String> protectedFields = const <String>{},
-  }) =>
-      throw UnimplementedError('editing lands in a later phase');
+  }) => throw UnimplementedError('editing lands in a later phase');
 
   @override
   Future<void> deleteEntry(String entryUuid) =>
@@ -101,6 +111,5 @@ abstract class ManyKeeVaultState extends VaultState {
   Future<List<int>> saveDatabase({
     required String password,
     List<int>? keyFileBytes,
-  }) =>
-      throw UnimplementedError('saving lands in a later phase');
+  }) => throw UnimplementedError('saving lands in a later phase');
 }

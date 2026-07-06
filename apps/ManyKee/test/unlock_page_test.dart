@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -21,10 +22,13 @@ class FakeVaultState extends ManyKeeVaultState {
       const <Map<String, dynamic>>[];
 
   FakeVaultState({this.acceptedPassword = 'correct', String? initialFilePath})
-      : _lastFilePath = initialFilePath;
+    : _lastFilePath = initialFilePath;
 
   final String acceptedPassword;
   String? _lastFilePath;
+  String? createdDatabasePath;
+  String? createdDatabasePassword;
+  String? createdDatabaseFilename;
 
   @override
   String? get lastFilePath => _lastFilePath;
@@ -54,21 +58,42 @@ class FakeVaultState extends ManyKeeVaultState {
   }) async {
     clearError();
     if (password != acceptedPassword) {
-      final mapped = mapUnlockError('invalid credentials or corrupt database',
-          filePath: filePath);
+      final mapped = mapUnlockError(
+        'invalid credentials or corrupt database',
+        filePath: filePath,
+      );
       setErrorWithDetail(mapped.code, mapped.message, detail: mapped.detail);
       return;
     }
     _lastFilePath = filePath;
     handleValue = 1;
     lastFilenameValue = filename ?? filePath;
-    groupsValue = <VaultGroup>[
-      VaultGroup(uuid: 'g1', name: 'General'),
-    ];
+    groupsValue = <VaultGroup>[VaultGroup(uuid: 'g1', name: 'General')];
     selectedGroupValue = groups.first;
     entriesValue = <VaultEntry>[
       VaultEntry(uuid: 'e1', title: 'Example', username: 'alice', url: ''),
     ];
+    isLockedValue = false;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> createDatabaseAtPath({
+    required String filePath,
+    required String password,
+    String? filename,
+  }) async {
+    clearError();
+    createdDatabasePath = filePath;
+    createdDatabasePassword = password;
+    createdDatabaseFilename = filename;
+    _lastFilePath = filePath;
+    handleValue = 1;
+    lastFilenameValue = filename ?? filePath;
+    groupsValue = const <VaultGroup>[];
+    entriesValue = const <VaultEntry>[];
+    selectedGroupValue = null;
+    selectedEntryValue = null;
     isLockedValue = false;
     notifyListeners();
   }
@@ -111,11 +136,28 @@ class FakeVaultState extends ManyKeeVaultState {
   Future<Map<String, dynamic>?> getTotpCode(String entryUuid) async => null;
 }
 
+class _FakeFilePicker extends FilePicker {
+  _FakeFilePicker({this.savePath});
+
+  final String? savePath;
+
+  @override
+  Future<String?> saveFile({
+    String? dialogTitle,
+    String? fileName,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Uint8List? bytes,
+    bool lockParentWindow = false,
+  }) async {
+    return savePath;
+  }
+}
+
 Widget appWith(FakeVaultState state) {
   return ProviderScope(
-    overrides: <Override>[
-      vaultStateProvider.overrideWith((ref) => state),
-    ],
+    overrides: <Override>[vaultStateProvider.overrideWith((ref) => state)],
     child: const ManyKeeApp(),
   );
 }
@@ -135,8 +177,9 @@ void main() {
     expect(find.text('Re-detect'), findsOneWidget);
   });
 
-  testWidgets('re-unlock view shows path and maps a wrong password error',
-      (tester) async {
+  testWidgets('re-unlock view shows path and maps a wrong password error', (
+    tester,
+  ) async {
     final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
     await tester.pumpWidget(appWith(state));
 
@@ -153,15 +196,17 @@ void main() {
 
     expect(find.text('Incorrect password. Please try again.'), findsOneWidget);
     // The raw error rides along as a muted detail line, not in the message.
-    expect(find.text('invalid credentials or corrupt database'),
-        findsOneWidget);
+    expect(
+      find.text('invalid credentials or corrupt database'),
+      findsOneWidget,
+    );
     expect(state.isLocked, isTrue);
   });
 
-  testWidgets(
-      'unlock page does NOT expose a merge-databases entry point '
-      '(gated to an already-open vault, see vault_page_test.dart)',
-      (tester) async {
+  testWidgets('unlock page does NOT expose a merge-databases entry point '
+      '(gated to an already-open vault, see vault_page_test.dart)', (
+    tester,
+  ) async {
     await tester.pumpWidget(appWith(FakeVaultState()));
     expect(find.text('Merge databases…'), findsNothing);
   });
@@ -187,5 +232,46 @@ void main() {
     await tester.tap(find.text('General'));
     await tester.pump();
     expect(find.text('Example'), findsOneWidget);
+  });
+
+  testWidgets('create new database saves and opens the new vault', (
+    tester,
+  ) async {
+    FilePicker.platform = _FakeFilePicker(savePath: '/tmp/fresh-vault');
+    addTearDown(() => FilePicker.platform = _FakeFilePicker());
+
+    final state = FakeVaultState();
+    await tester.pumpWidget(appWith(state));
+
+    await tester.tap(find.text('Create new database…'));
+    await tester.pump();
+
+    expect(find.text('Create database'), findsOneWidget);
+
+    final dialogFields = find.descendant(
+      of: find.byType(MDialog),
+      matching: find.byType(EditableText),
+    );
+    expect(dialogFields, findsNWidgets(2));
+
+    await tester.enterText(dialogFields.at(0), 'fresh-pass');
+    await tester.pump();
+    await tester.enterText(dialogFields.at(1), 'different');
+    await tester.pump();
+    expect(find.text('Passwords do not match.'), findsOneWidget);
+
+    await tester.enterText(dialogFields.at(1), 'fresh-pass');
+    await tester.pump();
+    await tester.tap(
+      find.descendant(of: find.byType(MDialog), matching: find.text('Create')),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(state.createdDatabasePath, '/tmp/fresh-vault.kdbx');
+    expect(state.createdDatabasePassword, 'fresh-pass');
+    expect(state.createdDatabaseFilename, 'fresh-vault.kdbx');
+    expect(state.isLocked, isFalse);
+    expect(find.text('Lock'), findsOneWidget);
   });
 }

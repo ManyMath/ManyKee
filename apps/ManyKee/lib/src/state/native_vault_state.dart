@@ -12,8 +12,8 @@ import 'unlock_error_mapper.dart';
 ManyKeeVaultState createVaultState() => NativeVaultState();
 
 /// Vault state backed by [KeePassNativeApi] (FFI + worker isolate) and the
-/// local filesystem. Adapted from the reference apps/native implementation,
-/// trimmed to phase A's read-only surface.
+/// local filesystem. Adapted from the reference apps/native implementation
+/// and extended with ManyKee's unlock, editing, and creation flows.
 class NativeVaultState extends ManyKeeVaultState {
   final KeePassNativeApi _api = KeePassNativeApi();
 
@@ -41,6 +41,63 @@ class NativeVaultState extends ManyKeeVaultState {
     } catch (_) {
       // Detection failure (no pcsc, no permission) just means no YubiKey UI.
       return const <Map<String, dynamic>>[];
+    }
+  }
+
+  @override
+  Future<void> createDatabaseAtPath({
+    required String filePath,
+    required String password,
+    String? filename,
+  }) async {
+    clearError();
+    if (password.isEmpty) {
+      setError(
+        'MISSING_PASSWORD',
+        'Choose a master password before creating a database.',
+      );
+      return;
+    }
+
+    int? createdHandle;
+    try {
+      createdHandle = await _api.createDatabase();
+      _lastFilePath = filePath;
+      _lastKeyFilePath = null;
+      _lastYubiKeySlot = null;
+      _storageProvider = LocalFileStorageProvider(initialPath: filePath);
+      handleValue = createdHandle;
+      lastFilenameValue = filename ?? _filenameForPath(filePath);
+      await loadRootGroupsUsing(_api.listGroups);
+
+      selectedGroupValue = null;
+      selectedEntryValue = null;
+      final maps = await _api.listEntries(createdHandle, '');
+      entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
+      isLockedValue = false;
+      clearDirtyFlag();
+      await saveDatabase(password: password);
+      notifyListeners();
+
+      _scheduleCacheRefresh();
+    } catch (e) {
+      final handleToClose = createdHandle;
+      if (handleToClose != null) {
+        try {
+          await _api.closeDatabase(handleToClose);
+        } catch (_) {}
+      }
+      _lastFilePath = null;
+      _lastKeyFilePath = null;
+      _lastYubiKeySlot = null;
+      _storageProvider = LocalFileStorageProvider();
+      lastFilenameValue = null;
+      resetBrowsingState();
+      setErrorWithDetail(
+        'CREATE_DATABASE_FAILED',
+        'Could not create the database. Please try again.',
+        detail: truncateErrorDetail(e.toString()),
+      );
     }
   }
 
@@ -311,5 +368,10 @@ class NativeVaultState extends ManyKeeVaultState {
         if (!isLocked) rethrow;
       }
     }());
+  }
+
+  String _filenameForPath(String path) {
+    final parts = path.split(RegExp(r'[/\\]'));
+    return parts.isEmpty || parts.last.isEmpty ? path : parts.last;
   }
 }

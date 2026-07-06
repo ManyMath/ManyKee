@@ -36,9 +36,11 @@ class UnlockPage extends HookConsumerWidget {
                   mode == MThemeMode.dark ? MThemeMode.light : MThemeMode.dark;
             },
             semanticLabel: 'Toggle theme',
-            child: MIcon(ref.watch(themeModeProvider) == MThemeMode.dark
-                ? MIconData.sun
-                : MIconData.moon),
+            child: MIcon(
+              ref.watch(themeModeProvider) == MThemeMode.dark
+                  ? MIconData.sun
+                  : MIconData.moon,
+            ),
           ),
         ],
       ),
@@ -77,13 +79,15 @@ class _UnlockForm extends HookConsumerWidget {
     final keyFilename = useState<String?>(null);
     final password = useState('');
     final unlocking = useState(false);
+    final creating = useState(false);
     final passwordController = _usePasswordController();
     final yubiKeyAttempt = useState(0);
     final yubiKeys = _useYubiKeys(ref, yubiKeyAttempt.value);
     final useYubiKey = useState(false);
 
+    final busy = unlocking.value || creating.value;
     final canUnlock =
-        filePath.value != null && password.value.isNotEmpty && !unlocking.value;
+        filePath.value != null && password.value.isNotEmpty && !busy;
 
     void selectRecent(RecentDatabase recent) {
       filePath.value = recent.path;
@@ -125,11 +129,64 @@ class _UnlockForm extends HookConsumerWidget {
         filePath: filePath.value!,
         keyFilePath: keyFilePath.value,
         filename: filename.value,
-        yubiKeySlot:
-            useYubiKey.value && (yubiKeys.value?.isNotEmpty ?? false)
-                ? '2'
-                : null,
+        yubiKeySlot: useYubiKey.value && (yubiKeys.value?.isNotEmpty ?? false)
+            ? '2'
+            : null,
       );
+    }
+
+    Future<void> createDatabase() async {
+      if (busy) return;
+      final request = await _showCreateDatabaseDialog(context);
+      if (request == null) return;
+
+      final vault = ref.read(vaultStateProvider);
+      final String? selectedPath;
+      try {
+        selectedPath = await FilePicker.platform.saveFile(
+          dialogTitle: 'Create KDBX File',
+          fileName: 'NewDatabase.kdbx',
+          type: FileType.custom,
+          allowedExtensions: const <String>['kdbx'],
+        );
+      } catch (e) {
+        vault.setErrorWithDetail(
+          'CREATE_DATABASE_FAILED',
+          'Could not create the database. Please try again.',
+          detail: truncateErrorDetail(e.toString()),
+        );
+        return;
+      }
+      if (selectedPath == null) return;
+
+      final databasePath = _ensureKdbxExtension(selectedPath);
+      final databaseName = _filenameForPath(databasePath);
+      creating.value = true;
+      try {
+        await vault.createDatabaseAtPath(
+          filePath: databasePath,
+          password: request.password,
+          filename: databaseName,
+        );
+      } on UnimplementedError catch (e) {
+        vault.setError(
+          'UNSUPPORTED',
+          e.message ?? 'Database creation is not supported on this platform.',
+        );
+      } catch (e) {
+        vault.setErrorWithDetail(
+          'CREATE_DATABASE_FAILED',
+          'Could not create the database. Please try again.',
+          detail: truncateErrorDetail(e.toString()),
+        );
+      }
+      if (vault.errorCode == null && !vault.isLocked) {
+        ref
+            .read(recentDatabasesControllerProvider)
+            .recordOpened(databasePath, databaseName);
+      }
+      if (!context.mounted) return;
+      creating.value = false;
     }
 
     return Column(
@@ -140,8 +197,15 @@ class _UnlockForm extends HookConsumerWidget {
         const SizedBox(height: 8),
         Text(
           'Open a KeePass (.kdbx) file to get started.',
-          style: theme.typography.bodySmall
-              .copyWith(color: theme.colors.mutedForeground),
+          style: theme.typography.bodySmall.copyWith(
+            color: theme.colors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: 16),
+        MButton(
+          variant: MButtonVariant.outline,
+          onPressed: busy ? null : createDatabase,
+          child: Text(creating.value ? 'Creating…' : 'Create new database…'),
         ),
         if (recents.isNotEmpty) ...[
           const SizedBox(height: 24),
@@ -149,7 +213,7 @@ class _UnlockForm extends HookConsumerWidget {
           const SizedBox(height: 8),
           _RecentDatabasesList(
             recents: recents,
-            enabled: !unlocking.value,
+            enabled: !busy,
             onSelect: selectRecent,
           ),
         ],
@@ -158,7 +222,7 @@ class _UnlockForm extends HookConsumerWidget {
         const SizedBox(height: 8),
         MButton(
           variant: MButtonVariant.outline,
-          onPressed: unlocking.value ? null : pickDatabase,
+          onPressed: busy ? null : pickDatabase,
           child: Text(
             filename.value ?? 'Choose file…',
             overflow: TextOverflow.ellipsis,
@@ -169,7 +233,7 @@ class _UnlockForm extends HookConsumerWidget {
         const SizedBox(height: 8),
         MButton(
           variant: MButtonVariant.outline,
-          onPressed: unlocking.value ? null : pickKeyFile,
+          onPressed: busy ? null : pickKeyFile,
           child: Text(
             keyFilename.value ?? 'Choose key file…',
             overflow: TextOverflow.ellipsis,
@@ -183,14 +247,14 @@ class _UnlockForm extends HookConsumerWidget {
           obscureText: true,
           placeholder: 'Password',
           semanticLabel: 'Master password',
-          enabled: !unlocking.value,
+          enabled: !busy,
           onChanged: (value) => password.value = value,
           onSubmitted: (_) => unlock(),
         ),
         _YubiKeyOption(
           yubiKeys: yubiKeys.value,
           useYubiKey: useYubiKey,
-          enabled: !unlocking.value,
+          enabled: !busy,
           onRedetect: () {
             yubiKeys.value = null;
             yubiKeyAttempt.value++;
@@ -198,7 +262,8 @@ class _UnlockForm extends HookConsumerWidget {
         ),
         _UnlockStatus(
           unlocking: unlocking.value,
-          usingYubiKey: useYubiKey.value && (yubiKeys.value?.isNotEmpty ?? false),
+          usingYubiKey:
+              useYubiKey.value && (yubiKeys.value?.isNotEmpty ?? false),
         ),
         const SizedBox(height: 24),
         MButton(
@@ -206,6 +271,94 @@ class _UnlockForm extends HookConsumerWidget {
           child: Text(unlocking.value ? 'Unlocking…' : 'Unlock'),
         ),
       ],
+    );
+  }
+}
+
+class _CreateDatabaseRequest {
+  const _CreateDatabaseRequest({required this.password});
+
+  final String password;
+}
+
+Future<_CreateDatabaseRequest?> _showCreateDatabaseDialog(
+  BuildContext context,
+) {
+  return showMDialog<_CreateDatabaseRequest>(
+    context,
+    semanticLabel: 'Create new database',
+    builder: (BuildContext ctx) => const _CreateDatabaseDialogContent(),
+  );
+}
+
+class _CreateDatabaseDialogContent extends HookWidget {
+  const _CreateDatabaseDialogContent();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = MTheme.of(context);
+    final password = useState('');
+    final confirm = useState('');
+    final mismatch =
+        confirm.value.isNotEmpty && confirm.value != password.value;
+    final canCreate =
+        password.value.isNotEmpty && confirm.value == password.value;
+
+    void submit() {
+      if (!canCreate) return;
+      Navigator.of(
+        context,
+      ).pop(_CreateDatabaseRequest(password: password.value));
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 380),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text('Create database', style: theme.typography.headlineSmall),
+          const SizedBox(height: 16),
+          const MLabel('Master password'),
+          const SizedBox(height: 4),
+          MTextField(
+            obscureText: true,
+            placeholder: 'Password',
+            semanticLabel: 'New database master password',
+            autofocus: true,
+            onChanged: (value) => password.value = value,
+            onSubmitted: (_) => submit(),
+          ),
+          const SizedBox(height: 12),
+          const MLabel('Confirm password'),
+          const SizedBox(height: 4),
+          MTextField(
+            obscureText: true,
+            placeholder: 'Password',
+            semanticLabel: 'Confirm new database master password',
+            error: mismatch,
+            errorText: mismatch ? 'Passwords do not match.' : null,
+            onChanged: (value) => confirm.value = value,
+            onSubmitted: (_) => submit(),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: <Widget>[
+              MButton(
+                variant: MButtonVariant.ghost,
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              MButton(
+                onPressed: canCreate ? submit : null,
+                child: const Text('Create'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -248,8 +401,9 @@ class _ReUnlockForm extends HookConsumerWidget {
         const SizedBox(height: 8),
         Text(
           filePath,
-          style: theme.typography.bodySmall
-              .copyWith(color: theme.colors.mutedForeground),
+          style: theme.typography.bodySmall.copyWith(
+            color: theme.colors.mutedForeground,
+          ),
         ),
         const SizedBox(height: 24),
         const MLabel('Master password'),
@@ -305,15 +459,17 @@ class _UnlockStatus extends ConsumerWidget {
           const SizedBox(height: 12),
           Text(
             errorMessage,
-            style: theme.typography.bodySmall
-                .copyWith(color: theme.colors.destructive),
+            style: theme.typography.bodySmall.copyWith(
+              color: theme.colors.destructive,
+            ),
           ),
           if (errorDetail != null) ...[
             const SizedBox(height: 4),
             Text(
               errorDetail,
-              style: theme.typography.caption
-                  .copyWith(color: theme.colors.mutedForeground),
+              style: theme.typography.caption.copyWith(
+                color: theme.colors.mutedForeground,
+              ),
             ),
           ],
         ],
@@ -330,8 +486,9 @@ class _UnlockStatus extends ConsumerWidget {
                   : 'Deriving key… $percent%';
               return Text(
                 label,
-                style: theme.typography.caption
-                    .copyWith(color: theme.colors.mutedForeground),
+                style: theme.typography.caption.copyWith(
+                  color: theme.colors.mutedForeground,
+                ),
               );
             },
           ),
@@ -345,7 +502,9 @@ class _UnlockStatus extends ConsumerWidget {
 /// (possibly empty) descriptor list. Detection re-runs whenever [attempt]
 /// changes; the Re-detect button resets the notifier to null and bumps it.
 ValueNotifier<List<Map<String, dynamic>>?> _useYubiKeys(
-    WidgetRef ref, int attempt) {
+  WidgetRef ref,
+  int attempt,
+) {
   final yubiKeys = useState<List<Map<String, dynamic>>?>(null);
   useEffect(() {
     var cancelled = false;
@@ -378,8 +537,9 @@ class _YubiKeyOption extends StatelessWidget {
   Widget build(BuildContext context) {
     if (kIsWeb) return const SizedBox.shrink();
     final theme = MTheme.of(context);
-    final captionStyle = theme.typography.caption
-        .copyWith(color: theme.colors.mutedForeground);
+    final captionStyle = theme.typography.caption.copyWith(
+      color: theme.colors.mutedForeground,
+    );
     final keys = yubiKeys;
     if (keys == null) {
       return Padding(
@@ -392,9 +552,7 @@ class _YubiKeyOption extends StatelessWidget {
         padding: const EdgeInsets.only(top: 8),
         child: Row(
           children: <Widget>[
-            Expanded(
-              child: Text('No YubiKey detected.', style: captionStyle),
-            ),
+            Expanded(child: Text('No YubiKey detected.', style: captionStyle)),
             const SizedBox(width: 8),
             MButton(
               variant: MButtonVariant.ghost,
@@ -474,8 +632,8 @@ class _RecentDatabasesList extends ConsumerWidget {
                 semanticLabel: 'Forget ${recent.label}',
                 onPressed: enabled
                     ? () => ref
-                        .read(recentDatabasesControllerProvider)
-                        .forget(recent.path)
+                          .read(recentDatabasesControllerProvider)
+                          .forget(recent.path)
                     : null,
                 child: const Text('Forget'),
               ),
@@ -492,6 +650,14 @@ MController<String> _usePasswordController() {
   final controller = useMemoized(() => MController<String>(''));
   useEffect(() => controller.dispose, <Object?>[controller]);
   return controller;
+}
+
+String _ensureKdbxExtension(String path) =>
+    path.toLowerCase().endsWith('.kdbx') ? path : '$path.kdbx';
+
+String _filenameForPath(String path) {
+  final parts = path.split(RegExp(r'[/\\]'));
+  return parts.isEmpty || parts.last.isEmpty ? path : parts.last;
 }
 
 /// Runs an unlock attempt against the vault state, keeping the transient UI
@@ -536,9 +702,8 @@ Future<void> _runUnlock({
     password.value = '';
   }
   if (vault.errorCode == null) {
-    ref.read(recentDatabasesControllerProvider).recordOpened(
-          filePath,
-          filename ?? vault.lastFilename ?? filePath,
-        );
+    ref
+        .read(recentDatabasesControllerProvider)
+        .recordOpened(filePath, filename ?? vault.lastFilename ?? filePath);
   }
 }
