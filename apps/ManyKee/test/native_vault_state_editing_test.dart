@@ -105,6 +105,63 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
+  test('saveCopyAs writes an alternate file without clearing dirty state', () async {
+    final sourcePath = _firstExisting(<String>[
+      '../native/integration_test/fixtures/test_db_kdbx4_with_password_argon2id.kdbx',
+      '../../apps/native/integration_test/fixtures/test_db_kdbx4_with_password_argon2id.kdbx',
+      '../../rust/keepass-rs/tests/resources/test_db_kdbx4_with_password_argon2id.kdbx',
+    ]);
+    final tempDir = await Directory.systemTemp.createTemp(
+      'manykee-native-copy-state',
+    );
+    final originalFile = File('${tempDir.path}/original.kdbx');
+    final copyFile = File('${tempDir.path}/copy.kdbx');
+    await File(sourcePath).copy(originalFile.path);
+
+    final state = NativeVaultState();
+    await state.unlockFromPath(
+      filePath: originalFile.path,
+      password: 'demopass',
+      filename: 'original.kdbx',
+    );
+
+    final groupUuid = state.groups.isNotEmpty
+        ? state.groups.first.uuid
+        : await state.createGroup('', 'Copy Test Group');
+    final entryUuid = await state.createEntry(groupUuid);
+    await state.updateEntry(entryUuid, <String, String?>{
+      'Title': 'ManyKee Copy State',
+      'UserName': 'manykee-copy',
+    });
+    expect(state.isDirty, isTrue);
+
+    await state.saveCopyAs(filePath: copyFile.path, password: 'demopass');
+
+    expect(await copyFile.exists(), isTrue);
+    expect(state.lastFilePath, originalFile.path);
+    expect(state.lastFilename, 'original.kdbx');
+    expect(state.isDirty, isTrue);
+
+    await state.lock();
+    state.dispose();
+
+    final reopenedCopy = NativeVaultState();
+    await reopenedCopy.unlockFromPath(
+      filePath: copyFile.path,
+      password: 'demopass',
+      filename: 'copy.kdbx',
+    );
+
+    final copied = reopenedCopy.entries
+        .where((entry) => entry.title == 'ManyKee Copy State')
+        .toList();
+    expect(copied, isNotEmpty);
+
+    await reopenedCopy.lock();
+    reopenedCopy.dispose();
+    await tempDir.delete(recursive: true);
+  });
+
   test('group create/rename/move/delete round trip', () async {
     final sourcePath = _firstExisting(<String>[
       '../native/integration_test/fixtures/test_db_kdbx4_with_password_argon2id.kdbx',

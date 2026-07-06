@@ -112,4 +112,11 @@ abstract class ManyKeeVaultState extends VaultState {
     required String password,
     List<int>? keyFileBytes,
   }) => throw UnimplementedError('saving lands in a later phase');
+
+  /// Writes a copy of the current in-memory database to [filePath] without
+  /// changing the currently-open database path or clearing dirty state.
+  Future<void> saveCopyAs({
+    required String filePath,
+    required String password,
+  }) => throw UnimplementedError('save copy lands in a later phase');
 }

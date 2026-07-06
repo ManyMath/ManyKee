@@ -335,6 +335,22 @@ class NativeVaultState extends ManyKeeVaultState {
     return bytes;
   }
 
+  @override
+  Future<void> saveCopyAs({
+    required String filePath,
+    required String password,
+  }) async {
+    if (password.isEmpty) {
+      throw StateError('A master password is required to save');
+    }
+    final bytes = await _api.saveDatabase(
+      _requireHandle(),
+      password: password,
+      keyFileBytes: await _loadRememberedKeyFileBytes(),
+    );
+    await File(filePath).writeAsBytes(bytes, flush: true);
+  }
+
   int _requireHandle() {
     final currentHandle = handle;
     if (currentHandle == null) {

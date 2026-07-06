@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:manyui/manyui.dart';
@@ -73,6 +76,42 @@ void main() {
     expect(state.isLocked, isFalse);
     expect(find.text('Unsaved changes'), findsNothing);
   });
+
+  testWidgets(
+    'save a copy writes alternate path without clearing dirty state',
+    (tester) async {
+      FilePicker.platform = _FakeFilePicker(savePath: '/tmp/vault-copy');
+      addTearDown(() => FilePicker.platform = _FakeFilePicker());
+
+      final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
+      await _unlockVault(tester, state);
+      state.makeDirty();
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(MButton, 'Save a copy...'));
+      await tester.pump();
+
+      final passwordField = find.descendant(
+        of: find.byType(MDialog),
+        matching: find.byType(EditableText),
+      );
+      expect(passwordField, findsOneWidget);
+
+      await tester.enterText(passwordField, 'copy-pass');
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: find.byType(MDialog), matching: find.text('Save')),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(state.copiedDatabasePaths, <String>['/tmp/vault-copy.kdbx']);
+      expect(state.copiedDatabasePasswords, <String>['copy-pass']);
+      expect(state.lastFilePath, '/tmp/vault.kdbx');
+      expect(state.isDirty, isTrue);
+      expect(state.isLocked, isFalse);
+    },
+  );
 
   testWidgets('dirty lock can be cancelled without losing changes', (
     tester,
@@ -164,4 +203,23 @@ Future<void> _unlockVault(WidgetTester tester, FakeVaultState state) async {
   await tester.pump();
 
   expect(state.isLocked, isFalse);
+}
+
+class _FakeFilePicker extends FilePicker {
+  _FakeFilePicker({this.savePath});
+
+  final String? savePath;
+
+  @override
+  Future<String?> saveFile({
+    String? dialogTitle,
+    String? fileName,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Uint8List? bytes,
+    bool lockParentWindow = false,
+  }) async {
+    return savePath;
+  }
 }

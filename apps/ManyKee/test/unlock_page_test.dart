@@ -30,6 +30,8 @@ class FakeVaultState extends ManyKeeVaultState {
   String? createdDatabasePassword;
   String? createdDatabaseFilename;
   final List<String> savedPasswords = <String>[];
+  final List<String> copiedDatabasePaths = <String>[];
+  final List<String> copiedDatabasePasswords = <String>[];
   Object? saveError;
 
   @override
@@ -116,6 +118,19 @@ class FakeVaultState extends ManyKeeVaultState {
     }
     clearDirtyFlag();
     return const <int>[];
+  }
+
+  @override
+  Future<void> saveCopyAs({
+    required String filePath,
+    required String password,
+  }) async {
+    copiedDatabasePaths.add(filePath);
+    copiedDatabasePasswords.add(password);
+    final error = saveError;
+    if (error != null) {
+      throw error;
+    }
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -52,6 +53,46 @@ class _VaultActions {
     } catch (error) {
       if (context.mounted) _showActionError(context, error);
       return false;
+    }
+  }
+
+  Future<void> saveCopyAs() async {
+    final String? selectedPath;
+    try {
+      selectedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save a copy as...',
+        fileName: _copyFileName(vault.lastFilename),
+        type: FileType.custom,
+        allowedExtensions: const <String>['kdbx'],
+      );
+    } catch (error) {
+      if (context.mounted) _showActionError(context, error);
+      return;
+    }
+    if (selectedPath == null) return;
+    if (!context.mounted) return;
+
+    final password = await showSavePasswordDialog(
+      context,
+      title: 'Save a copy',
+      message: 'Enter the master password for the copied database.',
+    );
+    if (password == null) return;
+
+    try {
+      await vault.saveCopyAs(
+        filePath: _ensureKdbxExtension(selectedPath),
+        password: password,
+      );
+      if (context.mounted) {
+        showMToast(
+          context,
+          builder: (_) => const Text('Database copy saved.'),
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) _showActionError(context, error);
     }
   }
 
@@ -270,6 +311,7 @@ class VaultPage extends HookConsumerWidget {
               canMerge: currentFilePath != null,
               isDark: ref.watch(themeModeProvider) == MThemeMode.dark,
               onSave: actions.saveChanges,
+              onSaveCopy: actions.saveCopyAs,
               onDiscard: actions.discardAndLock,
               onMerge: currentFilePath == null
                   ? null
@@ -308,6 +350,7 @@ class _VaultHeaderActions extends StatelessWidget {
     required this.canMerge,
     required this.isDark,
     required this.onSave,
+    required this.onSaveCopy,
     required this.onDiscard,
     required this.onMerge,
     required this.onToggleTheme,
@@ -318,6 +361,7 @@ class _VaultHeaderActions extends StatelessWidget {
   final bool canMerge;
   final bool isDark;
   final VoidCallback onSave;
+  final VoidCallback onSaveCopy;
   final VoidCallback onDiscard;
   final VoidCallback? onMerge;
   final VoidCallback onToggleTheme;
@@ -345,6 +389,11 @@ class _VaultHeaderActions extends StatelessWidget {
             onPressed: onSave,
             child: const Text('Save changes'),
           ),
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: onSaveCopy,
+          child: const Text('Save a copy...'),
+        ),
         if (isDirty)
           MButton(
             variant: MButtonVariant.destructive,
@@ -372,6 +421,19 @@ class _VaultHeaderActions extends StatelessWidget {
       ],
     );
   }
+}
+
+String _ensureKdbxExtension(String path) =>
+    path.toLowerCase().endsWith('.kdbx') ? path : '$path.kdbx';
+
+String _copyFileName(String? filename) {
+  final value = filename == null || filename.trim().isEmpty
+      ? 'vault.kdbx'
+      : filename.split(RegExp(r'[/\\]')).last;
+  if (value.toLowerCase().endsWith('.kdbx')) {
+    return '${value.substring(0, value.length - 5)} copy.kdbx';
+  }
+  return '$value copy.kdbx';
 }
 
 class _WideLayout extends ConsumerWidget {
