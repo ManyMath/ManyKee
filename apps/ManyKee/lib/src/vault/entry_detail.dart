@@ -6,12 +6,22 @@ import 'package:manyui/manyui.dart';
 
 import '../state/vault_state_provider.dart';
 
-/// Read-only detail view for one entry: title, username, password (hidden
-/// until revealed, fetched on demand), URL, and notes, with copy buttons.
+/// Detail view for one entry: title, username, password (hidden until
+/// revealed, fetched on demand), URL, and notes, with copy buttons plus
+/// edit/move/delete actions.
 class EntryDetail extends HookConsumerWidget {
-  const EntryDetail({required this.entry, super.key});
+  const EntryDetail({
+    required this.entry,
+    this.onEditEntry,
+    this.onMoveEntry,
+    this.onDeleteEntry,
+    super.key,
+  });
 
   final VaultEntry entry;
+  final VoidCallback? onEditEntry;
+  final VoidCallback? onMoveEntry;
+  final VoidCallback? onDeleteEntry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -76,9 +86,41 @@ class EntryDetail extends HookConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        Text(
-          title.isEmpty ? '(untitled)' : title,
-          style: theme.typography.headlineSmall,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                title.isEmpty ? '(untitled)' : title,
+                style: theme.typography.headlineSmall,
+              ),
+            ),
+            if (onEditEntry != null)
+              MButton(
+                variant: MButtonVariant.ghost,
+                size: MButtonSize.sm,
+                onPressed: onEditEntry,
+                child: const Text('Edit'),
+              ),
+            if (onMoveEntry != null) ...[
+              const SizedBox(width: 4),
+              MButton(
+                variant: MButtonVariant.ghost,
+                size: MButtonSize.sm,
+                onPressed: onMoveEntry,
+                child: const Text('Move'),
+              ),
+            ],
+            if (onDeleteEntry != null) ...[
+              const SizedBox(width: 4),
+              MButton(
+                variant: MButtonVariant.ghost,
+                size: MButtonSize.sm,
+                onPressed: onDeleteEntry,
+                child: const Text('Delete'),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 16),
         _Field(
