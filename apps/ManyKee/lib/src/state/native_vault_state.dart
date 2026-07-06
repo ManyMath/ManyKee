@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:keepass_flutter/keepass_flutter.dart';
@@ -170,12 +171,136 @@ class NativeVaultState extends ManyKeeVaultState {
     return _api.getTotpCode(_requireHandle(), entryUuid);
   }
 
+  @override
+  Future<String> createEntry(String groupUuid) async {
+    final entryUuid = await _api.createEntry(_requireHandle(), groupUuid);
+    await refreshSelectedGroupUsing(selectGroup);
+    _selectEntryIfVisible(entryUuid);
+    _scheduleCacheRefresh();
+    markDirty();
+    return entryUuid;
+  }
+
+  @override
+  Future<void> updateEntry(
+    String entryUuid,
+    Map<String, String?> fields, {
+    Set<String> protectedFields = const <String>{},
+  }) async {
+    final databaseHandle = _requireHandle();
+    for (final field in fields.entries) {
+      await _api.setEntryField(
+        databaseHandle,
+        entryUuid,
+        field.key,
+        field.value ?? '',
+        isProtected: protectedFields.contains(field.key),
+      );
+    }
+    await refreshSelectedGroupUsing(selectGroup);
+    _selectEntryIfVisible(entryUuid);
+    _scheduleCacheRefresh();
+    markDirty();
+  }
+
+  @override
+  Future<void> deleteEntry(String entryUuid) async {
+    await _api.deleteEntry(_requireHandle(), entryUuid);
+    await refreshSelectedGroupUsing(selectGroup);
+    _scheduleCacheRefresh();
+    markDirty();
+  }
+
+  @override
+  Future<void> moveEntry(String entryUuid, String targetGroupUuid) async {
+    await _api.moveEntry(_requireHandle(), entryUuid, targetGroupUuid);
+    await refreshSelectedGroupUsing(selectGroup);
+    _scheduleCacheRefresh();
+    markDirty();
+  }
+
+  @override
+  Future<String> createGroup(String parentGroupUuid, String name) async {
+    final groupUuid = await _api.createGroup(
+      _requireHandle(),
+      parentGroupUuid,
+      name,
+    );
+    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    _scheduleCacheRefresh();
+    markDirty();
+    return groupUuid;
+  }
+
+  @override
+  Future<void> renameGroup(String groupUuid, String name) async {
+    await _api.renameGroup(_requireHandle(), groupUuid, name);
+    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    _scheduleCacheRefresh();
+    markDirty();
+  }
+
+  @override
+  Future<void> deleteGroup(String groupUuid) async {
+    await _api.deleteGroup(_requireHandle(), groupUuid);
+    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    _scheduleCacheRefresh();
+    markDirty();
+  }
+
+  @override
+  Future<void> moveGroup(String groupUuid, String targetParentUuid) async {
+    await _api.moveGroup(_requireHandle(), groupUuid, targetParentUuid);
+    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    _scheduleCacheRefresh();
+    markDirty();
+  }
+
+  @override
+  Future<List<int>> saveDatabase({
+    required String password,
+    List<int>? keyFileBytes,
+  }) async {
+    if (password.isEmpty) {
+      throw StateError('A master password is required to save');
+    }
+    final bytes = await _api.saveDatabase(
+      _requireHandle(),
+      password: password,
+      keyFileBytes: keyFileBytes ?? await _loadRememberedKeyFileBytes(),
+    );
+    _storageProvider.rememberPath(_lastFilePath);
+    await _storageProvider.save(
+      Uint8List.fromList(bytes),
+      name: lastFilename ?? 'vault.kdbx',
+    );
+    clearDirtyFlag();
+    return bytes;
+  }
+
   int _requireHandle() {
     final currentHandle = handle;
     if (currentHandle == null) {
       throw StateError('Vault is locked');
     }
     return currentHandle;
+  }
+
+  Future<List<int>?> _loadRememberedKeyFileBytes() async {
+    final keyFilePath = _lastKeyFilePath;
+    if (keyFilePath == null) {
+      return null;
+    }
+    return File(keyFilePath).readAsBytes();
+  }
+
+  void _selectEntryIfVisible(String entryUuid) {
+    for (final entry in entries) {
+      if (entry.uuid == entryUuid) {
+        selectedEntryValue = entry;
+        return;
+      }
+    }
   }
 
   void _scheduleCacheRefresh() {
