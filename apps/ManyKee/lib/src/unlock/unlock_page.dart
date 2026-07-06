@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 
+import '../state/recent_database.dart';
 import '../state/unlock_error_mapper.dart';
 import '../state/vault_state_provider.dart';
 import '../theme.dart';
@@ -68,6 +69,7 @@ class _UnlockForm extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
+    final recents = ref.watch(recentDatabasesProvider);
 
     final filePath = useState<String?>(null);
     final filename = useState<String?>(null);
@@ -82,6 +84,11 @@ class _UnlockForm extends HookConsumerWidget {
 
     final canUnlock =
         filePath.value != null && password.value.isNotEmpty && !unlocking.value;
+
+    void selectRecent(RecentDatabase recent) {
+      filePath.value = recent.path;
+      filename.value = recent.label;
+    }
 
     Future<void> pickDatabase() async {
       final result = await FilePicker.platform.pickFiles(
@@ -136,6 +143,16 @@ class _UnlockForm extends HookConsumerWidget {
           style: theme.typography.bodySmall
               .copyWith(color: theme.colors.mutedForeground),
         ),
+        if (recents.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          const MLabel('Recent'),
+          const SizedBox(height: 8),
+          _RecentDatabasesList(
+            recents: recents,
+            enabled: !unlocking.value,
+            onSelect: selectRecent,
+          ),
+        ],
         const SizedBox(height: 24),
         const MLabel('Database'),
         const SizedBox(height: 8),
@@ -426,6 +443,49 @@ class _YubiKeyOption extends StatelessWidget {
   }
 }
 
+/// List of previously-opened databases with a forget action, shown above the
+/// file picker so re-opening a known database skips re-browsing entirely.
+class _RecentDatabasesList extends ConsumerWidget {
+  const _RecentDatabasesList({
+    required this.recents,
+    required this.enabled,
+    required this.onSelect,
+  });
+
+  final List<RecentDatabase> recents;
+  final bool enabled;
+  final ValueChanged<RecentDatabase> onSelect;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (final recent in recents)
+            MListTile(
+              title: Text(recent.label, overflow: TextOverflow.ellipsis),
+              subtitle: Text(recent.path, overflow: TextOverflow.ellipsis),
+              semanticLabel: recent.label,
+              onTap: enabled ? () => onSelect(recent) : null,
+              trailing: MButton(
+                variant: MButtonVariant.ghost,
+                size: MButtonSize.sm,
+                semanticLabel: 'Forget ${recent.label}',
+                onPressed: enabled
+                    ? () => ref
+                        .read(recentDatabasesControllerProvider)
+                        .forget(recent.path)
+                    : null,
+                child: const Text('Forget'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Owns a disposed-with-the-widget [MController] for the password field so
 /// the form can clear it after a wrong-password attempt.
 MController<String> _usePasswordController() {
@@ -474,5 +534,11 @@ Future<void> _runUnlock({
   if (vault.errorCode == 'WRONG_PASSWORD') {
     passwordController.value = '';
     password.value = '';
+  }
+  if (vault.errorCode == null) {
+    ref.read(recentDatabasesControllerProvider).recordOpened(
+          filePath,
+          filename ?? vault.lastFilename ?? filePath,
+        );
   }
 }

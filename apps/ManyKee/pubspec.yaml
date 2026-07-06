@@ -27,6 +27,7 @@ dependencies:
     path: ../../../ManyUI/manyui_hooks
   manyui_riverpod:
     path: ../../../ManyUI/manyui_riverpod
+  shared_preferences: ^2.4.0
 
 dev_dependencies:
   flutter_lints: ^5.0.0
