@@ -87,6 +87,71 @@ class Database implements Finalizable {
     }
   }
 
+  factory Database.openWithKeyFileAndYubiKey(
+    String path, {
+    required String password,
+    required String keyFilePath,
+    required String slot,
+    int serial = 0,
+  }) {
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final keyPtr = toNativeString(keyFilePath);
+    final slotPtr = toNativeString(slot);
+    try {
+      final handle = bindings.kpxc_database_open_with_keyfile_and_yubikey(
+        pathPtr,
+        passPtr,
+        keyPtr,
+        slotPtr,
+        serial,
+      );
+      if (handle == nullptr) {
+        throw KeePassError.fromLastError(
+          'Failed to open database with key file and YubiKey',
+        );
+      }
+      return Database._(handle);
+    } finally {
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(keyPtr);
+      freeNativeString(slotPtr);
+    }
+  }
+
+  factory Database.openWithKeyFileAndLocalChallenge(
+    String path, {
+    required String password,
+    required String keyFilePath,
+    required String hexSecret,
+  }) {
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final keyPtr = toNativeString(keyFilePath);
+    final secretPtr = toNativeString(hexSecret);
+    try {
+      final handle =
+          bindings.kpxc_database_open_with_keyfile_and_local_challenge(
+        pathPtr,
+        passPtr,
+        keyPtr,
+        secretPtr,
+      );
+      if (handle == nullptr) {
+        throw KeePassError.fromLastError(
+          'Failed to open database with key file and local challenge',
+        );
+      }
+      return Database._(handle);
+    } finally {
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(keyPtr);
+      freeNativeString(secretPtr);
+    }
+  }
+
   /// Save the database to a file.
   void save(String path, {required String password}) {
     _ensureOpen();
@@ -123,6 +188,38 @@ class Database implements Finalizable {
       freeNativeString(pathPtr);
       freeNativeString(passPtr);
       freeNativeString(keyPtr);
+    }
+  }
+
+  void saveWithKeyFileAndLocalChallenge(
+    String path, {
+    required String password,
+    required String keyFilePath,
+    required String hexSecret,
+  }) {
+    _ensureOpen();
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final keyPtr = toNativeString(keyFilePath);
+    final secretPtr = toNativeString(hexSecret);
+    try {
+      final result =
+          bindings.kpxc_database_save_with_keyfile_and_local_challenge(
+        _handle,
+        pathPtr,
+        passPtr,
+        keyPtr,
+        secretPtr,
+      );
+      KeePassError.checkResult(
+        result,
+        'Failed to save database with key file and local challenge',
+      );
+    } finally {
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(keyPtr);
+      freeNativeString(secretPtr);
     }
   }
 

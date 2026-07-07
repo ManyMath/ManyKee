@@ -126,6 +126,29 @@ struct KpxcDatabase *kpxc_database_open_with_yubikey(const char *path,
                                                      uint32_t serial)
 ;
 
+
+struct KpxcDatabase *kpxc_database_open_with_keyfile_and_yubikey(const char *path,
+                                                                 const char *password,
+                                                                 const char *keyfile_path,
+                                                                 const char *slot,
+                                                                 uint32_t serial)
+;
+
+
+struct KpxcDatabase *kpxc_database_open_with_keyfile_and_local_challenge(const char *path,
+                                                                         const char *password,
+                                                                         const char *keyfile_path,
+                                                                         const char *hex_secret)
+;
+
+
+int kpxc_database_save_with_keyfile_and_local_challenge(struct KpxcDatabase *db,
+                                                        const char *path,
+                                                        const char *password,
+                                                        const char *keyfile_path,
+                                                        const char *hex_secret)
+;
+
  char *kpxc_yubikey_list(void) ;
 
 #endif  /* KEEPASSXC_FFI_H */

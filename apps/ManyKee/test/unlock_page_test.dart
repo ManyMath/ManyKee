@@ -18,14 +18,22 @@ import 'package:manykee/src/state/vault_state_provider.dart';
 /// error exactly like the native implementation does.
 class FakeVaultState extends ManyKeeVaultState {
   @override
-  Future<List<Map<String, dynamic>>> listYubiKeys() async =>
-      const <Map<String, dynamic>>[];
+  Future<List<Map<String, dynamic>>> listYubiKeys() async => yubiKeys;
 
-  FakeVaultState({this.acceptedPassword = 'correct', String? initialFilePath})
-    : _lastFilePath = initialFilePath;
+  FakeVaultState({
+    this.acceptedPassword = 'correct',
+    this.yubiKeys = const <Map<String, dynamic>>[],
+    String? initialFilePath,
+  }) : _lastFilePath = initialFilePath;
 
   final String acceptedPassword;
+  final List<Map<String, dynamic>> yubiKeys;
   String? _lastFilePath;
+  String? _lastYubiKeySlot;
+  String? lastUnlockFilePath;
+  String? lastUnlockPassword;
+  String? lastUnlockKeyFilePath;
+  String? lastUnlockFilename;
   String? createdDatabasePath;
   String? createdDatabasePassword;
   String? createdDatabaseFilename;
@@ -36,6 +44,9 @@ class FakeVaultState extends ManyKeeVaultState {
 
   @override
   String? get lastFilePath => _lastFilePath;
+
+  @override
+  String? get lastYubiKeySlot => _lastYubiKeySlot;
 
   @override
   Stream<int> get progress => const Stream<int>.empty();
@@ -61,6 +72,10 @@ class FakeVaultState extends ManyKeeVaultState {
     String? yubiKeySlot,
   }) async {
     clearError();
+    lastUnlockFilePath = filePath;
+    lastUnlockPassword = password;
+    lastUnlockKeyFilePath = keyFilePath;
+    lastUnlockFilename = filename;
     if (password != acceptedPassword) {
       final mapped = mapUnlockError(
         'invalid credentials or corrupt database',
@@ -70,6 +85,7 @@ class FakeVaultState extends ManyKeeVaultState {
       return;
     }
     _lastFilePath = filePath;
+    _lastYubiKeySlot = yubiKeySlot;
     handleValue = 1;
     lastFilenameValue = filename ?? filePath;
     groupsValue = <VaultGroup>[VaultGroup(uuid: 'g1', name: 'General')];
@@ -172,9 +188,31 @@ class FakeVaultState extends ManyKeeVaultState {
 }
 
 class _FakeFilePicker extends FilePicker {
-  _FakeFilePicker({this.savePath});
+  _FakeFilePicker({this.savePath, List<PlatformFile>? pickFiles})
+    : _pickFiles = pickFiles ?? const <PlatformFile>[];
 
   final String? savePath;
+  final List<PlatformFile> _pickFiles;
+  int _pickIndex = 0;
+
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = true,
+    int compressionQuality = 30,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool readSequential = false,
+    bool lockParentWindow = false,
+  }) async {
+    if (_pickIndex >= _pickFiles.length) return null;
+    return FilePickerResult(<PlatformFile>[_pickFiles[_pickIndex++]]);
+  }
 
   @override
   Future<String?> saveFile({
@@ -267,6 +305,46 @@ void main() {
     await tester.tap(find.text('General'));
     await tester.pump();
     expect(find.text('Example'), findsOneWidget);
+  });
+
+  testWidgets('unlock can combine key file and YubiKey credentials', (
+    tester,
+  ) async {
+    FilePicker.platform = _FakeFilePicker(
+      pickFiles: <PlatformFile>[
+        PlatformFile(name: 'vault.kdbx', path: '/tmp/vault.kdbx', size: 0),
+        PlatformFile(name: 'vault.keyx', path: '/tmp/vault.keyx', size: 0),
+      ],
+    );
+    addTearDown(() => FilePicker.platform = _FakeFilePicker());
+
+    final state = FakeVaultState(
+      yubiKeys: const <Map<String, dynamic>>[
+        <String, dynamic>{'serial_number': 123456, 'name': 'YubiKey'},
+      ],
+    );
+    await tester.pumpWidget(appWith(state));
+    await tester.pump();
+
+    await tester.tap(find.text('Choose file…'));
+    await tester.pump();
+    await tester.tap(find.text('Choose key file…'));
+    await tester.pump();
+    await tester.enterText(find.byType(EditableText), 'correct');
+    await tester.pump();
+    await tester.tap(find.byType(MCheckbox));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Unlock'));
+    await tester.pump();
+    await tester.tap(find.text('Unlock'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(state.isLocked, isFalse);
+    expect(state.lastUnlockFilePath, '/tmp/vault.kdbx');
+    expect(state.lastUnlockKeyFilePath, '/tmp/vault.keyx');
+    expect(state.lastUnlockFilename, 'vault.kdbx');
+    expect(state.lastYubiKeySlot, '2');
   });
 
   testWidgets('create new database saves and opens the new vault', (

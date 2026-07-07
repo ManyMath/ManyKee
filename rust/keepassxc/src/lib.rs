@@ -37,7 +37,8 @@ pub use merge::{merge, ConflictResolution, MergeConflict, MergeResult, MergeWarn
 
 #[cfg(feature = "yubikey")]
 pub use yubikey::{
-    list_yubikeys, open_with_local_challenge, open_with_yubikey, ChallengeResponseKey, Yubikey,
+    list_yubikeys, open_with_local_challenge, open_with_local_challenge_and_keyfile,
+    open_with_yubikey, open_with_yubikey_and_keyfile, ChallengeResponseKey, Yubikey,
 };
 
 pub use error::KeePassXcError;

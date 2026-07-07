@@ -131,7 +131,14 @@ class NativeVaultState extends ManyKeeVaultState {
 
     final int handle;
     try {
-      if (effectiveYubiKeySlot != null) {
+      if (effectiveYubiKeySlot != null && effectiveKeyFilePath != null) {
+        handle = await _api.openFromPathWithKeyFileAndYubiKey(
+          filePath,
+          password: password,
+          keyFilePath: effectiveKeyFilePath,
+          slot: effectiveYubiKeySlot,
+        );
+      } else if (effectiveYubiKeySlot != null) {
         handle = await _api.openFromPathWithYubiKey(
           filePath,
           password: password,
@@ -318,6 +325,11 @@ class NativeVaultState extends ManyKeeVaultState {
     required String password,
     List<int>? keyFileBytes,
   }) async {
+    if (_lastYubiKeySlot != null) {
+      throw UnsupportedError(
+        'Saving YubiKey-protected databases is not supported yet.',
+      );
+    }
     if (password.isEmpty) {
       throw StateError('A master password is required to save');
     }
@@ -340,6 +352,11 @@ class NativeVaultState extends ManyKeeVaultState {
     required String filePath,
     required String password,
   }) async {
+    if (_lastYubiKeySlot != null) {
+      throw UnsupportedError(
+        'Copying YubiKey-protected databases is not supported yet.',
+      );
+    }
     if (password.isEmpty) {
       throw StateError('A master password is required to save');
     }

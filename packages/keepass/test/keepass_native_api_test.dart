@@ -235,7 +235,51 @@ void main() {
     }
   });
 
-  test('createDatabase produces an empty database that can be saved and reopened',
+  test(
+      'openFromPathWithKeyFileAndLocalChallenge supports combined credentials through the worker isolate',
+      () async {
+    final api = KeePassNativeApi();
+    final keyFile = await _writeTempDatabase(
+      'manykee-combined-keyfile'.codeUnits,
+      suffix: '.key',
+    );
+    final databaseFile = File(
+      '${Directory.systemTemp.path}/manykee_test_${DateTime.now().microsecondsSinceEpoch}.kdbx',
+    );
+    const localChallengeHex = '0123456789abcdef0123456789abcdef01234567';
+    final database = Database.create();
+
+    try {
+      database.saveWithKeyFileAndLocalChallenge(
+        databaseFile.path,
+        password: 'combined-pass',
+        keyFilePath: keyFile.path,
+        hexSecret: localChallengeHex,
+      );
+
+      final handle = await api.openFromPathWithKeyFileAndLocalChallenge(
+        databaseFile.path,
+        password: 'combined-pass',
+        keyFilePath: keyFile.path,
+        hexSecret: localChallengeHex,
+      );
+
+      try {
+        expect(handle, greaterThan(0));
+        expect(await api.listGroups(handle, ''), isEmpty);
+      } finally {
+        await api.closeDatabase(handle);
+      }
+    } finally {
+      database.close();
+      await api.dispose();
+      if (await databaseFile.exists()) await databaseFile.delete();
+      if (await keyFile.exists()) await keyFile.delete();
+    }
+  });
+
+  test(
+      'createDatabase produces an empty database that can be saved and reopened',
       () async {
     final api = KeePassNativeApi();
     final handle = await api.createDatabase();

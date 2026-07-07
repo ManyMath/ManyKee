@@ -355,6 +355,42 @@ class KeePassNativeApi implements KeePassApi {
     );
   }
 
+  Future<int> openFromPathWithKeyFileAndYubiKey(
+    String filePath, {
+    required String password,
+    required String keyFilePath,
+    required String slot,
+    int serial = 0,
+  }) async {
+    return _openFromWorker(
+      'openFromPathWithKeyFileAndYubiKey',
+      <String, Object?>{
+        'filePath': filePath,
+        'password': password,
+        'keyFilePath': keyFilePath,
+        'slot': slot,
+        'serial': serial,
+      },
+    );
+  }
+
+  Future<int> openFromPathWithKeyFileAndLocalChallenge(
+    String filePath, {
+    required String password,
+    required String keyFilePath,
+    required String hexSecret,
+  }) async {
+    return _openFromWorker(
+      'openFromPathWithKeyFileAndLocalChallenge',
+      <String, Object?>{
+        'filePath': filePath,
+        'password': password,
+        'keyFilePath': keyFilePath,
+        'hexSecret': hexSecret,
+      },
+    );
+  }
+
   Future<int> openFromPathWithYubiKey(
     String filePath, {
     required String password,
@@ -476,6 +512,12 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
           'openFromPath' => _workerOpenFromPath(databases, nextHandle++, args),
           'openFromPathWithKeyFile' =>
             _workerOpenFromPathWithKeyFile(databases, nextHandle++, args),
+          'openFromPathWithKeyFileAndYubiKey' =>
+            _workerOpenFromPathWithKeyFileAndYubiKey(
+                databases, nextHandle++, args),
+          'openFromPathWithKeyFileAndLocalChallenge' =>
+            _workerOpenFromPathWithKeyFileAndLocalChallenge(
+                databases, nextHandle++, args),
           'openFromPathWithYubiKey' =>
             _workerOpenFromPathWithYubiKey(databases, nextHandle++, args),
           'closeDatabase' => _workerCloseDatabase(databases, args),
@@ -546,6 +588,37 @@ int _workerOpenFromPathWithKeyFile(
     args['filePath']! as String,
     password: args['password']! as String,
     keyFilePath: args['keyFilePath']! as String,
+  );
+  databases[handle] = database;
+  return handle;
+}
+
+int _workerOpenFromPathWithKeyFileAndYubiKey(
+  Map<int, Database> databases,
+  int handle,
+  Map<String, Object?> args,
+) {
+  final database = Database.openWithKeyFileAndYubiKey(
+    args['filePath']! as String,
+    password: args['password']! as String,
+    keyFilePath: args['keyFilePath']! as String,
+    slot: args['slot']! as String,
+    serial: args['serial'] as int? ?? 0,
+  );
+  databases[handle] = database;
+  return handle;
+}
+
+int _workerOpenFromPathWithKeyFileAndLocalChallenge(
+  Map<int, Database> databases,
+  int handle,
+  Map<String, Object?> args,
+) {
+  final database = Database.openWithKeyFileAndLocalChallenge(
+    args['filePath']! as String,
+    password: args['password']! as String,
+    keyFilePath: args['keyFilePath']! as String,
+    hexSecret: args['hexSecret']! as String,
   );
   databases[handle] = database;
   return handle;

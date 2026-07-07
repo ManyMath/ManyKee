@@ -30,6 +30,24 @@ fn create_db_with_challenge(password: &str, hex_secret: &str) -> Vec<u8> {
     buf
 }
 
+fn create_db_with_keyfile_and_challenge(
+    password: &str,
+    keyfile_bytes: &[u8],
+    hex_secret: &str,
+) -> Vec<u8> {
+    let cr_key = ChallengeResponseKey::LocalChallenge(hex_secret.to_string());
+    let mut keyfile = Cursor::new(keyfile_bytes);
+    let key = DatabaseKey::new()
+        .with_password(password)
+        .with_keyfile(&mut keyfile)
+        .expect("keyfile should be readable")
+        .with_challenge_response_key(cr_key);
+    let db = Database::new(DatabaseConfig::default());
+    let mut buf = Vec::new();
+    db.save(&mut buf, key).expect("save failed");
+    buf
+}
+
 // ---------------------------------------------------------------------------
 // CI-safe tests (no physical YubiKey required)
 // ---------------------------------------------------------------------------
@@ -90,6 +108,30 @@ fn test_open_with_local_challenge_convenience() {
     let mut cursor = Cursor::new(&data);
     let db = open_with_local_challenge(&mut cursor, password, hex_secret)
         .expect("open_with_local_challenge convenience should succeed");
+
+    assert!(
+        !db.root.name.is_empty(),
+        "root group name should not be empty"
+    );
+}
+
+#[test]
+fn test_open_with_local_challenge_and_keyfile_convenience() {
+    let password = "test123";
+    let keyfile_bytes = b"manykee-ci-keyfile";
+    let hex_secret = "0123456789abcdef0123456789abcdef01234567";
+
+    let data = create_db_with_keyfile_and_challenge(password, keyfile_bytes, hex_secret);
+
+    let mut cursor = Cursor::new(&data);
+    let mut keyfile = Cursor::new(keyfile_bytes);
+    let db = keepassxc::open_with_local_challenge_and_keyfile(
+        &mut cursor,
+        password,
+        &mut keyfile,
+        hex_secret,
+    )
+    .expect("combined local-challenge/keyfile open should succeed");
 
     assert!(
         !db.root.name.is_empty(),
