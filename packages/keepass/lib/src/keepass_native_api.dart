@@ -289,6 +289,9 @@ class KeePassNativeApi implements KeePassApi {
     int handle, {
     required String password,
     List<int>? keyFileBytes,
+    String? yubiKeySlot,
+    int yubiKeySerial = 0,
+    String? localChallengeHex,
   }) async {
     final result = await _invoke(
       'saveDatabase',
@@ -296,6 +299,9 @@ class KeePassNativeApi implements KeePassApi {
         'handle': handle,
         'password': password,
         if (keyFileBytes != null) 'keyFileBytes': keyFileBytes,
+        if (yubiKeySlot != null) 'yubiKeySlot': yubiKeySlot,
+        'yubiKeySerial': yubiKeySerial,
+        if (localChallengeHex != null) 'localChallengeHex': localChallengeHex,
       },
     );
     return _castBytes(result);
@@ -386,6 +392,21 @@ class KeePassNativeApi implements KeePassApi {
         'filePath': filePath,
         'password': password,
         'keyFilePath': keyFilePath,
+        'hexSecret': hexSecret,
+      },
+    );
+  }
+
+  Future<int> openFromPathWithLocalChallenge(
+    String filePath, {
+    required String password,
+    required String hexSecret,
+  }) async {
+    return _openFromWorker(
+      'openFromPathWithLocalChallenge',
+      <String, Object?>{
+        'filePath': filePath,
+        'password': password,
         'hexSecret': hexSecret,
       },
     );
@@ -518,6 +539,9 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
           'openFromPathWithKeyFileAndLocalChallenge' =>
             _workerOpenFromPathWithKeyFileAndLocalChallenge(
                 databases, nextHandle++, args),
+          'openFromPathWithLocalChallenge' =>
+            _workerOpenFromPathWithLocalChallenge(
+                databases, nextHandle++, args),
           'openFromPathWithYubiKey' =>
             _workerOpenFromPathWithYubiKey(databases, nextHandle++, args),
           'closeDatabase' => _workerCloseDatabase(databases, args),
@@ -618,6 +642,20 @@ int _workerOpenFromPathWithKeyFileAndLocalChallenge(
     args['filePath']! as String,
     password: args['password']! as String,
     keyFilePath: args['keyFilePath']! as String,
+    hexSecret: args['hexSecret']! as String,
+  );
+  databases[handle] = database;
+  return handle;
+}
+
+int _workerOpenFromPathWithLocalChallenge(
+  Map<int, Database> databases,
+  int handle,
+  Map<String, Object?> args,
+) {
+  final database = Database.openWithLocalChallenge(
+    args['filePath']! as String,
+    password: args['password']! as String,
     hexSecret: args['hexSecret']! as String,
   );
   databases[handle] = database;
@@ -818,6 +856,9 @@ List<int> _workerSaveDatabase(
   return database.saveBytes(
     password: args['password']! as String,
     keyFileBytes: keyFileBytes,
+    yubiKeySlot: args['yubiKeySlot'] as String?,
+    yubiKeySerial: args['yubiKeySerial'] as int? ?? 0,
+    localChallengeHex: args['localChallengeHex'] as String?,
   );
 }
 

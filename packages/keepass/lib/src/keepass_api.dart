@@ -97,6 +97,9 @@ abstract class KeePassApi {
     int handle, {
     required String password,
     List<int>? keyFileBytes,
+    String? yubiKeySlot,
+    int yubiKeySerial = 0,
+    String? localChallengeHex,
   });
 
   /// Return a live TOTP payload for an entry when supported.

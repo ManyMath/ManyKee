@@ -558,6 +558,28 @@ class KeePassXcFfiBindings {
           ffi.Pointer<KpxcDatabase> Function(ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>, int)>();
 
+  ffi.Pointer<KpxcDatabase> kpxc_database_open_with_local_challenge(
+    ffi.Pointer<ffi.Char> path,
+    ffi.Pointer<ffi.Char> password,
+    ffi.Pointer<ffi.Char> hex_secret,
+  ) {
+    return _kpxc_database_open_with_local_challenge(
+      path,
+      password,
+      hex_secret,
+    );
+  }
+
+  late final _kpxc_database_open_with_local_challengePtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Pointer<KpxcDatabase> Function(ffi.Pointer<ffi.Char>,
+                  ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>>(
+      'kpxc_database_open_with_local_challenge');
+  late final _kpxc_database_open_with_local_challenge =
+      _kpxc_database_open_with_local_challengePtr.asFunction<
+          ffi.Pointer<KpxcDatabase> Function(ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
+
   ffi.Pointer<KpxcDatabase> kpxc_database_open_with_keyfile_and_yubikey(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -620,6 +642,96 @@ class KeePassXcFfiBindings {
               ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>)>();
+
+  int kpxc_database_save_with_yubikey(
+    ffi.Pointer<KpxcDatabase> db,
+    ffi.Pointer<ffi.Char> path,
+    ffi.Pointer<ffi.Char> password,
+    ffi.Pointer<ffi.Char> slot,
+    int serial,
+  ) {
+    return _kpxc_database_save_with_yubikey(
+      db,
+      path,
+      password,
+      slot,
+      serial,
+    );
+  }
+
+  late final _kpxc_database_save_with_yubikeyPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int Function(
+              ffi.Pointer<KpxcDatabase>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Uint32)>>('kpxc_database_save_with_yubikey');
+  late final _kpxc_database_save_with_yubikey =
+      _kpxc_database_save_with_yubikeyPtr.asFunction<
+          int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>, int)>();
+
+  int kpxc_database_save_with_keyfile_and_yubikey(
+    ffi.Pointer<KpxcDatabase> db,
+    ffi.Pointer<ffi.Char> path,
+    ffi.Pointer<ffi.Char> password,
+    ffi.Pointer<ffi.Char> keyfile_path,
+    ffi.Pointer<ffi.Char> slot,
+    int serial,
+  ) {
+    return _kpxc_database_save_with_keyfile_and_yubikey(
+      db,
+      path,
+      password,
+      keyfile_path,
+      slot,
+      serial,
+    );
+  }
+
+  late final _kpxc_database_save_with_keyfile_and_yubikeyPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int Function(
+              ffi.Pointer<KpxcDatabase>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Uint32)>>('kpxc_database_save_with_keyfile_and_yubikey');
+  late final _kpxc_database_save_with_keyfile_and_yubikey =
+      _kpxc_database_save_with_keyfile_and_yubikeyPtr.asFunction<
+          int Function(
+              ffi.Pointer<KpxcDatabase>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              int)>();
+
+  int kpxc_database_save_with_local_challenge(
+    ffi.Pointer<KpxcDatabase> db,
+    ffi.Pointer<ffi.Char> path,
+    ffi.Pointer<ffi.Char> password,
+    ffi.Pointer<ffi.Char> hex_secret,
+  ) {
+    return _kpxc_database_save_with_local_challenge(
+      db,
+      path,
+      password,
+      hex_secret,
+    );
+  }
+
+  late final _kpxc_database_save_with_local_challengePtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
+                  ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>>(
+      'kpxc_database_save_with_local_challenge');
+  late final _kpxc_database_save_with_local_challenge =
+      _kpxc_database_save_with_local_challengePtr.asFunction<
+          int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
   int kpxc_database_save_with_keyfile_and_local_challenge(
     ffi.Pointer<KpxcDatabase> db,

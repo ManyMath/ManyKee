@@ -236,7 +236,64 @@ void main() {
   });
 
   test(
-      'openFromPathWithKeyFileAndLocalChallenge supports combined credentials through the worker isolate',
+      'saveDatabase preserves local-challenge databases through the worker isolate',
+      () async {
+    final api = KeePassNativeApi();
+    final databaseFile = File(
+      '${Directory.systemTemp.path}/manykee_test_${DateTime.now().microsecondsSinceEpoch}.kdbx',
+    );
+    const localChallengeHex = '0123456789abcdef0123456789abcdef01234567';
+    final database = Database.create();
+
+    try {
+      database.saveWithLocalChallenge(
+        databaseFile.path,
+        password: 'challenge-pass',
+        hexSecret: localChallengeHex,
+      );
+
+      final handle = await api.openFromPathWithLocalChallenge(
+        databaseFile.path,
+        password: 'challenge-pass',
+        hexSecret: localChallengeHex,
+      );
+
+      try {
+        final entryUuid = await api.createEntry(handle, '');
+        await api.setEntryField(handle, entryUuid, 'Title', 'Challenge Save');
+        final savedBytes = await api.saveDatabase(
+          handle,
+          password: 'challenge-pass',
+          localChallengeHex: localChallengeHex,
+        );
+        final savedFile = await _writeTempDatabase(
+          savedBytes,
+          suffix: '.kdbx',
+        );
+        final reopenedHandle = await api.openFromPathWithLocalChallenge(
+          savedFile.path,
+          password: 'challenge-pass',
+          hexSecret: localChallengeHex,
+        );
+        try {
+          final entries = await api.listEntries(reopenedHandle, '');
+          expect(entries.any((entry) => entry['uuid'] == entryUuid), isTrue);
+        } finally {
+          await api.closeDatabase(reopenedHandle);
+          await savedFile.delete();
+        }
+      } finally {
+        await api.closeDatabase(handle);
+      }
+    } finally {
+      database.close();
+      await api.dispose();
+      if (await databaseFile.exists()) await databaseFile.delete();
+    }
+  });
+
+  test(
+      'saveDatabase preserves keyfile and local-challenge databases through the worker isolate',
       () async {
     final api = KeePassNativeApi();
     final keyFile = await _writeTempDatabase(
@@ -265,8 +322,32 @@ void main() {
       );
 
       try {
-        expect(handle, greaterThan(0));
-        expect(await api.listGroups(handle, ''), isEmpty);
+        final entryUuid = await api.createEntry(handle, '');
+        await api.setEntryField(handle, entryUuid, 'Title', 'Combined Save');
+        final savedBytes = await api.saveDatabase(
+          handle,
+          password: 'combined-pass',
+          keyFileBytes: await keyFile.readAsBytes(),
+          localChallengeHex: localChallengeHex,
+        );
+        final savedFile = await _writeTempDatabase(
+          savedBytes,
+          suffix: '.kdbx',
+        );
+        final reopenedHandle =
+            await api.openFromPathWithKeyFileAndLocalChallenge(
+          savedFile.path,
+          password: 'combined-pass',
+          keyFilePath: keyFile.path,
+          hexSecret: localChallengeHex,
+        );
+        try {
+          final entries = await api.listEntries(reopenedHandle, '');
+          expect(entries.any((entry) => entry['uuid'] == entryUuid), isTrue);
+        } finally {
+          await api.closeDatabase(reopenedHandle);
+          await savedFile.delete();
+        }
       } finally {
         await api.closeDatabase(handle);
       }

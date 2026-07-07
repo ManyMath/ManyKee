@@ -101,9 +101,8 @@ class KeePassWebApi implements KeePassApi {
       'custom_data':
           (payload['custom_data'] as Map?)?.cast<String, dynamic>() ??
               <String, dynamic>{},
-      'protected':
-          (payload['protected'] as Map?)?.cast<String, dynamic>() ??
-              <String, dynamic>{},
+      'protected': (payload['protected'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{},
     };
   }
 
@@ -193,6 +192,9 @@ class KeePassWebApi implements KeePassApi {
     int handle, {
     required String password,
     List<int>? keyFileBytes,
+    String? yubiKeySlot,
+    int yubiKeySerial = 0,
+    String? localChallengeHex,
   }) async {
     final result = await _bridge.call('save_db', [
       handle,

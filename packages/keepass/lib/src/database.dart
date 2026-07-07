@@ -223,10 +223,99 @@ class Database implements Finalizable {
     }
   }
 
+  void saveWithYubiKey(
+    String path, {
+    required String password,
+    required String slot,
+    int serial = 0,
+  }) {
+    _ensureOpen();
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final slotPtr = toNativeString(slot);
+    try {
+      final result = bindings.kpxc_database_save_with_yubikey(
+        _handle,
+        pathPtr,
+        passPtr,
+        slotPtr,
+        serial,
+      );
+      KeePassError.checkResult(result, 'Failed to save database with YubiKey');
+    } finally {
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(slotPtr);
+    }
+  }
+
+  void saveWithKeyFileAndYubiKey(
+    String path, {
+    required String password,
+    required String keyFilePath,
+    required String slot,
+    int serial = 0,
+  }) {
+    _ensureOpen();
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final keyPtr = toNativeString(keyFilePath);
+    final slotPtr = toNativeString(slot);
+    try {
+      final result = bindings.kpxc_database_save_with_keyfile_and_yubikey(
+        _handle,
+        pathPtr,
+        passPtr,
+        keyPtr,
+        slotPtr,
+        serial,
+      );
+      KeePassError.checkResult(
+        result,
+        'Failed to save database with key file and YubiKey',
+      );
+    } finally {
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(keyPtr);
+      freeNativeString(slotPtr);
+    }
+  }
+
+  void saveWithLocalChallenge(
+    String path, {
+    required String password,
+    required String hexSecret,
+  }) {
+    _ensureOpen();
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final secretPtr = toNativeString(hexSecret);
+    try {
+      final result = bindings.kpxc_database_save_with_local_challenge(
+        _handle,
+        pathPtr,
+        passPtr,
+        secretPtr,
+      );
+      KeePassError.checkResult(
+        result,
+        'Failed to save database with local challenge',
+      );
+    } finally {
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(secretPtr);
+    }
+  }
+
   /// Save the database to a temporary file and return its bytes.
   List<int> saveBytes({
     required String password,
     List<int>? keyFileBytes,
+    String? yubiKeySlot,
+    int yubiKeySerial = 0,
+    String? localChallengeHex,
   }) {
     _ensureOpen();
     final tempDir = Directory.systemTemp.createTempSync('manykee_save_');
@@ -237,6 +326,37 @@ class Database implements Finalizable {
       if (keyFileBytes != null) {
         tempKeyFile = File('${tempDir.path}/data.key');
         tempKeyFile.writeAsBytesSync(keyFileBytes, flush: true);
+      }
+
+      if (localChallengeHex != null && tempKeyFile != null) {
+        saveWithKeyFileAndLocalChallenge(
+          tempFile.path,
+          password: password,
+          keyFilePath: tempKeyFile.path,
+          hexSecret: localChallengeHex,
+        );
+      } else if (localChallengeHex != null) {
+        saveWithLocalChallenge(
+          tempFile.path,
+          password: password,
+          hexSecret: localChallengeHex,
+        );
+      } else if (yubiKeySlot != null && tempKeyFile != null) {
+        saveWithKeyFileAndYubiKey(
+          tempFile.path,
+          password: password,
+          keyFilePath: tempKeyFile.path,
+          slot: yubiKeySlot,
+          serial: yubiKeySerial,
+        );
+      } else if (yubiKeySlot != null) {
+        saveWithYubiKey(
+          tempFile.path,
+          password: password,
+          slot: yubiKeySlot,
+          serial: yubiKeySerial,
+        );
+      } else if (tempKeyFile != null) {
         saveWithKeyFile(
           tempFile.path,
           password: password,
@@ -300,6 +420,33 @@ class Database implements Finalizable {
       freeNativeString(pathPtr);
       freeNativeString(passPtr);
       freeNativeString(slotPtr);
+    }
+  }
+
+  factory Database.openWithLocalChallenge(
+    String path, {
+    required String password,
+    required String hexSecret,
+  }) {
+    final pathPtr = toNativeString(path);
+    final passPtr = toNativeString(password);
+    final secretPtr = toNativeString(hexSecret);
+    try {
+      final handle = bindings.kpxc_database_open_with_local_challenge(
+        pathPtr,
+        passPtr,
+        secretPtr,
+      );
+      if (handle == nullptr) {
+        throw KeePassError.fromLastError(
+          'Failed to open with local challenge',
+        );
+      }
+      return Database._(handle);
+    } finally {
+      freeNativeString(pathPtr);
+      freeNativeString(passPtr);
+      freeNativeString(secretPtr);
     }
   }
 
