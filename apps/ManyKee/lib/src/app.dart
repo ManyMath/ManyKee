@@ -9,6 +9,7 @@ import 'state/recent_database.dart';
 import 'state/manykee_vault_state.dart';
 import 'state/settings_state.dart';
 import 'state/vault_state_provider.dart';
+import 'services/screen_protection.dart';
 import 'theme.dart';
 import 'unlock/unlock_page.dart';
 import 'vault/vault_page.dart';
@@ -26,6 +27,7 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
   ManyKeeSettings? _appliedSettings;
   bool? _appliedLockedState;
   bool? _appliedDirtyState;
+  bool? _appliedScreenProtectionState;
 
   @override
   void initState() {
@@ -37,6 +39,7 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _idleTimer?.cancel();
+    unawaited(ScreenProtection.setSecure(false));
     super.dispose();
   }
 
@@ -94,6 +97,11 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
       clearDelay: settings.clipboardAutoClearDelay,
       pasteOnceEnabled: settings.clipboardPasteOnce,
     );
+    final secure = settings.screenProtectionEnabled && !vault.isLocked;
+    if (_appliedScreenProtectionState != secure) {
+      _appliedScreenProtectionState = secure;
+      unawaited(ScreenProtection.setSecure(secure));
+    }
 
     if (_appliedSettings == settings &&
         _appliedLockedState == vault.isLocked &&

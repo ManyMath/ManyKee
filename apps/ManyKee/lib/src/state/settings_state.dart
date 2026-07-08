@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _prefsThemeModeKey = 'manykee.settings.themeMode';
 const _prefsAutoLockMinutesKey = 'manykee.settings.autoLockMinutes';
 const _prefsLockOnBackgroundKey = 'manykee.settings.lockOnBackground';
+const _prefsScreenProtectionKey = 'manykee.settings.screenProtection';
 const _prefsClipboardSecondsKey = 'manykee.settings.clipboardSeconds';
 const _prefsClipboardPasteOnceKey = 'manykee.settings.clipboardPasteOnce';
 
@@ -42,6 +43,7 @@ class ManyKeeSettings {
     this.themePreference = ManyKeeThemePreference.system,
     this.autoLockTimeoutMinutes = 5,
     this.lockOnBackground = true,
+    this.screenProtectionEnabled = true,
     this.clipboardAutoClearSeconds = 30,
     this.clipboardPasteOnce = false,
   });
@@ -49,6 +51,7 @@ class ManyKeeSettings {
   final ManyKeeThemePreference themePreference;
   final int autoLockTimeoutMinutes;
   final bool lockOnBackground;
+  final bool screenProtectionEnabled;
   final int clipboardAutoClearSeconds;
   final bool clipboardPasteOnce;
 
@@ -68,6 +71,7 @@ class ManyKeeSettings {
     ManyKeeThemePreference? themePreference,
     int? autoLockTimeoutMinutes,
     bool? lockOnBackground,
+    bool? screenProtectionEnabled,
     int? clipboardAutoClearSeconds,
     bool? clipboardPasteOnce,
   }) {
@@ -76,6 +80,8 @@ class ManyKeeSettings {
       autoLockTimeoutMinutes:
           autoLockTimeoutMinutes ?? this.autoLockTimeoutMinutes,
       lockOnBackground: lockOnBackground ?? this.lockOnBackground,
+      screenProtectionEnabled:
+          screenProtectionEnabled ?? this.screenProtectionEnabled,
       clipboardAutoClearSeconds:
           clipboardAutoClearSeconds ?? this.clipboardAutoClearSeconds,
       clipboardPasteOnce: clipboardPasteOnce ?? this.clipboardPasteOnce,
@@ -89,6 +95,7 @@ class ManyKeeSettings {
         other.themePreference == themePreference &&
         other.autoLockTimeoutMinutes == autoLockTimeoutMinutes &&
         other.lockOnBackground == lockOnBackground &&
+        other.screenProtectionEnabled == screenProtectionEnabled &&
         other.clipboardAutoClearSeconds == clipboardAutoClearSeconds &&
         other.clipboardPasteOnce == clipboardPasteOnce;
   }
@@ -98,6 +105,7 @@ class ManyKeeSettings {
     themePreference,
     autoLockTimeoutMinutes,
     lockOnBackground,
+    screenProtectionEnabled,
     clipboardAutoClearSeconds,
     clipboardPasteOnce,
   );
@@ -119,6 +127,7 @@ final manyKeeSettingsLoaderProvider = FutureProvider<void>((ref) async {
       fallback: 5,
     ),
     lockOnBackground: prefs.getBool(_prefsLockOnBackgroundKey) ?? true,
+    screenProtectionEnabled: prefs.getBool(_prefsScreenProtectionKey) ?? true,
     clipboardAutoClearSeconds: _validOption(
       prefs.getInt(_prefsClipboardSecondsKey),
       clipboardSecondOptions,
@@ -134,6 +143,10 @@ final manyKeeSettingsPersistenceProvider = Provider<void>((ref) {
     await prefs.setString(_prefsThemeModeKey, next.themePreference.name);
     await prefs.setInt(_prefsAutoLockMinutesKey, next.autoLockTimeoutMinutes);
     await prefs.setBool(_prefsLockOnBackgroundKey, next.lockOnBackground);
+    await prefs.setBool(
+      _prefsScreenProtectionKey,
+      next.screenProtectionEnabled,
+    );
     await prefs.setInt(
       _prefsClipboardSecondsKey,
       next.clipboardAutoClearSeconds,
@@ -174,6 +187,10 @@ class ManyKeeSettingsController {
 
   void setLockOnBackground(bool value) {
     _set((settings) => settings.copyWith(lockOnBackground: value));
+  }
+
+  void setScreenProtectionEnabled(bool value) {
+    _set((settings) => settings.copyWith(screenProtectionEnabled: value));
   }
 
   void setClipboardAutoClearSeconds(int seconds) {

@@ -78,6 +78,17 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   ),
                   _SettingRow(
+                    title: 'Screen protection',
+                    description:
+                        'Hide unlocked vault content from app switchers and screen capture where supported.',
+                    trailing: MSwitch(
+                      key: ValueKey<bool>(settings.screenProtectionEnabled),
+                      initialValue: settings.screenProtectionEnabled,
+                      semanticLabel: 'Screen protection',
+                      onChanged: controller.setScreenProtectionEnabled,
+                    ),
+                  ),
+                  _SettingRow(
                     title: 'Clipboard auto-clear',
                     description:
                         'Choose how long copied secrets remain on the clipboard.',

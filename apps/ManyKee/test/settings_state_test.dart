@@ -23,6 +23,7 @@ void main() {
       'manykee.settings.themeMode': 'dark',
       'manykee.settings.autoLockMinutes': 15,
       'manykee.settings.lockOnBackground': false,
+      'manykee.settings.screenProtection': false,
       'manykee.settings.clipboardSeconds': 60,
       'manykee.settings.clipboardPasteOnce': true,
     });
@@ -37,6 +38,7 @@ void main() {
         themePreference: ManyKeeThemePreference.dark,
         autoLockTimeoutMinutes: 15,
         lockOnBackground: false,
+        screenProtectionEnabled: false,
         clipboardAutoClearSeconds: 60,
         clipboardPasteOnce: true,
       ),
@@ -67,6 +69,7 @@ void main() {
     controller.setThemePreference(ManyKeeThemePreference.light);
     controller.setAutoLockTimeoutMinutes(30);
     controller.setLockOnBackground(false);
+    controller.setScreenProtectionEnabled(false);
     controller.setClipboardAutoClearSeconds(10);
     controller.setClipboardPasteOnce(true);
     await Future<void>.delayed(Duration.zero);
@@ -75,6 +78,7 @@ void main() {
     expect(prefs.getString('manykee.settings.themeMode'), 'light');
     expect(prefs.getInt('manykee.settings.autoLockMinutes'), 30);
     expect(prefs.getBool('manykee.settings.lockOnBackground'), false);
+    expect(prefs.getBool('manykee.settings.screenProtection'), false);
     expect(prefs.getInt('manykee.settings.clipboardSeconds'), 10);
     expect(prefs.getBool('manykee.settings.clipboardPasteOnce'), true);
   });

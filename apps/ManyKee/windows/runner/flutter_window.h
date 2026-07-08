@@ -3,6 +3,8 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include <memory>
 
@@ -23,11 +25,21 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  // Registers the com.manykee.native/screen_protection MethodChannel that
+  // toggles WDA_EXCLUDEFROMCAPTURE on this window while vault content is
+  // visible.
+  void RegisterScreenProtectionChannel();
+
   // The project to run.
   flutter::DartProject project_;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // Kept alive for the lifetime of the window; SetMethodCallHandler's closure
+  // captures `this` and must remain reachable.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      screen_protection_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
