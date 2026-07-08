@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -59,6 +60,31 @@ class _VaultActions {
   }
 
   Future<void> saveCopyAs() async {
+    if (kIsWeb) {
+      final password = await showSavePasswordDialog(
+        context,
+        title: 'Save a copy',
+        message: 'Enter the master password for the downloaded database.',
+      );
+      if (password == null) return;
+      try {
+        await vault.saveCopyAs(
+          filePath: _copyFileName(vault.lastFilename),
+          password: password,
+        );
+        if (context.mounted) {
+          showMToast(
+            context,
+            builder: (_) => const Text('Database copy downloaded.'),
+            duration: const Duration(seconds: 2),
+          );
+        }
+      } catch (error) {
+        if (context.mounted) _showActionError(context, error);
+      }
+      return;
+    }
+
     final String? selectedPath;
     try {
       selectedPath = await FilePicker.platform.saveFile(

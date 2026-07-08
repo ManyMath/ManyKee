@@ -21,6 +21,8 @@ dependencies:
     path: ../../packages/keepass_flutter
   keepass_ui:
     path: ../../packages/keepass_ui
+  keepass_web:
+    path: ../../packages/keepass_web
   manyui:
     path: ../../../ManyUI/manyui
   manyui_hooks:
@@ -28,6 +30,7 @@ dependencies:
   manyui_riverpod:
     path: ../../../ManyUI/manyui_riverpod
   shared_preferences: ^2.4.0
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_lints: ^5.0.0

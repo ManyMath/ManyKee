@@ -4,7 +4,10 @@ import 'dart:async';
 ///
 /// Implemented by:
 /// - Native: `packages/keepass` Database class (dart:ffi)
-/// - Web: `packages/keepass_web` KeePassWebApi (Worker bridge)
+///
+/// `packages/keepass_web` exposes a `KeePassWebApi` with the same method
+/// shape, but intentionally does not implement this interface so browser
+/// builds never import `dart:ffi`.
 ///
 /// The web implementation communicates with a WASM module via postMessage RPC.
 /// All methods are async because the web path involves Worker message passing.

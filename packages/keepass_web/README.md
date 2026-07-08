@@ -1,8 +1,8 @@
 # keepass_web
 
-KeePass KDBX SDK for the web. Implements the platform-agnostic `KeePassApi`
-from [`package:keepass`](https://pub.dev/packages/keepass) on top of a WASM
-module hosted in a dedicated Web Worker.
+KeePass KDBX SDK for the web. Exposes a `KeePassWebApi` surface that mirrors
+the platform-agnostic native API without importing `package:keepass` or
+`dart:ffi`, backed by a WASM module hosted in a dedicated Web Worker.
 
 ## Why this package
 
@@ -68,8 +68,7 @@ See [`example/`](example/) for a full Flutter Web vault browser.
 
 ## What ships in the SDK
 
-- `KeePassWebApi`: implementation of `KeePassApi` (from `package:keepass`)
-  that proxies all calls to the WASM worker.
+- `KeePassWebApi`: web-safe API that proxies all calls to the WASM worker.
 - `WorkerBridge`: low-level RPC over `postMessage` with progress streaming.
 - `WorkerError`: typed errors returned by the worker.
 - `WebUsbYubiKey` helpers: WebUSB challenge-response for HMAC-SHA1 unlock.

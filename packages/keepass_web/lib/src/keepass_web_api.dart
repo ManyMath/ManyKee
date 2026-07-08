@@ -2,28 +2,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:keepass/keepass.dart';
-
 import 'worker_bridge.dart';
 import 'worker_error.dart';
 
-class KeePassWebApi implements KeePassApi {
+class KeePassWebApi {
   final WorkerBridge _bridge = WorkerBridge();
 
-  @override
   Stream<int> get progress => _bridge.progress;
 
-  @override
   Future<void> init() => _bridge.init();
 
-  @override
   Future<int> createDatabase() async {
     final result = await _bridge.call('create_db', const []);
     final json = jsonDecode(result) as Map<String, dynamic>;
     return json['handle'] as int;
   }
 
-  @override
   Future<int> openDatabase(List<int> dbBytes,
       {required String password}) async {
     final result = await _bridge.call('open_db', [
@@ -35,7 +29,6 @@ class KeePassWebApi implements KeePassApi {
     return json['handle'] as int;
   }
 
-  @override
   Future<int> openDatabaseWithKeyFile(
     List<int> dbBytes, {
     required String password,
@@ -50,7 +43,6 @@ class KeePassWebApi implements KeePassApi {
     return json['handle'] as int;
   }
 
-  @override
   Future<int> openDatabaseWithChallengeResponse(
     List<int> dbBytes, {
     required String password,
@@ -65,12 +57,10 @@ class KeePassWebApi implements KeePassApi {
     return json['handle'] as int;
   }
 
-  @override
   Future<void> closeDatabase(int handle) async {
     await _bridge.call('close_db', [handle]);
   }
 
-  @override
   Future<List<Map<String, dynamic>>> listGroups(
       int handle, String groupUuid) async {
     final result = await _bridge.call('list_groups', [handle, groupUuid]);
@@ -78,7 +68,6 @@ class KeePassWebApi implements KeePassApi {
     return list.cast<Map<String, dynamic>>();
   }
 
-  @override
   Future<List<Map<String, dynamic>>> listEntries(
       int handle, String groupUuid) async {
     final result = await _bridge.call('list_entries', [handle, groupUuid]);
@@ -86,7 +75,6 @@ class KeePassWebApi implements KeePassApi {
     return list.cast<Map<String, dynamic>>();
   }
 
-  @override
   Future<Map<String, dynamic>> readEntryFields(
       int handle, String entryUuid) async {
     final result = await _bridge.call('read_entry_fields', [handle, entryUuid]);
@@ -106,7 +94,6 @@ class KeePassWebApi implements KeePassApi {
     };
   }
 
-  @override
   Future<String?> readEntryField(
     int handle,
     String entryUuid,
@@ -122,14 +109,12 @@ class KeePassWebApi implements KeePassApi {
     }
   }
 
-  @override
   Future<String> createEntry(int handle, String groupUuid) async {
     final result = await _bridge.call('create_entry', [handle, groupUuid, '']);
     final json = jsonDecode(result) as Map<String, dynamic>;
     return json['uuid'] as String;
   }
 
-  @override
   Future<void> setEntryField(
     int handle,
     String entryUuid,
@@ -146,12 +131,10 @@ class KeePassWebApi implements KeePassApi {
     ]);
   }
 
-  @override
   Future<void> deleteEntry(int handle, String entryUuid) async {
     await _bridge.call('delete_entry', [handle, entryUuid]);
   }
 
-  @override
   Future<void> moveEntry(
     int handle,
     String entryUuid,
@@ -160,7 +143,6 @@ class KeePassWebApi implements KeePassApi {
     await _bridge.call('move_entry', [handle, entryUuid, targetGroupUuid]);
   }
 
-  @override
   Future<String> createGroup(int handle, String parentUuid, String name) async {
     final result =
         await _bridge.call('create_group', [handle, parentUuid, name]);
@@ -168,17 +150,14 @@ class KeePassWebApi implements KeePassApi {
     return json['uuid'] as String;
   }
 
-  @override
   Future<void> renameGroup(int handle, String groupUuid, String name) async {
     await _bridge.call('rename_group', [handle, groupUuid, name]);
   }
 
-  @override
   Future<void> deleteGroup(int handle, String groupUuid) async {
     await _bridge.call('delete_group', [handle, groupUuid]);
   }
 
-  @override
   Future<void> moveGroup(
     int handle,
     String groupUuid,
@@ -187,7 +166,6 @@ class KeePassWebApi implements KeePassApi {
     await _bridge.call('move_group', [handle, groupUuid, targetParentUuid]);
   }
 
-  @override
   Future<List<int>> saveDatabase(
     int handle, {
     required String password,
@@ -204,7 +182,6 @@ class KeePassWebApi implements KeePassApi {
     return _decodeHex(result);
   }
 
-  @override
   Future<Map<String, dynamic>?> getTotpCode(int handle, String entryUuid) {
     return _bridge.call('get_totp', [handle, entryUuid]).then((result) {
       final decoded = jsonDecode(result);
@@ -215,7 +192,6 @@ class KeePassWebApi implements KeePassApi {
     });
   }
 
-  @override
   Future<Map<String, dynamic>> mergeDatabases(int handleA, int handleB) async {
     final result = await _bridge.call('merge_databases', [handleA, handleB]);
     return jsonDecode(result) as Map<String, dynamic>;
@@ -227,7 +203,6 @@ class KeePassWebApi implements KeePassApi {
     ]);
   }
 
-  @override
   Future<void> dispose() async {
     _bridge.dispose();
   }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
@@ -80,8 +82,10 @@ class _UnlockForm extends HookConsumerWidget {
     final recents = ref.watch(recentDatabasesProvider);
 
     final filePath = useState<String?>(null);
+    final databaseBytes = useState<Uint8List?>(null);
     final filename = useState<String?>(null);
     final keyFilePath = useState<String?>(null);
+    final keyFileBytes = useState<Uint8List?>(null);
     final keyFilename = useState<String?>(null);
     final password = useState('');
     final unlocking = useState(false);
@@ -97,6 +101,7 @@ class _UnlockForm extends HookConsumerWidget {
 
     void selectRecent(RecentDatabase recent) {
       filePath.value = recent.path;
+      databaseBytes.value = null;
       filename.value = recent.label;
     }
 
@@ -105,10 +110,13 @@ class _UnlockForm extends HookConsumerWidget {
         type: FileType.custom,
         allowedExtensions: const <String>['kdbx'],
         dialogTitle: 'Choose KDBX File',
+        withData: kIsWeb,
       );
       if (result != null && result.files.isNotEmpty) {
-        filePath.value = result.files.single.path;
-        filename.value = result.files.single.name;
+        final file = result.files.single;
+        filePath.value = file.path ?? file.name;
+        databaseBytes.value = file.bytes;
+        filename.value = file.name;
       }
     }
 
@@ -117,10 +125,13 @@ class _UnlockForm extends HookConsumerWidget {
         type: FileType.custom,
         allowedExtensions: const <String>['key', 'keyx', 'xml'],
         dialogTitle: 'Choose Key File',
+        withData: kIsWeb,
       );
       if (result != null && result.files.isNotEmpty) {
-        keyFilePath.value = result.files.single.path;
-        keyFilename.value = result.files.single.name;
+        final file = result.files.single;
+        keyFilePath.value = file.path;
+        keyFileBytes.value = file.bytes;
+        keyFilename.value = file.name;
       }
     }
 
@@ -133,7 +144,9 @@ class _UnlockForm extends HookConsumerWidget {
         password: password,
         passwordController: passwordController,
         filePath: filePath.value!,
+        dbBytes: databaseBytes.value,
         keyFilePath: keyFilePath.value,
+        keyFileBytes: keyFileBytes.value,
         filename: filename.value,
         yubiKeySlot: useYubiKey.value && (yubiKeys.value?.isNotEmpty ?? false)
             ? '2'
@@ -676,19 +689,31 @@ Future<void> _runUnlock({
   required MController<String> passwordController,
   required String filePath,
   String? keyFilePath,
+  Uint8List? dbBytes,
+  Uint8List? keyFileBytes,
   String? filename,
   String? yubiKeySlot,
 }) async {
   final vault = ref.read(vaultStateProvider);
   unlocking.value = true;
   try {
-    await vault.unlockFromPath(
-      filePath: filePath,
-      password: passwordController.value,
-      keyFilePath: keyFilePath,
-      filename: filename,
-      yubiKeySlot: yubiKeySlot,
-    );
+    if (dbBytes != null) {
+      await vault.unlock(
+        dbBytes: dbBytes,
+        filePath: filePath,
+        password: passwordController.value,
+        keyFileBytes: keyFileBytes,
+        filename: filename,
+      );
+    } else {
+      await vault.unlockFromPath(
+        filePath: filePath,
+        password: passwordController.value,
+        keyFilePath: keyFilePath,
+        filename: filename,
+        yubiKeySlot: yubiKeySlot,
+      );
+    }
   } on UnimplementedError catch (e) {
     vault.setError(
       'UNSUPPORTED',
@@ -708,8 +733,10 @@ Future<void> _runUnlock({
     password.value = '';
   }
   if (vault.errorCode == null) {
-    ref
-        .read(recentDatabasesControllerProvider)
-        .recordOpened(filePath, filename ?? vault.lastFilename ?? filePath);
+    if (!kIsWeb) {
+      ref
+          .read(recentDatabasesControllerProvider)
+          .recordOpened(filePath, filename ?? vault.lastFilename ?? filePath);
+    }
   }
 }

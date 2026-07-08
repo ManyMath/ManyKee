@@ -119,7 +119,7 @@ describe('keepassxc-wasm JS module', () => {
     wasm.close_db(handle);
   });
 
-  test('read_entry_fields returns field values including Password', () => {
+  test('read_entry_fields returns field values and protected metadata', () => {
     const openResult = JSON.parse(wasm.open_db(new Uint8Array(TEST_DB_AES), 'demopass', undefined));
     const handle = openResult.handle;
 
@@ -128,13 +128,19 @@ describe('keepassxc-wasm JS module', () => {
     expect(entries.length).toBeGreaterThan(0);
 
     const fields = JSON.parse(wasm.read_entry_fields(handle, entries[0].uuid));
-    expect(fields).toHaveProperty('Title');
-    expect(fields).toHaveProperty('UserName');
-    expect(fields).toHaveProperty('Password');
+    expect(fields).toHaveProperty('fields');
+    expect(fields).toHaveProperty('protected');
+    expect(fields.fields).toHaveProperty('Title');
+    expect(fields.fields).toHaveProperty('UserName');
+    expect(fields.fields).toHaveProperty('Password');
     // Known values from test DB
-    expect(fields.Title).toBe('ASDF');
-    expect(fields.UserName).toBe('ghj');
-    expect(fields.Password).toBe('klmno');
+    expect(fields.fields.Title).toBe('ASDF');
+    expect(fields.fields.UserName).toBe('ghj');
+    expect(fields.fields.Password).toBe('');
+    expect(fields.protected.Password).toBe(true);
+
+    const password = wasm.read_entry_field(handle, entries[0].uuid, 'Password');
+    expect(password).toBe('klmno');
 
     wasm.close_db(handle);
   });
