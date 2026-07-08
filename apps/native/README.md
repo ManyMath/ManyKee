@@ -1,7 +1,10 @@
 # apps/native
 
-This app is a secondary/transitional native host in the v1.5 workspace.
+This is a legacy native host retained as a transitional reference.
 
-The canonical Flutter reference GUI now lives in `packages/keepass_flutter/example`, which is where the primary local GUI verification should happen.
+The canonical product app is now `apps/ManyKee`. New user-facing features,
+verification, and documentation should target that app.
 
-Keep this app only for transitional workspace compatibility while productization finishes. Do not treat it as the primary reference surface for new verification or documentation work.
+Do not add new product behavior here. Keep the host only while it remains useful
+for comparison or while its remaining tests are being ported into
+`apps/ManyKee`, `packages/keepass_flutter/example`, or package-level coverage.
