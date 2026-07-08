@@ -21,6 +21,7 @@ import 'group_tree.dart';
 import 'move_dialog.dart';
 import 'save_password_dialog.dart';
 import 'unsaved_changes_dialog.dart';
+import 'vault_sessions_dialog.dart';
 
 void _showActionError(BuildContext context, Object error) {
   if (!context.mounted) return;
@@ -310,6 +311,7 @@ class VaultPage extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
     final vault = ref.watch(vaultStateProvider);
+    final sessions = ref.watch(vaultSessionsControllerProvider);
     final narrowPane = useState(_NarrowPane.groups);
     final actions = _VaultActions(context, vault);
 
@@ -347,6 +349,10 @@ class VaultPage extends HookConsumerWidget {
                       context,
                       currentFilePath: currentFilePath,
                     ),
+              onDatabases: sessions == null
+                  ? null
+                  : () => showVaultSessionsDialog(context, sessions),
+              databaseCount: sessions?.sessionCount ?? 1,
               onToggleTheme: () {
                 ref
                     .read(manyKeeSettingsControllerProvider)
@@ -379,6 +385,8 @@ class _VaultHeaderActions extends StatelessWidget {
     required this.onSaveCopy,
     required this.onDiscard,
     required this.onMerge,
+    required this.onDatabases,
+    required this.databaseCount,
     required this.onToggleTheme,
     required this.onSettings,
     required this.onLock,
@@ -391,6 +399,8 @@ class _VaultHeaderActions extends StatelessWidget {
   final VoidCallback onSaveCopy;
   final VoidCallback onDiscard;
   final VoidCallback? onMerge;
+  final VoidCallback? onDatabases;
+  final int databaseCount;
   final VoidCallback onToggleTheme;
   final VoidCallback onSettings;
   final VoidCallback onLock;
@@ -434,6 +444,13 @@ class _VaultHeaderActions extends StatelessWidget {
           onPressed: canMerge ? onMerge : null,
           semanticLabel: 'Merge databases',
           child: const Text('Merge databases…'),
+        ),
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: onDatabases,
+          child: Text(
+            databaseCount > 1 ? 'Databases ($databaseCount)' : 'Databases',
+          ),
         ),
         MButton(
           variant: MButtonVariant.ghost,

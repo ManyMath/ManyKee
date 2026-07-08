@@ -9,6 +9,7 @@ import 'state/recent_database.dart';
 import 'state/manykee_vault_state.dart';
 import 'state/settings_state.dart';
 import 'state/vault_state_provider.dart';
+import 'state/vault_sessions.dart';
 import 'services/screen_protection.dart';
 import 'theme.dart';
 import 'unlock/unlock_page.dart';
@@ -53,8 +54,8 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
 
     final settings = ref.read(manyKeeSettingsProvider);
     final vault = ref.read(vaultStateProvider);
-    if (settings.lockOnBackground && _canAutoLock(vault)) {
-      unawaited(vault.lock());
+    if (settings.lockOnBackground) {
+      _lockCleanVaults(vault);
     }
   }
 
@@ -97,7 +98,7 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
       clearDelay: settings.clipboardAutoClearDelay,
       pasteOnceEnabled: settings.clipboardPasteOnce,
     );
-    final secure = settings.screenProtectionEnabled && !vault.isLocked;
+    final secure = settings.screenProtectionEnabled && _hasUnlockedVault(vault);
     if (_appliedScreenProtectionState != secure) {
       _appliedScreenProtectionState = secure;
       unawaited(ScreenProtection.setSecure(secure));
@@ -123,18 +124,43 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
   void _restartIdleTimer(ManyKeeSettings settings, ManyKeeVaultState vault) {
     _idleTimer?.cancel();
     _idleTimer = null;
-    if (!_canAutoLock(vault) || settings.autoLockTimeout == Duration.zero) {
+    if (!_hasAutoLockCandidate(vault) ||
+        settings.autoLockTimeout == Duration.zero) {
       return;
     }
 
     _idleTimer = Timer(settings.autoLockTimeout, () {
       if (!mounted) return;
       final vault = ref.read(vaultStateProvider);
-      if (_canAutoLock(vault)) unawaited(vault.lock());
+      _lockCleanVaults(vault);
     });
   }
 
   bool _canAutoLock(ManyKeeVaultState vault) {
     return !vault.isLocked && !vault.isDirty;
+  }
+
+  bool _hasUnlockedVault(ManyKeeVaultState vault) {
+    if (vault is VaultSessionsController) {
+      return vault.hasUnlockedSessions;
+    }
+    return !vault.isLocked;
+  }
+
+  bool _hasAutoLockCandidate(ManyKeeVaultState vault) {
+    if (vault is VaultSessionsController) {
+      return vault.hasUnlockedCleanSessions;
+    }
+    return _canAutoLock(vault);
+  }
+
+  void _lockCleanVaults(ManyKeeVaultState vault) {
+    if (vault is VaultSessionsController) {
+      if (vault.hasUnlockedCleanSessions) {
+        unawaited(vault.lockCleanSessions());
+      }
+      return;
+    }
+    if (_canAutoLock(vault)) unawaited(vault.lock());
   }
 }

@@ -13,6 +13,7 @@ import '../state/settings_state.dart';
 import '../state/unlock_error_mapper.dart';
 import '../state/vault_state_provider.dart';
 import '../theme.dart';
+import '../vault/vault_sessions_dialog.dart';
 
 /// Landing page: open a .kdbx database and unlock it.
 ///
@@ -26,12 +27,24 @@ class UnlockPage extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = MTheme.of(context);
     final vault = ref.watch(vaultStateProvider);
+    final sessions = ref.watch(vaultSessionsControllerProvider);
+    final showSessions =
+        sessions != null &&
+        (sessions.sessionCount > 1 || sessions.hasUnlockedSessions);
 
     return MScaffold(
       header: Row(
         children: <Widget>[
           Text('ManyKee', style: theme.typography.title),
           const Spacer(),
+          if (showSessions) ...[
+            MButton(
+              variant: MButtonVariant.ghost,
+              onPressed: () => showVaultSessionsDialog(context, sessions),
+              child: const Text('Databases'),
+            ),
+            const SizedBox(width: 8),
+          ],
           MButton(
             variant: MButtonVariant.ghost,
             onPressed: () => showSettingsPage(context),

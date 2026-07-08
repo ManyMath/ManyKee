@@ -6,9 +6,8 @@ import 'package:keepass_ui/keepass_ui.dart' show VaultState;
 /// small surface the ManyKee pages need beyond browsing: the last-opened
 /// file path (for the re-unlock view) and path-based unlocking.
 ///
-/// Mutation methods throw here by default; [NativeVaultState] overrides them
-/// with the real FFI-backed implementation, while [WebVaultState] still has
-/// no unlock path at all yet and so inherits these throws.
+/// Mutation methods throw here by default; platform states override the parts
+/// they support with native FFI or web WASM-backed implementations.
 abstract class ManyKeeVaultState extends VaultState {
   String? _errorDetail;
 
@@ -69,8 +68,6 @@ abstract class ManyKeeVaultState extends VaultState {
   /// Forgets [lastFilePath] and any remembered key file so the unlock page
   /// returns to the full "choose a database" view.
   void openDifferentFile();
-
-  // TODO(manykee): web support (see WebVaultState).
 
   @override
   Future<String> createEntry(String groupUuid) =>
