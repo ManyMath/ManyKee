@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:keepass_ui/keepass_ui.dart' show ClipboardManager;
 import 'package:manyui/manyui.dart';
+import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import 'state/recent_database.dart';
 import 'state/manykee_vault_state.dart';
@@ -62,7 +63,7 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(manyKeeSettingsProvider);
-    final mode = ref.watch(themeModeProvider);
+    final mode = ref.watchMThemeMode(themeModeProvider);
     final vault = ref.watch(vaultStateProvider);
     ref.watch(manyKeeSettingsLoaderProvider);
     ref.watch(manyKeeSettingsPersistenceProvider);

@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
+import 'package:manyui_hooks/manyui_hooks.dart';
+import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import '../settings/settings_page.dart';
 import '../state/recent_database.dart';
@@ -58,7 +60,7 @@ class UnlockPage extends HookConsumerWidget {
                 .toggleLightDarkTheme(),
             semanticLabel: 'Toggle theme',
             child: MIcon(
-              ref.watch(themeModeProvider) == MThemeMode.dark
+              ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark
                   ? MIconData.sun
                   : MIconData.moon,
             ),
@@ -679,9 +681,7 @@ class _RecentDatabasesList extends ConsumerWidget {
 /// Owns a disposed-with-the-widget [MController] for the password field so
 /// the form can clear it after a wrong-password attempt.
 MController<String> _usePasswordController() {
-  final controller = useMemoized(() => MController<String>(''));
-  useEffect(() => controller.dispose, <Object?>[controller]);
-  return controller;
+  return useMController<String>('');
 }
 
 String _ensureKdbxExtension(String path) =>

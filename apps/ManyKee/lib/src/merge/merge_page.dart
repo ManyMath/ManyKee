@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
+import 'package:manyui_hooks/manyui_hooks.dart';
 
 import '../state/unlock_error_mapper.dart';
 import 'merge_service.dart';
@@ -90,55 +91,59 @@ class MergeDatabasesPage extends HookConsumerWidget {
                 padding: const EdgeInsets.all(24),
                 child: switch (step.value) {
                   _MergeStep.openA => _OpenSourceStep(
-                      label: 'A (your open vault)',
-                      description:
-                          'This is the vault you currently have open, at '
-                          '$currentFilePath. Enter its password again to '
-                          'independently prove it still opens before '
-                          'anything else happens.',
-                      fixedFilePath: currentFilePath,
-                      onOpened: (filePath, password) async {
-                        errorMessage.value = null;
-                        try {
-                          await service.openA(
-                              filePath: filePath, password: password);
-                          step.value = _MergeStep.openB;
-                        } catch (e) {
-                          errorMessage.value = _friendlyMessage(e, filePath);
-                          rethrow;
-                        }
-                      },
-                    ),
+                    label: 'A (your open vault)',
+                    description:
+                        'This is the vault you currently have open, at '
+                        '$currentFilePath. Enter its password again to '
+                        'independently prove it still opens before '
+                        'anything else happens.',
+                    fixedFilePath: currentFilePath,
+                    onOpened: (filePath, password) async {
+                      errorMessage.value = null;
+                      try {
+                        await service.openA(
+                          filePath: filePath,
+                          password: password,
+                        );
+                        step.value = _MergeStep.openB;
+                      } catch (e) {
+                        errorMessage.value = _friendlyMessage(e, filePath);
+                        rethrow;
+                      }
+                    },
+                  ),
                   _MergeStep.openB => _OpenSourceStep(
-                      label: 'B',
-                      description:
-                          'Choose the other copy of this database (e.g. '
-                          'synced from another device). It must also open '
-                          'on its own, independently of database A, '
-                          'before the merge preview is shown. The merge '
-                          'engine can only merge divergent copies of the '
-                          'same original database, not two unrelated '
-                          'databases.',
-                      onOpened: (filePath, password) async {
-                        errorMessage.value = null;
-                        try {
-                          await service.openB(
-                              filePath: filePath, password: password);
-                          step.value = _MergeStep.confirm;
-                        } catch (e) {
-                          errorMessage.value = _friendlyMessage(e, filePath);
-                          rethrow;
-                        }
-                      },
-                    ),
+                    label: 'B',
+                    description:
+                        'Choose the other copy of this database (e.g. '
+                        'synced from another device). It must also open '
+                        'on its own, independently of database A, '
+                        'before the merge preview is shown. The merge '
+                        'engine can only merge divergent copies of the '
+                        'same original database, not two unrelated '
+                        'databases.',
+                    onOpened: (filePath, password) async {
+                      errorMessage.value = null;
+                      try {
+                        await service.openB(
+                          filePath: filePath,
+                          password: password,
+                        );
+                        step.value = _MergeStep.confirm;
+                      } catch (e) {
+                        errorMessage.value = _friendlyMessage(e, filePath);
+                        rethrow;
+                      }
+                    },
+                  ),
                   _MergeStep.confirm => _ConfirmStep(
-                      service: service,
-                      onCancel: () => Navigator.of(context).maybePop(),
-                      onMerged: (result) {
-                        mergeResult.value = result;
-                        step.value = _MergeStep.done;
-                      },
-                    ),
+                    service: service,
+                    onCancel: () => Navigator.of(context).maybePop(),
+                    onMerged: (result) {
+                      mergeResult.value = result;
+                      step.value = _MergeStep.done;
+                    },
+                  ),
                   _MergeStep.done => _DoneStep(result: mergeResult.value!),
                 },
               ),
@@ -181,8 +186,7 @@ class _OpenSourceStep extends HookWidget {
     final filePath = useState<String?>(fixedFilePath);
     final filename = useState<String?>(fixedFilePath);
     final password = useState('');
-    final passwordController = useMemoized(() => MController<String>(''));
-    useEffect(() => passwordController.dispose, <Object?>[passwordController]);
+    final passwordController = useMController<String>('');
     final opening = useState(false);
     final error = useState<String?>(null);
 
@@ -221,8 +225,9 @@ class _OpenSourceStep extends HookWidget {
         const SizedBox(height: 8),
         Text(
           description,
-          style: theme.typography.bodySmall
-              .copyWith(color: theme.colors.mutedForeground),
+          style: theme.typography.bodySmall.copyWith(
+            color: theme.colors.mutedForeground,
+          ),
         ),
         const SizedBox(height: 24),
         MLabel('Database $label'),
@@ -254,8 +259,9 @@ class _OpenSourceStep extends HookWidget {
           const SizedBox(height: 12),
           Text(
             error.value!,
-            style: theme.typography.bodySmall
-                .copyWith(color: theme.colors.destructive),
+            style: theme.typography.bodySmall.copyWith(
+              color: theme.colors.destructive,
+            ),
           ),
         ],
         if (opening.value) ...[
@@ -293,16 +299,12 @@ class _ConfirmStep extends HookWidget {
 
     final outputPath = useState<String?>(null);
     final outputPassword = useState('');
-    final outputPasswordController =
-        useMemoized(() => MController<String>(''));
-    useEffect(
-      () => outputPasswordController.dispose,
-      <Object?>[outputPasswordController],
-    );
+    final outputPasswordController = useMController<String>('');
     final saving = useState(false);
     final error = useState<String?>(null);
 
-    final canSave = outputPath.value != null &&
+    final canSave =
+        outputPath.value != null &&
         outputPassword.value.isNotEmpty &&
         !saving.value;
 
@@ -344,8 +346,9 @@ class _ConfirmStep extends HookWidget {
           'Both databases opened successfully. Nothing has been written to '
           'disk yet: review the changes below, then choose where to save '
           'the merged copy.',
-          style: theme.typography.bodySmall
-              .copyWith(color: theme.colors.mutedForeground),
+          style: theme.typography.bodySmall.copyWith(
+            color: theme.colors.mutedForeground,
+          ),
         ),
         const SizedBox(height: 20),
         _MergePreviewCard(preview: preview),
@@ -376,8 +379,9 @@ class _ConfirmStep extends HookWidget {
           const SizedBox(height: 12),
           Text(
             error.value!,
-            style: theme.typography.bodySmall
-                .copyWith(color: theme.colors.destructive),
+            style: theme.typography.bodySmall.copyWith(
+              color: theme.colors.destructive,
+            ),
           ),
         ],
         if (saving.value) ...[
@@ -398,8 +402,7 @@ class _ConfirmStep extends HookWidget {
             Expanded(
               child: MButton(
                 onPressed: canSave ? confirmAndSave : null,
-                child:
-                    Text(saving.value ? 'Merging…' : 'Confirm & save merge'),
+                child: Text(saving.value ? 'Merging…' : 'Confirm & save merge'),
               ),
             ),
           ],
@@ -440,15 +443,17 @@ class _MergePreviewCard extends StatelessWidget {
           children: <Widget>[
             Text(
               'Total changes: ${preview.totalChanges}',
-              style: theme.typography.bodySmall
-                  .copyWith(fontWeight: FontWeight.bold),
+              style: theme.typography.bodySmall.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             if (rows.isEmpty) ...[
               const SizedBox(height: 4),
               Text(
                 'No differences found.',
-                style: theme.typography.bodySmall
-                    .copyWith(color: theme.colors.mutedForeground),
+                style: theme.typography.bodySmall.copyWith(
+                  color: theme.colors.mutedForeground,
+                ),
               ),
             ],
             for (final row in rows) ...[
@@ -465,22 +470,25 @@ class _MergePreviewCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 '${preview.conflictsCount} conflict(s) resolved.',
-                style: theme.typography.bodySmall
-                    .copyWith(color: theme.colors.destructive),
+                style: theme.typography.bodySmall.copyWith(
+                  color: theme.colors.destructive,
+                ),
               ),
             ],
             if (preview.warningsCount > 0) ...[
               const SizedBox(height: 8),
               Text(
                 '${preview.warningsCount} warning(s):',
-                style: theme.typography.bodySmall
-                    .copyWith(color: theme.colors.destructive),
+                style: theme.typography.bodySmall.copyWith(
+                  color: theme.colors.destructive,
+                ),
               ),
               for (final warning in preview.warnings)
                 Text(
                   '• $warning',
-                  style: theme.typography.caption
-                      .copyWith(color: theme.colors.mutedForeground),
+                  style: theme.typography.caption.copyWith(
+                    color: theme.colors.mutedForeground,
+                  ),
                 ),
             ],
           ],
@@ -506,8 +514,9 @@ class _DoneStep extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'The merged database was saved to:',
-          style: theme.typography.bodySmall
-              .copyWith(color: theme.colors.mutedForeground),
+          style: theme.typography.bodySmall.copyWith(
+            color: theme.colors.mutedForeground,
+          ),
         ),
         const SizedBox(height: 4),
         Text(result.outputPath, style: theme.typography.bodySmall),

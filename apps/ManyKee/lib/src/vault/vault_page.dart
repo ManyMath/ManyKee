@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:keepass_ui/keepass_ui.dart' show VaultGroup;
 import 'package:manyui/manyui.dart';
+import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import '../merge/merge_page.dart';
 import '../settings/settings_page.dart';
@@ -339,7 +340,7 @@ class VaultPage extends HookConsumerWidget {
             child: _VaultHeaderActions(
               isDirty: vault.isDirty,
               canMerge: currentFilePath != null,
-              isDark: ref.watch(themeModeProvider) == MThemeMode.dark,
+              isDark: ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark,
               onSave: actions.saveChanges,
               onSaveCopy: actions.saveCopyAs,
               onDiscard: actions.discardAndLock,
