@@ -185,6 +185,8 @@ class _OpenSourceStep extends HookWidget {
     final passwordController = useMController<String>('');
     final opening = useState(false);
     final error = useState<String?>(null);
+    final databaseFocus = useFocusNode();
+    final passwordFocus = useFocusNode();
 
     final canOpen =
         filePath.value != null && password.value.isNotEmpty && !opening.value;
@@ -226,30 +228,37 @@ class _OpenSourceStep extends HookWidget {
           ),
         ),
         const SizedBox(height: 24),
-        MLabel('Database $label'),
-        const SizedBox(height: 8),
-        if (fixedFilePath != null)
-          Text(fixedFilePath!, overflow: TextOverflow.ellipsis)
-        else
-          MButton(
-            variant: MButtonVariant.outline,
-            onPressed: opening.value ? null : pickDatabase,
-            child: Text(
-              filename.value ?? 'Choose file…',
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        const SizedBox(height: 16),
-        const MLabel('Master password'),
-        const SizedBox(height: 8),
-        MTextField(
-          controller: passwordController,
-          obscureText: true,
-          placeholder: 'Password',
-          semanticLabel: 'Master password for database $label',
+        MField(
+          label: 'Database $label',
+          focusNode: fixedFilePath == null ? databaseFocus : null,
           enabled: !opening.value,
-          onChanged: (value) => password.value = value,
-          onSubmitted: (_) => open(),
+          child: fixedFilePath != null
+              ? Text(fixedFilePath!, overflow: TextOverflow.ellipsis)
+              : MButton(
+                  focusNode: databaseFocus,
+                  variant: MButtonVariant.outline,
+                  onPressed: opening.value ? null : pickDatabase,
+                  child: Text(
+                    filename.value ?? 'Choose file…',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+        ),
+        const SizedBox(height: 16),
+        MField(
+          label: 'Master password',
+          focusNode: passwordFocus,
+          enabled: !opening.value,
+          child: MTextField(
+            focusNode: passwordFocus,
+            controller: passwordController,
+            obscureText: true,
+            placeholder: 'Password',
+            semanticLabel: 'Master password for database $label',
+            enabled: !opening.value,
+            onChanged: (value) => password.value = value,
+            onSubmitted: (_) => open(),
+          ),
         ),
         if (error.value != null && !opening.value) ...[
           const SizedBox(height: 12),
@@ -293,6 +302,8 @@ class _ConfirmStep extends HookWidget {
     final outputPasswordController = useMController<String>('');
     final saving = useState(false);
     final error = useState<String?>(null);
+    final outputPathFocus = useFocusNode();
+    final outputPasswordFocus = useFocusNode();
 
     final canSave =
         outputPath.value != null &&
@@ -344,27 +355,35 @@ class _ConfirmStep extends HookWidget {
         const SizedBox(height: 20),
         _MergePreviewCard(preview: preview),
         const SizedBox(height: 20),
-        const MLabel('Save merged copy as'),
-        const SizedBox(height: 8),
-        MButton(
-          variant: MButtonVariant.outline,
-          onPressed: saving.value ? null : pickOutputPath,
-          child: Text(
-            outputPath.value ?? 'Choose destination…',
-            overflow: TextOverflow.ellipsis,
+        MField(
+          label: 'Save merged copy as',
+          focusNode: outputPathFocus,
+          enabled: !saving.value,
+          child: MButton(
+            focusNode: outputPathFocus,
+            variant: MButtonVariant.outline,
+            onPressed: saving.value ? null : pickOutputPath,
+            child: Text(
+              outputPath.value ?? 'Choose destination…',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
         const SizedBox(height: 16),
-        const MLabel('Master password for merged copy'),
-        const SizedBox(height: 8),
-        MTextField(
-          controller: outputPasswordController,
-          obscureText: true,
-          placeholder: 'Password',
-          semanticLabel: 'Master password for the merged copy',
+        MField(
+          label: 'Master password for merged copy',
+          focusNode: outputPasswordFocus,
           enabled: !saving.value,
-          onChanged: (value) => outputPassword.value = value,
-          onSubmitted: (_) => confirmAndSave(),
+          child: MTextField(
+            focusNode: outputPasswordFocus,
+            controller: outputPasswordController,
+            obscureText: true,
+            placeholder: 'Password',
+            semanticLabel: 'Master password for the merged copy',
+            enabled: !saving.value,
+            onChanged: (value) => outputPassword.value = value,
+            onSubmitted: (_) => confirmAndSave(),
+          ),
         ),
         if (error.value != null && !saving.value) ...[
           const SizedBox(height: 12),
@@ -417,68 +436,61 @@ class _MergePreviewCard extends StatelessWidget {
       MapEntry('Groups relocated', preview.groupsRelocated),
     ].where((e) => e.value > 0).toList();
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colors.muted,
-        borderRadius: BorderRadius.circular(theme.radius),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
+    return MInsetPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            'Total changes: ${preview.totalChanges}',
+            style: theme.typography.bodySmall.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (rows.isEmpty) ...[
+            const SizedBox(height: 4),
             Text(
-              'Total changes: ${preview.totalChanges}',
+              'No differences found.',
               style: theme.typography.bodySmall.copyWith(
-                fontWeight: FontWeight.bold,
+                color: theme.colors.mutedForeground,
               ),
             ),
-            if (rows.isEmpty) ...[
-              const SizedBox(height: 4),
+          ],
+          for (final row in rows) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Text(row.key, style: theme.typography.bodySmall),
+                Text('${row.value}', style: theme.typography.bodySmall),
+              ],
+            ),
+          ],
+          if (preview.conflictsCount > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${preview.conflictsCount} conflict(s) resolved.',
+              style: theme.typography.bodySmall.copyWith(
+                color: theme.colors.destructive,
+              ),
+            ),
+          ],
+          if (preview.warningsCount > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${preview.warningsCount} warning(s):',
+              style: theme.typography.bodySmall.copyWith(
+                color: theme.colors.destructive,
+              ),
+            ),
+            for (final warning in preview.warnings)
               Text(
-                'No differences found.',
-                style: theme.typography.bodySmall.copyWith(
+                '• $warning',
+                style: theme.typography.caption.copyWith(
                   color: theme.colors.mutedForeground,
                 ),
               ),
-            ],
-            for (final row in rows) ...[
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(row.key, style: theme.typography.bodySmall),
-                  Text('${row.value}', style: theme.typography.bodySmall),
-                ],
-              ),
-            ],
-            if (preview.conflictsCount > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                '${preview.conflictsCount} conflict(s) resolved.',
-                style: theme.typography.bodySmall.copyWith(
-                  color: theme.colors.destructive,
-                ),
-              ),
-            ],
-            if (preview.warningsCount > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                '${preview.warningsCount} warning(s):',
-                style: theme.typography.bodySmall.copyWith(
-                  color: theme.colors.destructive,
-                ),
-              ),
-              for (final warning in preview.warnings)
-                Text(
-                  '• $warning',
-                  style: theme.typography.caption.copyWith(
-                    color: theme.colors.mutedForeground,
-                  ),
-                ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }

@@ -176,41 +176,37 @@ class _Field extends StatelessWidget {
     final valueStyle = monospace
         ? theme.typography.code
         : theme.typography.body;
+    final actions = <Widget>[
+      if (trailing != null) trailing!,
+      if (onCopy != null)
+        MButton(
+          variant: MButtonVariant.ghost,
+          size: MButtonSize.sm,
+          onPressed: onCopy,
+          child: const Text('Copy'),
+        ),
+    ];
 
-    return Padding(
+    return MPropertyRow(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          MLabel(label),
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: multiline
-                ? CrossAxisAlignment.start
-                : CrossAxisAlignment.center,
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  value,
-                  style: valueStyle,
-                  maxLines: multiline ? null : 1,
-                  overflow: multiline ? null : TextOverflow.ellipsis,
-                ),
-              ),
-              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-              if (onCopy != null) ...[
-                const SizedBox(width: 8),
-                MButton(
-                  variant: MButtonVariant.ghost,
-                  size: MButtonSize.sm,
-                  onPressed: onCopy,
-                  child: const Text('Copy'),
-                ),
-              ],
-            ],
-          ),
-        ],
+      label: label,
+      value: Text(
+        value,
+        style: valueStyle,
+        maxLines: multiline ? null : 1,
+        overflow: multiline ? null : TextOverflow.ellipsis,
       ),
+      trailing: actions.isEmpty
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (int i = 0; i < actions.length; i++) ...<Widget>[
+                  if (i > 0) const SizedBox(width: 8),
+                  actions[i],
+                ],
+              ],
+            ),
     );
   }
 }

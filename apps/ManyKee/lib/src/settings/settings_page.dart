@@ -169,7 +169,7 @@ class _Section extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(title, style: theme.typography.title),
+        MSectionHeader(title: title, titleStyle: theme.typography.title),
         const SizedBox(height: 12),
         MCard(
           child: Column(
@@ -199,49 +199,11 @@ class _SettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final content = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(title, style: theme.typography.label),
-            const SizedBox(height: 4),
-            Text(
-              description,
-              style: theme.typography.caption.copyWith(
-                color: theme.colors.mutedForeground,
-              ),
-            ),
-          ],
-        );
-
-        if (constraints.maxWidth < 520) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                content,
-                const SizedBox(height: 12),
-                Align(alignment: Alignment.centerLeft, child: trailing),
-              ],
-            ),
-          );
-        }
-
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: <Widget>[
-              Expanded(child: content),
-              const SizedBox(width: 24),
-              trailing,
-            ],
-          ),
-        );
-      },
+    return MPropertyRow(
+      padding: const EdgeInsets.all(16),
+      label: title,
+      description: description,
+      trailing: trailing,
     );
   }
 }

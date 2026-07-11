@@ -74,6 +74,11 @@ class _EntryFormDialogContent extends HookWidget {
     final urlField = useState(urlValue);
     final notesField = useState(notesValue);
     final revealPassword = useState(false);
+    final titleFocus = useFocusNode();
+    final usernameFocus = useFocusNode();
+    final passwordFocus = useFocusNode();
+    final urlFocus = useFocusNode();
+    final notesFocus = useFocusNode();
 
     void submit() {
       if (titleField.value.trim().isEmpty) return;
@@ -95,63 +100,83 @@ class _EntryFormDialogContent extends HookWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const MLabel('Title'),
-          const SizedBox(height: 4),
-          MTextField(
-            initialValue: titleValue,
-            placeholder: 'Title',
-            semanticLabel: 'Title',
-            autofocus: true,
-            onChanged: (v) => titleField.value = v,
-            onSubmitted: (_) => submit(),
-          ),
-          const SizedBox(height: 12),
-          const MLabel('Username'),
-          const SizedBox(height: 4),
-          MTextField(
-            initialValue: usernameValue,
-            placeholder: 'Username',
-            semanticLabel: 'Username',
-            onChanged: (v) => usernameField.value = v,
-            onSubmitted: (_) => submit(),
-          ),
-          const SizedBox(height: 12),
-          const MLabel('Password'),
-          const SizedBox(height: 4),
-          MTextField(
-            initialValue: passwordValue,
-            placeholder: 'Password',
-            semanticLabel: 'Password',
-            obscureText: !revealPassword.value,
-            onChanged: (v) => passwordField.value = v,
-            onSubmitted: (_) => submit(),
-            trailing: MButton(
-              variant: MButtonVariant.ghost,
-              size: MButtonSize.sm,
-              onPressed: () => revealPassword.value = !revealPassword.value,
-              child: Text(revealPassword.value ? 'Hide' : 'Reveal'),
+          MField(
+            label: 'Title',
+            focusNode: titleFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: titleFocus,
+              initialValue: titleValue,
+              placeholder: 'Title',
+              semanticLabel: 'Title',
+              autofocus: true,
+              onChanged: (v) => titleField.value = v,
+              onSubmitted: (_) => submit(),
             ),
           ),
           const SizedBox(height: 12),
-          const MLabel('URL'),
-          const SizedBox(height: 4),
-          MTextField(
-            initialValue: urlValue,
-            placeholder: 'https://example.com',
-            semanticLabel: 'URL',
-            onChanged: (v) => urlField.value = v,
-            onSubmitted: (_) => submit(),
+          MField(
+            label: 'Username',
+            focusNode: usernameFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: usernameFocus,
+              initialValue: usernameValue,
+              placeholder: 'Username',
+              semanticLabel: 'Username',
+              onChanged: (v) => usernameField.value = v,
+              onSubmitted: (_) => submit(),
+            ),
           ),
           const SizedBox(height: 12),
-          const MLabel('Notes'),
-          const SizedBox(height: 4),
-          MTextField(
-            initialValue: notesValue,
-            placeholder: 'Notes',
-            semanticLabel: 'Notes',
-            maxLines: 4,
-            minLines: 2,
-            onChanged: (v) => notesField.value = v,
+          MField(
+            label: 'Password',
+            focusNode: passwordFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: passwordFocus,
+              initialValue: passwordValue,
+              placeholder: 'Password',
+              semanticLabel: 'Password',
+              obscureText: !revealPassword.value,
+              onChanged: (v) => passwordField.value = v,
+              onSubmitted: (_) => submit(),
+              trailing: MButton(
+                variant: MButtonVariant.ghost,
+                size: MButtonSize.sm,
+                onPressed: () => revealPassword.value = !revealPassword.value,
+                child: Text(revealPassword.value ? 'Hide' : 'Reveal'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          MField(
+            label: 'URL',
+            focusNode: urlFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: urlFocus,
+              initialValue: urlValue,
+              placeholder: 'https://example.com',
+              semanticLabel: 'URL',
+              onChanged: (v) => urlField.value = v,
+              onSubmitted: (_) => submit(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          MField(
+            label: 'Notes',
+            focusNode: notesFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: notesFocus,
+              initialValue: notesValue,
+              placeholder: 'Notes',
+              semanticLabel: 'Notes',
+              maxLines: 4,
+              minLines: 2,
+              onChanged: (v) => notesField.value = v,
+            ),
           ),
         ],
       ),

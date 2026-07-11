@@ -88,7 +88,6 @@ class _UnlockForm extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final recents = ref.watch(recentDatabasesProvider);
 
     final filePath = useState<String?>(null);
@@ -101,6 +100,9 @@ class _UnlockForm extends HookConsumerWidget {
     final unlocking = useState(false);
     final creating = useState(false);
     final passwordController = _usePasswordController();
+    final databaseFocus = useFocusNode();
+    final keyFileFocus = useFocusNode();
+    final passwordFocus = useFocusNode();
     final yubiKeyAttempt = useState(0);
     final yubiKeys = _useYubiKeys(ref, yubiKeyAttempt.value);
     final useYubiKey = useState(false);
@@ -222,13 +224,9 @@ class _UnlockForm extends HookConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text('Unlock a database', style: theme.typography.headlineSmall),
-        const SizedBox(height: 8),
-        Text(
-          'Open a KeePass (.kdbx) file to get started.',
-          style: theme.typography.bodySmall.copyWith(
-            color: theme.colors.mutedForeground,
-          ),
+        const MSectionHeader(
+          title: 'Unlock a database',
+          description: 'Open a KeePass (.kdbx) file to get started.',
         ),
         const SizedBox(height: 16),
         MButton(
@@ -238,47 +236,61 @@ class _UnlockForm extends HookConsumerWidget {
         ),
         if (recents.isNotEmpty) ...[
           const SizedBox(height: 24),
-          const MLabel('Recent'),
-          const SizedBox(height: 8),
-          _RecentDatabasesList(
-            recents: recents,
+          MField(
+            label: 'Recent',
             enabled: !busy,
-            onSelect: selectRecent,
+            child: _RecentDatabasesList(
+              recents: recents,
+              enabled: !busy,
+              onSelect: selectRecent,
+            ),
           ),
         ],
         const SizedBox(height: 24),
-        const MLabel('Database'),
-        const SizedBox(height: 8),
-        MButton(
-          variant: MButtonVariant.outline,
-          onPressed: busy ? null : pickDatabase,
-          child: Text(
-            filename.value ?? 'Choose file…',
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const MLabel('Key file (optional)'),
-        const SizedBox(height: 8),
-        MButton(
-          variant: MButtonVariant.outline,
-          onPressed: busy ? null : pickKeyFile,
-          child: Text(
-            keyFilename.value ?? 'Choose key file…',
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const MLabel('Master password'),
-        const SizedBox(height: 8),
-        MTextField(
-          controller: passwordController,
-          obscureText: true,
-          placeholder: 'Password',
-          semanticLabel: 'Master password',
+        MField(
+          label: 'Database',
+          focusNode: databaseFocus,
           enabled: !busy,
-          onChanged: (value) => password.value = value,
-          onSubmitted: (_) => unlock(),
+          child: MButton(
+            focusNode: databaseFocus,
+            variant: MButtonVariant.outline,
+            onPressed: busy ? null : pickDatabase,
+            child: Text(
+              filename.value ?? 'Choose file…',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        MField(
+          label: 'Key file (optional)',
+          focusNode: keyFileFocus,
+          enabled: !busy,
+          child: MButton(
+            focusNode: keyFileFocus,
+            variant: MButtonVariant.outline,
+            onPressed: busy ? null : pickKeyFile,
+            child: Text(
+              keyFilename.value ?? 'Choose key file…',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        MField(
+          label: 'Master password',
+          focusNode: passwordFocus,
+          enabled: !busy,
+          child: MTextField(
+            focusNode: passwordFocus,
+            controller: passwordController,
+            obscureText: true,
+            placeholder: 'Password',
+            semanticLabel: 'Master password',
+            enabled: !busy,
+            onChanged: (value) => password.value = value,
+            onSubmitted: (_) => unlock(),
+          ),
         ),
         _YubiKeyOption(
           yubiKeys: yubiKeys.value,
@@ -327,6 +339,8 @@ class _CreateDatabaseDialogContent extends HookWidget {
   Widget build(BuildContext context) {
     final password = useState('');
     final confirm = useState('');
+    final passwordFocus = useFocusNode();
+    final confirmFocus = useFocusNode();
     final mismatch =
         confirm.value.isNotEmpty && confirm.value != password.value;
     final canCreate =
@@ -346,27 +360,35 @@ class _CreateDatabaseDialogContent extends HookWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const MLabel('Master password'),
-          const SizedBox(height: 4),
-          MTextField(
-            obscureText: true,
-            placeholder: 'Password',
-            semanticLabel: 'New database master password',
-            autofocus: true,
-            onChanged: (value) => password.value = value,
-            onSubmitted: (_) => submit(),
+          MField(
+            label: 'Master password',
+            focusNode: passwordFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: passwordFocus,
+              obscureText: true,
+              placeholder: 'Password',
+              semanticLabel: 'New database master password',
+              autofocus: true,
+              onChanged: (value) => password.value = value,
+              onSubmitted: (_) => submit(),
+            ),
           ),
           const SizedBox(height: 12),
-          const MLabel('Confirm password'),
-          const SizedBox(height: 4),
-          MTextField(
-            obscureText: true,
-            placeholder: 'Password',
-            semanticLabel: 'Confirm new database master password',
-            error: mismatch,
+          MField(
+            label: 'Confirm password',
+            focusNode: confirmFocus,
+            spacing: 4,
             errorText: mismatch ? 'Passwords do not match.' : null,
-            onChanged: (value) => confirm.value = value,
-            onSubmitted: (_) => submit(),
+            child: MTextField(
+              focusNode: confirmFocus,
+              obscureText: true,
+              placeholder: 'Password',
+              semanticLabel: 'Confirm new database master password',
+              error: mismatch,
+              onChanged: (value) => confirm.value = value,
+              onSubmitted: (_) => submit(),
+            ),
           ),
         ],
       ),
@@ -393,12 +415,12 @@ class _ReUnlockForm extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final vault = ref.watch(vaultStateProvider);
 
     final password = useState('');
     final unlocking = useState(false);
     final passwordController = _usePasswordController();
+    final passwordFocus = useFocusNode();
 
     final filePath = vault.lastFilePath!;
     final canUnlock = password.value.isNotEmpty && !unlocking.value;
@@ -419,26 +441,23 @@ class _ReUnlockForm extends HookConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text('Vault locked', style: theme.typography.headlineSmall),
-        const SizedBox(height: 8),
-        Text(
-          filePath,
-          style: theme.typography.bodySmall.copyWith(
-            color: theme.colors.mutedForeground,
-          ),
-        ),
+        MSectionHeader(title: 'Vault locked', description: filePath),
         const SizedBox(height: 24),
-        const MLabel('Master password'),
-        const SizedBox(height: 8),
-        MTextField(
-          controller: passwordController,
-          obscureText: true,
-          placeholder: 'Password',
-          semanticLabel: 'Master password',
+        MField(
+          label: 'Master password',
+          focusNode: passwordFocus,
           enabled: !unlocking.value,
-          autofocus: true,
-          onChanged: (value) => password.value = value,
-          onSubmitted: (_) => unlock(),
+          child: MTextField(
+            focusNode: passwordFocus,
+            controller: passwordController,
+            obscureText: true,
+            placeholder: 'Password',
+            semanticLabel: 'Master password',
+            enabled: !unlocking.value,
+            autofocus: true,
+            onChanged: (value) => password.value = value,
+            onSubmitted: (_) => unlock(),
+          ),
         ),
         _UnlockStatus(
           unlocking: unlocking.value,
@@ -628,7 +647,8 @@ class _RecentDatabasesList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return MCard(
+    return MInsetPanel(
+      padding: EdgeInsets.zero,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[

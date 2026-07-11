@@ -11,6 +11,7 @@ import 'package:manykee/src/app.dart';
 import 'package:manykee/src/state/manykee_vault_state.dart';
 import 'package:manykee/src/state/unlock_error_mapper.dart';
 import 'package:manykee/src/state/vault_state_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// In-memory vault state: no native library, no file system.
 ///
@@ -236,6 +237,10 @@ Widget appWith(FakeVaultState state) {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   testWidgets('fresh unlock form renders', (tester) async {
     await tester.pumpWidget(appWith(FakeVaultState()));
 
@@ -282,6 +287,28 @@ void main() {
   ) async {
     await tester.pumpWidget(appWith(FakeVaultState()));
     expect(find.text('Merge databases…'), findsNothing);
+  });
+
+  testWidgets('recent databases render in an inset list', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manykee.recentDatabases':
+          '[{"path":"/tmp/one.kdbx","label":"one.kdbx",'
+          '"lastOpened":"2026-01-01T00:00:00.000"}]',
+    });
+    await tester.pumpWidget(appWith(FakeVaultState()));
+    await tester.pump();
+    await tester.pump();
+
+    final inset = find.byType(MInsetPanel);
+    expect(inset, findsOneWidget);
+    expect(
+      find.descendant(of: inset, matching: find.text('one.kdbx')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: inset, matching: find.byType(MListTile)),
+      findsOneWidget,
+    );
   });
 
   testWidgets('successful unlock opens the vault browser', (tester) async {

@@ -34,6 +34,7 @@ class _GroupNameDialogContent extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final name = useState(initialValue);
+    final nameFocus = useFocusNode();
 
     void submit() {
       final trimmed = name.value.trim();
@@ -48,15 +49,19 @@ class _GroupNameDialogContent extends HookWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const MLabel('Name'),
-          const SizedBox(height: 4),
-          MTextField(
-            initialValue: initialValue,
-            placeholder: 'Group name',
-            semanticLabel: 'Group name',
-            autofocus: true,
-            onChanged: (v) => name.value = v,
-            onSubmitted: (_) => submit(),
+          MField(
+            label: 'Name',
+            focusNode: nameFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: nameFocus,
+              initialValue: initialValue,
+              placeholder: 'Group name',
+              semanticLabel: 'Group name',
+              autofocus: true,
+              onChanged: (v) => name.value = v,
+              onSubmitted: (_) => submit(),
+            ),
           ),
         ],
       ),

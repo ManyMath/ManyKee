@@ -28,6 +28,7 @@ class _SavePasswordDialogContent extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final password = useState('');
+    final passwordFocus = useFocusNode();
 
     void submit() {
       if (password.value.isEmpty) return;
@@ -42,15 +43,19 @@ class _SavePasswordDialogContent extends HookWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const MLabel('Master password'),
-          const SizedBox(height: 4),
-          MTextField(
-            obscureText: true,
-            placeholder: 'Password',
-            semanticLabel: 'Master password for saving',
-            autofocus: true,
-            onChanged: (value) => password.value = value,
-            onSubmitted: (_) => submit(),
+          MField(
+            label: 'Master password',
+            focusNode: passwordFocus,
+            spacing: 4,
+            child: MTextField(
+              focusNode: passwordFocus,
+              obscureText: true,
+              placeholder: 'Password',
+              semanticLabel: 'Master password for saving',
+              autofocus: true,
+              onChanged: (value) => password.value = value,
+              onSubmitted: (_) => submit(),
+            ),
           ),
         ],
       ),
