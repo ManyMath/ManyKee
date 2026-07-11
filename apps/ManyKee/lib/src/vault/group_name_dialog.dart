@@ -33,7 +33,6 @@ class _GroupNameDialogContent extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
     final name = useState(initialValue);
 
     void submit() {
@@ -42,14 +41,13 @@ class _GroupNameDialogContent extends HookWidget {
       Navigator.of(context).pop(trimmed);
     }
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 360),
-      child: Column(
+    return MDialogContent(
+      title: title,
+      maxWidth: 360,
+      content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(title, style: theme.typography.headlineSmall),
-          const SizedBox(height: 16),
           const MLabel('Name'),
           const SizedBox(height: 4),
           MTextField(
@@ -60,24 +58,19 @@ class _GroupNameDialogContent extends HookWidget {
             onChanged: (v) => name.value = v,
             onSubmitted: (_) => submit(),
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              MButton(
-                variant: MButtonVariant.ghost,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              MButton(
-                onPressed: name.value.trim().isEmpty ? null : submit,
-                child: Text(submitLabel),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        MButton(
+          onPressed: name.value.trim().isEmpty ? null : submit,
+          child: Text(submitLabel),
+        ),
+      ],
     );
   }
 }

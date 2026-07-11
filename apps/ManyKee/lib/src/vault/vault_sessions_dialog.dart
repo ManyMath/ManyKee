@@ -23,14 +23,13 @@ class _VaultSessionsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = MTheme.of(context);
     final sessions = controller.sessions;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 460),
-      child: Column(
+    return MDialogContent(
+      title: 'Databases',
+      maxWidth: 460,
+      content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text('Databases', style: theme.typography.headlineSmall),
-          const SizedBox(height: 16),
           for (final session in sessions)
             MListTile(
               selected: session.isActive,
@@ -54,27 +53,22 @@ class _VaultSessionsDialog extends StatelessWidget {
                     )
                   : null,
             ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              MButton(
-                variant: MButtonVariant.ghost,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              MButton(
-                onPressed: () {
-                  controller.openNewSession();
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Open another database'),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        MButton(
+          onPressed: () {
+            controller.openNewSession();
+            Navigator.of(context).pop();
+          },
+          child: const Text('Open another database'),
+        ),
+      ],
     );
   }
 }

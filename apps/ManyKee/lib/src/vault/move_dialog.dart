@@ -23,11 +23,13 @@ List<_GroupOption> _flattenGroups(
       continue;
     }
     options.add(_GroupOption(group.uuid, '${'  ' * depth}${group.name}'));
-    options.addAll(_flattenGroups(
-      group.children,
-      excludeUuid: excludeUuid,
-      depth: depth + 1,
-    ));
+    options.addAll(
+      _flattenGroups(
+        group.children,
+        excludeUuid: excludeUuid,
+        depth: depth + 1,
+      ),
+    );
   }
   return options;
 }
@@ -72,19 +74,18 @@ class _MoveDialogContent extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-    final validInitial =
-        options.any((o) => o.uuid == initialGroupUuid) ? initialGroupUuid : null;
+    final validInitial = options.any((o) => o.uuid == initialGroupUuid)
+        ? initialGroupUuid
+        : null;
     final selected = useState<String?>(validInitial ?? options.first.uuid);
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 380),
-      child: Column(
+    return MDialogContent(
+      title: title,
+      maxWidth: 380,
+      content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(title, style: theme.typography.headlineSmall),
-          const SizedBox(height: 16),
           MSelect<String>(
             items: [
               for (final option in options)
@@ -94,26 +95,21 @@ class _MoveDialogContent extends HookWidget {
             onChanged: (v) => selected.value = v,
             semanticLabel: 'Target group',
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              MButton(
-                variant: MButtonVariant.ghost,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              MButton(
-                onPressed: selected.value == null
-                    ? null
-                    : () => Navigator.of(context).pop(selected.value),
-                child: const Text('Move'),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        MButton(
+          onPressed: selected.value == null
+              ? null
+              : () => Navigator.of(context).pop(selected.value),
+          child: const Text('Move'),
+        ),
+      ],
     );
   }
 }

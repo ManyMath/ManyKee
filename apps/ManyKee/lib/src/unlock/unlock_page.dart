@@ -325,7 +325,6 @@ class _CreateDatabaseDialogContent extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
     final password = useState('');
     final confirm = useState('');
     final mismatch =
@@ -340,14 +339,13 @@ class _CreateDatabaseDialogContent extends HookWidget {
       ).pop(_CreateDatabaseRequest(password: password.value));
     }
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 380),
-      child: Column(
+    return MDialogContent(
+      title: 'Create database',
+      maxWidth: 380,
+      content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text('Create database', style: theme.typography.headlineSmall),
-          const SizedBox(height: 16),
           const MLabel('Master password'),
           const SizedBox(height: 4),
           MTextField(
@@ -370,24 +368,19 @@ class _CreateDatabaseDialogContent extends HookWidget {
             onChanged: (value) => confirm.value = value,
             onSubmitted: (_) => submit(),
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              MButton(
-                variant: MButtonVariant.ghost,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              MButton(
-                onPressed: canCreate ? submit : null,
-                child: const Text('Create'),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        MButton(
+          onPressed: canCreate ? submit : null,
+          child: const Text('Create'),
+        ),
+      ],
     );
   }
 }

@@ -19,12 +19,12 @@ class EntryFormResult {
   final String notes;
 
   Map<String, String?> toFields() => <String, String?>{
-        'Title': title,
-        'UserName': username,
-        'Password': password,
-        'URL': url,
-        'Notes': notes,
-      };
+    'Title': title,
+    'UserName': username,
+    'Password': password,
+    'URL': url,
+    'Notes': notes,
+  };
 
   Set<String> get protectedFields => const <String>{'Password'};
 }
@@ -62,8 +62,6 @@ class _EntryFormDialogContent extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-
     final titleValue = (initialFields['Title'] as String?) ?? '';
     final usernameValue = (initialFields['UserName'] as String?) ?? '';
     final passwordValue = (initialFields['Password'] as String?) ?? '';
@@ -79,23 +77,24 @@ class _EntryFormDialogContent extends HookWidget {
 
     void submit() {
       if (titleField.value.trim().isEmpty) return;
-      Navigator.of(context).pop(EntryFormResult(
-        title: titleField.value.trim(),
-        username: usernameField.value,
-        password: passwordField.value,
-        url: urlField.value,
-        notes: notesField.value,
-      ));
+      Navigator.of(context).pop(
+        EntryFormResult(
+          title: titleField.value.trim(),
+          username: usernameField.value,
+          password: passwordField.value,
+          url: urlField.value,
+          notes: notesField.value,
+        ),
+      );
     }
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: Column(
+    return MDialogContent(
+      title: title,
+      maxWidth: 420,
+      content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(title, style: theme.typography.headlineSmall),
-          const SizedBox(height: 16),
           const MLabel('Title'),
           const SizedBox(height: 4),
           MTextField(
@@ -154,24 +153,19 @@ class _EntryFormDialogContent extends HookWidget {
             minLines: 2,
             onChanged: (v) => notesField.value = v,
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              MButton(
-                variant: MButtonVariant.ghost,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              MButton(
-                onPressed: titleField.value.trim().isEmpty ? null : submit,
-                child: Text(submitLabel),
-              ),
-            ],
-          ),
         ],
       ),
+      actions: <Widget>[
+        MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        MButton(
+          onPressed: titleField.value.trim().isEmpty ? null : submit,
+          child: Text(submitLabel),
+        ),
+      ],
     );
   }
 }
