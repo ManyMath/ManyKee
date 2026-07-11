@@ -48,7 +48,7 @@ class EntryDetail extends HookConsumerWidget {
 
     final loaded = fields.value;
     if (loaded == null) {
-      return const Center(child: MCircularProgress.indeterminate());
+      return const Center(child: MLoadingState(message: 'Loading entry'));
     }
 
     final title = loaded['Title'] as String? ?? entry.title;

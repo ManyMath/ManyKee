@@ -486,21 +486,11 @@ class _UnlockStatus extends ConsumerWidget {
       children: <Widget>[
         if (errorMessage != null && !unlocking) ...[
           const SizedBox(height: 12),
-          Text(
-            errorMessage,
-            style: theme.typography.bodySmall.copyWith(
-              color: theme.colors.destructive,
-            ),
+          MAlert(
+            variant: MAlertVariant.destructive,
+            title: errorDetail == null ? null : errorMessage,
+            message: errorDetail ?? errorMessage,
           ),
-          if (errorDetail != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              errorDetail,
-              style: theme.typography.caption.copyWith(
-                color: theme.colors.mutedForeground,
-              ),
-            ),
-          ],
         ],
         if (unlocking) ...[
           const SizedBox(height: 16),

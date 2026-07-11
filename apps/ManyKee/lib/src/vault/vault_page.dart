@@ -625,14 +625,6 @@ class _EmptyDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-    return Center(
-      child: Text(
-        'Select an entry',
-        style: theme.typography.bodySmall.copyWith(
-          color: theme.colors.mutedForeground,
-        ),
-      ),
-    );
+    return const Center(child: MEmptyState(title: 'Select an entry'));
   }
 }

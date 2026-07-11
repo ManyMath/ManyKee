@@ -253,12 +253,7 @@ class _OpenSourceStep extends HookWidget {
         ),
         if (error.value != null && !opening.value) ...[
           const SizedBox(height: 12),
-          Text(
-            error.value!,
-            style: theme.typography.bodySmall.copyWith(
-              color: theme.colors.destructive,
-            ),
-          ),
+          MAlert(variant: MAlertVariant.destructive, message: error.value!),
         ],
         if (opening.value) ...[
           const SizedBox(height: 16),
@@ -373,12 +368,7 @@ class _ConfirmStep extends HookWidget {
         ),
         if (error.value != null && !saving.value) ...[
           const SizedBox(height: 12),
-          Text(
-            error.value!,
-            style: theme.typography.bodySmall.copyWith(
-              color: theme.colors.destructive,
-            ),
-          ),
+          MAlert(variant: MAlertVariant.destructive, message: error.value!),
         ],
         if (saving.value) ...[
           const SizedBox(height: 16),
