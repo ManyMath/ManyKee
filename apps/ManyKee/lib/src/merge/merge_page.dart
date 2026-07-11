@@ -53,7 +53,6 @@ class MergeDatabasesPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final service = useMemoized(createMergeService);
     useEffect(() => service.dispose, <Object?>[service]);
 
@@ -62,24 +61,21 @@ class MergeDatabasesPage extends HookConsumerWidget {
     final errorMessage = useState<String?>(null);
 
     return MScaffold(
-      header: Row(
-        children: <Widget>[
-          MButton(
-            variant: MButtonVariant.ghost,
-            onPressed: () => Navigator.of(context).maybePop(),
-            semanticLabel: 'Back',
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                MIcon(MIconData.chevronLeft, size: 14),
-                const SizedBox(width: 4),
-                const Text('Back'),
-              ],
-            ),
+      header: MAppHeader(
+        title: 'Merge databases',
+        leading: MButton(
+          variant: MButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).maybePop(),
+          semanticLabel: 'Back',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              MIcon(MIconData.chevronLeft, size: 14),
+              const SizedBox(width: 4),
+              const Text('Back'),
+            ],
           ),
-          const SizedBox(width: 12),
-          Text('Merge databases', style: theme.typography.title),
-        ],
+        ),
       ),
       body: Center(
         child: SingleChildScrollView(

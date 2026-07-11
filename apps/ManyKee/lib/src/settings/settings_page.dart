@@ -18,22 +18,18 @@ class SettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final settings = ref.watch(manyKeeSettingsProvider);
     final controller = ref.read(manyKeeSettingsControllerProvider);
 
     return MScaffold(
-      header: Row(
-        children: <Widget>[
-          MButton(
-            variant: MButtonVariant.ghost,
-            semanticLabel: 'Back',
-            onPressed: () => Navigator.of(context).maybePop(),
-            child: const MIcon(MIconData.chevronLeft),
-          ),
-          const SizedBox(width: 8),
-          Text('Settings', style: theme.typography.title),
-        ],
+      header: MAppHeader(
+        title: 'Settings',
+        leading: MButton(
+          variant: MButtonVariant.ghost,
+          semanticLabel: 'Back',
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: const MIcon(MIconData.chevronLeft),
+        ),
       ),
       body: Center(
         child: ConstrainedBox(

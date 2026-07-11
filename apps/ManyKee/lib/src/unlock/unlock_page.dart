@@ -27,7 +27,6 @@ class UnlockPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = MTheme.of(context);
     final vault = ref.watch(vaultStateProvider);
     final sessions = ref.watch(vaultSessionsControllerProvider);
     final showSessions =
@@ -35,24 +34,20 @@ class UnlockPage extends HookConsumerWidget {
         (sessions.sessionCount > 1 || sessions.hasUnlockedSessions);
 
     return MScaffold(
-      header: Row(
-        children: <Widget>[
-          Text('ManyKee', style: theme.typography.title),
-          const Spacer(),
-          if (showSessions) ...[
+      header: MAppHeader(
+        title: 'ManyKee',
+        actions: <Widget>[
+          if (showSessions)
             MButton(
               variant: MButtonVariant.ghost,
               onPressed: () => showVaultSessionsDialog(context, sessions),
               child: const Text('Databases'),
             ),
-            const SizedBox(width: 8),
-          ],
           MButton(
             variant: MButtonVariant.ghost,
             onPressed: () => showSettingsPage(context),
             child: const Text('Settings'),
           ),
-          const SizedBox(width: 8),
           MButton(
             variant: MButtonVariant.ghost,
             onPressed: () => ref

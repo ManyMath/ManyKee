@@ -320,50 +320,33 @@ class VaultPage extends HookConsumerWidget {
     final currentFilePath = vault.lastFilePath;
 
     return MScaffold(
-      header: Row(
-        children: <Widget>[
-          Text('ManyKee', style: theme.typography.title),
-          if (filename != null) ...[
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                filename,
-                style: theme.typography.bodySmall.copyWith(
-                  color: theme.colors.mutedForeground,
+      header: MAppHeader(
+        title: 'ManyKee',
+        subtitle: filename,
+        actions: _vaultHeaderActions(
+          theme: theme,
+          isDirty: vault.isDirty,
+          canMerge: currentFilePath != null,
+          isDark: ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark,
+          onSave: actions.saveChanges,
+          onSaveCopy: actions.saveCopyAs,
+          onDiscard: actions.discardAndLock,
+          onMerge: currentFilePath == null
+              ? null
+              : () => showMergeDatabasesPage(
+                  context,
+                  currentFilePath: currentFilePath,
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-          const Spacer(),
-          Flexible(
-            child: _VaultHeaderActions(
-              isDirty: vault.isDirty,
-              canMerge: currentFilePath != null,
-              isDark: ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark,
-              onSave: actions.saveChanges,
-              onSaveCopy: actions.saveCopyAs,
-              onDiscard: actions.discardAndLock,
-              onMerge: currentFilePath == null
-                  ? null
-                  : () => showMergeDatabasesPage(
-                      context,
-                      currentFilePath: currentFilePath,
-                    ),
-              onDatabases: sessions == null
-                  ? null
-                  : () => showVaultSessionsDialog(context, sessions),
-              databaseCount: sessions?.sessionCount ?? 1,
-              onToggleTheme: () {
-                ref
-                    .read(manyKeeSettingsControllerProvider)
-                    .toggleLightDarkTheme();
-              },
-              onSettings: () => showSettingsPage(context),
-              onLock: actions.lock,
-            ),
-          ),
-        ],
+          onDatabases: sessions == null
+              ? null
+              : () => showVaultSessionsDialog(context, sessions),
+          databaseCount: sessions?.sessionCount ?? 1,
+          onToggleTheme: () {
+            ref.read(manyKeeSettingsControllerProvider).toggleLightDarkTheme();
+          },
+          onSettings: () => showSettingsPage(context),
+          onLock: actions.lock,
+        ),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -377,101 +360,77 @@ class VaultPage extends HookConsumerWidget {
   }
 }
 
-class _VaultHeaderActions extends StatelessWidget {
-  const _VaultHeaderActions({
-    required this.isDirty,
-    required this.canMerge,
-    required this.isDark,
-    required this.onSave,
-    required this.onSaveCopy,
-    required this.onDiscard,
-    required this.onMerge,
-    required this.onDatabases,
-    required this.databaseCount,
-    required this.onToggleTheme,
-    required this.onSettings,
-    required this.onLock,
-  });
-
-  final bool isDirty;
-  final bool canMerge;
-  final bool isDark;
-  final VoidCallback onSave;
-  final VoidCallback onSaveCopy;
-  final VoidCallback onDiscard;
-  final VoidCallback? onMerge;
-  final VoidCallback? onDatabases;
-  final int databaseCount;
-  final VoidCallback onToggleTheme;
-  final VoidCallback onSettings;
-  final VoidCallback onLock;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = MTheme.of(context);
-    return Wrap(
-      alignment: WrapAlignment.end,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 8,
-      runSpacing: 8,
-      children: <Widget>[
-        if (isDirty)
-          Text(
-            'Unsaved changes',
-            style: theme.typography.caption.copyWith(
-              color: theme.colors.mutedForeground,
-            ),
-          ),
-        if (isDirty)
-          MButton(
-            size: MButtonSize.sm,
-            onPressed: onSave,
-            child: const Text('Save changes'),
-          ),
-        MButton(
-          variant: MButtonVariant.ghost,
-          onPressed: onSaveCopy,
-          child: const Text('Save a copy...'),
+List<Widget> _vaultHeaderActions({
+  required MThemeData theme,
+  required bool isDirty,
+  required bool canMerge,
+  required bool isDark,
+  required VoidCallback onSave,
+  required VoidCallback onSaveCopy,
+  required VoidCallback onDiscard,
+  required VoidCallback? onMerge,
+  required VoidCallback? onDatabases,
+  required int databaseCount,
+  required VoidCallback onToggleTheme,
+  required VoidCallback onSettings,
+  required VoidCallback onLock,
+}) {
+  return <Widget>[
+    if (isDirty)
+      Text(
+        'Unsaved changes',
+        style: theme.typography.caption.copyWith(
+          color: theme.colors.mutedForeground,
         ),
-        if (isDirty)
-          MButton(
-            variant: MButtonVariant.destructive,
-            size: MButtonSize.sm,
-            onPressed: onDiscard,
-            child: const Text('Discard'),
-          ),
-        MButton(
-          variant: MButtonVariant.ghost,
-          onPressed: canMerge ? onMerge : null,
-          semanticLabel: 'Merge databases',
-          child: const Text('Merge databases…'),
-        ),
-        MButton(
-          variant: MButtonVariant.ghost,
-          onPressed: onDatabases,
-          child: Text(
-            databaseCount > 1 ? 'Databases ($databaseCount)' : 'Databases',
-          ),
-        ),
-        MButton(
-          variant: MButtonVariant.ghost,
-          onPressed: onToggleTheme,
-          semanticLabel: 'Toggle theme',
-          child: MIcon(isDark ? MIconData.sun : MIconData.moon),
-        ),
-        MButton(
-          variant: MButtonVariant.ghost,
-          onPressed: onSettings,
-          child: const Text('Settings'),
-        ),
-        MButton(
-          variant: MButtonVariant.outline,
-          onPressed: onLock,
-          child: const Text('Lock'),
-        ),
-      ],
-    );
-  }
+      ),
+    if (isDirty)
+      MButton(
+        size: MButtonSize.sm,
+        onPressed: onSave,
+        child: const Text('Save changes'),
+      ),
+    MButton(
+      variant: MButtonVariant.ghost,
+      onPressed: onSaveCopy,
+      child: const Text('Save a copy...'),
+    ),
+    if (isDirty)
+      MButton(
+        variant: MButtonVariant.destructive,
+        size: MButtonSize.sm,
+        onPressed: onDiscard,
+        child: const Text('Discard'),
+      ),
+    MButton(
+      variant: MButtonVariant.ghost,
+      onPressed: canMerge ? onMerge : null,
+      semanticLabel: 'Merge databases',
+      child: const Text('Merge databases…'),
+    ),
+    MButton(
+      variant: MButtonVariant.ghost,
+      onPressed: onDatabases,
+      child: Text(
+        databaseCount > 1 ? 'Databases ($databaseCount)' : 'Databases',
+      ),
+    ),
+    MButton(
+      variant: MButtonVariant.ghost,
+      onPressed: onToggleTheme,
+      semanticLabel: 'Toggle theme',
+      child: MIcon(isDark ? MIconData.sun : MIconData.moon),
+    ),
+    MButton(
+      variant: MButtonVariant.ghost,
+      onPressed: onSettings,
+      child: const Text('Settings'),
+    ),
+    MButton(
+      variant: MButtonVariant.outline,
+      onPressed: onLock,
+      child: const Text('Lock'),
+    ),
+  ];
 }
 
 String _ensureKdbxExtension(String path) =>
