@@ -28,17 +28,11 @@ abstract class MergeService {
   /// Opens source database A. Throws [KeePassError] if it fails to
   /// open/decrypt: callers must not treat A as mergeable unless this
   /// returns normally.
-  Future<void> openA({
-    required String filePath,
-    required String password,
-  });
+  Future<void> openA({required String filePath, required String password});
 
   /// Opens source database B, independently of [openA]. Throws
   /// [KeePassError] if it fails to open/decrypt.
-  Future<void> openB({
-    required String filePath,
-    required String password,
-  });
+  Future<void> openB({required String filePath, required String password});
 
   /// Whether both [openA] and [openB] have completed successfully. The
   /// merge preview/confirmation UI should not be reachable until this is
@@ -76,7 +70,10 @@ class _NativeMergeService implements MergeService {
     required String password,
   }) async {
     if (!File(filePath).existsSync()) {
-      throw KeePassError.fromCode('FILE_NOT_FOUND', 'File not found: $filePath');
+      throw KeePassError.fromCode(
+        'FILE_NOT_FOUND',
+        'File not found: $filePath',
+      );
     }
     _dbA?.close();
     _dbA = Database.open(filePath, password: password);
@@ -88,7 +85,10 @@ class _NativeMergeService implements MergeService {
     required String password,
   }) async {
     if (!File(filePath).existsSync()) {
-      throw KeePassError.fromCode('FILE_NOT_FOUND', 'File not found: $filePath');
+      throw KeePassError.fromCode(
+        'FILE_NOT_FOUND',
+        'File not found: $filePath',
+      );
     }
     _dbB?.close();
     _dbB = Database.open(filePath, password: password);
@@ -100,7 +100,8 @@ class _NativeMergeService implements MergeService {
     final b = _dbB;
     if (a == null || b == null) {
       throw StateError(
-          'Both databases must be opened successfully before merging.');
+        'Both databases must be opened successfully before merging.',
+      );
     }
     return _cachedResult ??= a.merge(b);
   }
@@ -113,7 +114,8 @@ class _NativeMergeService implements MergeService {
     final a = _dbA;
     if (a == null || _dbB == null) {
       throw StateError(
-          'Both databases must be opened successfully before merging.');
+        'Both databases must be opened successfully before merging.',
+      );
     }
     final result = preview();
     a.save(outputPath, password: outputPassword);

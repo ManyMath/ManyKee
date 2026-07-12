@@ -6,9 +6,8 @@
 typedef UnlockError = ({String code, String message, String? detail});
 
 /// Truncates raw error text so a pathological message can't flood the UI.
-String truncateErrorDetail(String rawMessage) => rawMessage.length <= 300
-    ? rawMessage
-    : '${rawMessage.substring(0, 300)}…';
+String truncateErrorDetail(String rawMessage) =>
+    rawMessage.length <= 300 ? rawMessage : '${rawMessage.substring(0, 300)}…';
 
 /// Maps a raw `KeePassError` message onto a friendly unlock error.
 ///
@@ -23,7 +22,8 @@ UnlockError mapUnlockError(String rawMessage, {String? filePath}) {
       message.contains('native_worker') && message.contains('load')) {
     return (
       code: 'NATIVE_LIB_MISSING',
-      message: 'The KeePass engine could not be loaded. This is an app '
+      message:
+          'The KeePass engine could not be loaded. This is an app '
           'packaging problem, not an issue with your database file.',
       detail: detail,
     );
@@ -38,7 +38,8 @@ UnlockError mapUnlockError(String rawMessage, {String? filePath}) {
     }
     return (
       code: 'YUBIKEY_FAILED',
-      message: 'YubiKey communication failed. Make sure it is plugged in '
+      message:
+          'YubiKey communication failed. Make sure it is plugged in '
           '(touch it if it blinks) and try again.',
       detail: detail,
     );
@@ -73,7 +74,8 @@ UnlockError mapUnlockError(String rawMessage, {String? filePath}) {
   if (message.contains('locked') || message.contains('in use')) {
     return (
       code: 'FILE_LOCKED',
-      message: 'File is locked by another process. Close other applications '
+      message:
+          'File is locked by another process. Close other applications '
           'using this file and try again.',
       detail: detail,
     );

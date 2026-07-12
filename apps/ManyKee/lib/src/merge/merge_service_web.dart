@@ -61,8 +61,9 @@ abstract class MergeService {
 // TODO(manykee): phase B, real web merge via keepass_web (WASM worker),
 // alongside real web unlock (see WebVaultState).
 class _WebMergeService implements MergeService {
-  static Never _unsupported() =>
-      throw UnimplementedError('merging databases is not supported on web yet.');
+  static Never _unsupported() => throw UnimplementedError(
+    'merging databases is not supported on web yet.',
+  );
 
   @override
   Future<void> openA({required String filePath, required String password}) =>
@@ -82,8 +83,7 @@ class _WebMergeService implements MergeService {
   MergeServiceResult saveMergedCopy({
     required String outputPath,
     required String outputPassword,
-  }) =>
-      _unsupported();
+  }) => _unsupported();
 
   @override
   void dispose() {}
