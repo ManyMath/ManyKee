@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manyui/manyui.dart';
 
+import '../services/screen_protection.dart';
 import '../state/settings_state.dart';
 
 Future<void> showSettingsPage(BuildContext context) {
@@ -24,11 +25,10 @@ class SettingsPage extends ConsumerWidget {
     return MScaffold(
       header: MAppHeader(
         title: 'Settings',
-        leading: MButton(
-          variant: MButtonVariant.ghost,
-          semanticLabel: 'Back',
+        leading: MIconButton(
+          icon: MIconData.chevronLeft,
+          label: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
-          child: const MIcon(MIconData.chevronLeft),
         ),
       ),
       body: Center(
@@ -75,14 +75,22 @@ class SettingsPage extends ConsumerWidget {
                   ),
                   _SettingRow(
                     title: 'Screen protection',
-                    description:
-                        'Hide unlocked vault content from app switchers and screen capture where supported.',
-                    trailing: MSwitch(
-                      key: ValueKey<bool>(settings.screenProtectionEnabled),
-                      initialValue: settings.screenProtectionEnabled,
-                      semanticLabel: 'Screen protection',
-                      onChanged: controller.setScreenProtectionEnabled,
-                    ),
+                    description: ScreenProtection.isSupported
+                        ? 'Hide unlocked vault content when the app leaves the foreground, and block capture where supported.'
+                        : 'This platform does not expose reliable screen-capture protection.',
+                    trailing: ScreenProtection.isSupported
+                        ? MSwitch(
+                            key: ValueKey<bool>(
+                              settings.screenProtectionEnabled,
+                            ),
+                            initialValue: settings.screenProtectionEnabled,
+                            semanticLabel: 'Screen protection',
+                            onChanged: controller.setScreenProtectionEnabled,
+                          )
+                        : const MBadge(
+                            variant: MBadgeVariant.secondary,
+                            child: Text('Unavailable'),
+                          ),
                   ),
                   _SettingRow(
                     title: 'Clipboard auto-clear',

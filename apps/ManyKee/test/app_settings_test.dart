@@ -50,7 +50,7 @@ void main() {
 
     expect(state.isLocked, isFalse);
     expect(state.isDirty, isTrue);
-    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.text('Unsaved · auto-lock paused'), findsOneWidget);
   });
 
   testWidgets('backgrounding locks the open vault when enabled', (
@@ -68,6 +68,7 @@ void main() {
 
     expect(state.isLocked, isTrue);
 
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
 

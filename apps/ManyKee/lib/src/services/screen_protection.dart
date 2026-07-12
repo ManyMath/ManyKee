@@ -15,7 +15,7 @@ class ScreenProtection {
     'com.manykee.native/screen_protection',
   );
 
-  static bool get _isSupportedPlatform {
+  static bool get isSupported {
     if (kIsWeb) return false;
     return switch (defaultTargetPlatform) {
       TargetPlatform.android ||
@@ -27,7 +27,7 @@ class ScreenProtection {
   }
 
   static Future<void> setSecure(bool enabled) async {
-    if (!_isSupportedPlatform) return;
+    if (!isSupported) return;
     try {
       await channel.invokeMethod<void>('setSecure', {'enabled': enabled});
     } on MissingPluginException {
