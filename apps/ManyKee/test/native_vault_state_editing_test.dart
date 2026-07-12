@@ -5,6 +5,67 @@ import 'package:keepass_ui/keepass_ui.dart';
 import 'package:manykee/src/state/native_vault_state.dart';
 
 void main() {
+  test(
+    'Passwords fixture unlocks, edits, saves, and reopens',
+    () async {
+      final sourcePath = _firstExisting(<String>[
+        'test-fixtures/Passwords.kdbx',
+        '../../test-fixtures/Passwords.kdbx',
+      ]);
+      final tempDir = await Directory.systemTemp.createTemp(
+        'manykee-passwords-fixture',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final tempFile = File('${tempDir.path}/Passwords.kdbx');
+      await File(sourcePath).copy(tempFile.path);
+
+      final state = NativeVaultState();
+      await state.unlockFromPath(
+        filePath: tempFile.path,
+        password: 'hunter2',
+        filename: 'Passwords.kdbx',
+      );
+
+      expect(state.isLocked, isFalse);
+      expect(state.groups, isEmpty);
+      final entryUuid = await state.createEntry('');
+      await state.updateEntry(
+        entryUuid,
+        const <String, String?>{
+          'Title': 'Fixture round trip',
+          'Password': 'round-trip-secret',
+        },
+        protectedFields: const <String>{'Password'},
+      );
+      await state.saveDatabase(password: 'hunter2');
+      await state.lock();
+      state.dispose();
+
+      final reopened = NativeVaultState();
+      await reopened.unlockFromPath(
+        filePath: tempFile.path,
+        password: 'hunter2',
+        filename: 'Passwords.kdbx',
+      );
+      expect(
+        reopened.entries.any((entry) => entry.title == 'Fixture round trip'),
+        isTrue,
+      );
+      expect(
+        await reopened.readEntryField(entryUuid, 'Password'),
+        'round-trip-secret',
+      );
+
+      await reopened.lock();
+      reopened.dispose();
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
   test('createDatabaseAtPath saves a fresh database and opens it', () async {
     final tempDir = await Directory.systemTemp.createTemp('manykee-created-db');
     final tempFile = File('${tempDir.path}/fresh.kdbx');
