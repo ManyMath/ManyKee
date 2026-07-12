@@ -38,6 +38,8 @@ pub struct EntryReadFields {
     /// Whether each entry in `fields` is a KDBX-protected value (e.g. Password, or a
     /// custom field marked `Protected="True"`), keyed the same as `fields`.
     pub protected: BTreeMap<String, bool>,
+    /// Tags assigned directly to the entry.
+    pub tags: Vec<String>,
 }
 
 /// Dart-visible live TOTP payload used by FFI and WASM reads.
@@ -56,12 +58,25 @@ pub fn read_entry_fields(entry: &Entry) -> EntryReadFields {
     let mut fields = BTreeMap::new();
     let mut protected = BTreeMap::new();
     for (key, value) in &entry.fields {
-        fields.insert(key.clone(), value.get().clone());
-        protected.insert(key.clone(), value.is_protected());
+        let is_protected = value.is_protected();
+        fields.insert(
+            key.clone(),
+            if is_protected {
+                String::new()
+            } else {
+                value.get().clone()
+            },
+        );
+        protected.insert(key.clone(), is_protected);
     }
 
     let mut custom_data = BTreeMap::new();
     for (key, item) in &entry.custom_data {
+        // The otpauth URI contains the TOTP seed. Callers get derived codes
+        // through `read_entry_totp_at`; bulk reads must not transport the seed.
+        if key == "otp" {
+            continue;
+        }
         let Some(value) = item.value.as_ref() else {
             continue;
         };
@@ -76,6 +91,7 @@ pub fn read_entry_fields(entry: &Entry) -> EntryReadFields {
         fields,
         custom_data,
         protected,
+        tags: entry.tags.clone(),
     }
 }
 
@@ -499,10 +515,11 @@ mod tests {
     }
 
     #[test]
-    fn read_entry_fields_includes_custom_data() {
+    fn read_entry_fields_scrubs_protected_values_and_includes_metadata() {
         let mut entry = Entry::new();
         entry.set_unprotected(fields::TITLE, "OTP");
         entry.set_protected(fields::PASSWORD, "hunter2");
+        entry.tags = vec!["work".to_string(), "favorite".to_string()];
         entry.custom_data.insert(
             "otp".to_string(),
             CustomDataItem {
@@ -513,18 +530,33 @@ mod tests {
                 unknown_xml: Vec::new(),
             },
         );
+        entry.custom_data.insert(
+            "display_hint".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("login".to_string())),
+                last_modification_time: None,
+                unknown_xml: Vec::new(),
+            },
+        );
 
         let payload = read_entry_fields(&entry);
         assert_eq!(
             payload.fields.get(fields::TITLE).map(String::as_str),
             Some("OTP")
         );
+        assert!(!payload.custom_data.contains_key("otp"));
         assert_eq!(
-            payload.custom_data.get("otp").map(String::as_str),
-            Some("otpauth://totp/ManyKee:test?secret=JBSWY3DPEHPK3PXP")
+            payload.custom_data.get("display_hint").map(String::as_str),
+            Some("login")
         );
         assert_eq!(payload.protected.get(fields::TITLE), Some(&false));
         assert_eq!(payload.protected.get(fields::PASSWORD), Some(&true));
+        assert_eq!(
+            payload.fields.get(fields::PASSWORD).map(String::as_str),
+            Some("")
+        );
+        assert_eq!(payload.tags, vec!["work", "favorite"]);
+        assert!(read_entry_totp_at(&entry, 1234).unwrap().is_some());
     }
 
     #[test]

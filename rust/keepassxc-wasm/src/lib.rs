@@ -15,7 +15,7 @@ use keepassxc::{
 };
 use serde_json::json;
 use wasm_bindgen::prelude::*;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 thread_local! {
  static DATABASES: RefCell<BTreeMap<u32, Database>> = RefCell::new(BTreeMap::new());
@@ -280,28 +280,6 @@ pub fn list_entries(handle: u32, group_uuid: &str) -> Result<String, JsValue> {
     })
 }
 
-/// Clears the value of every field `EntryFields.protected` marks as
-/// protected (e.g. Password, or a custom field marked `Protected="True"`),
-/// leaving the key present with an empty string so callers can still see
-/// *that* a protected field exists (and its protected status) without its
-/// plaintext crossing the WASM/JS boundary on every read. Callers that need
-/// the actual value (e.g. the user clicked "reveal" or "copy") fetch it
-/// on demand via `read_entry_field` instead.
-fn scrub_protected_values(fields: &mut EntryFields) {
-    for (key, is_protected) in &fields.protected {
-        if *is_protected {
-            if let Some(value) = fields.fields.get_mut(key) {
-                // `String::clear()` alone only truncates the length; the
-                // plaintext bytes stay live in the WASM heap until the
-                // allocation is reused. Zero them first, matching the
-                // zeroization discipline used everywhere else this crate
-                // handles secret material.
-                value.zeroize();
-            }
-        }
-    }
-}
-
 #[wasm_bindgen]
 pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValue> {
     let uuid_owned = entry_uuid.to_string();
@@ -311,8 +289,7 @@ pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValu
                 err_json("NOT_FOUND", &format!("Entry not found: {}", uuid_owned))
             })?;
             let payload = read_entry_payload(entry);
-            let mut fields = EntryFields::from(payload);
-            scrub_protected_values(&mut fields);
+            let fields = EntryFields::from(payload);
             Ok(serde_json::to_string(&fields)
                 .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
         })?
@@ -430,8 +407,13 @@ pub fn delete_entry(handle: u32, entry_uuid: &str) -> Result<(), JsValue> {
 pub fn move_entry(handle: u32, entry_uuid: &str, target_group_uuid: &str) -> Result<(), JsValue> {
     catch_unwind_result(|| {
         let entry_uuid = parse_uuid(entry_uuid, "entry")?;
-        let target_group_uuid = parse_uuid(target_group_uuid, "group")?;
+        let target_group_uuid = if target_group_uuid.is_empty() {
+            None
+        } else {
+            Some(parse_uuid(target_group_uuid, "group")?)
+        };
         with_database_mut(handle, |db| {
+            let target_group_uuid = target_group_uuid.unwrap_or(db.root.uuid);
             move_entry_in_db(&mut db.root, entry_uuid, target_group_uuid)
                 .map_err(|error| err_json("MOVE_ERROR", &error.to_string()))
         })?
@@ -487,8 +469,13 @@ pub fn delete_group(handle: u32, group_uuid: &str) -> Result<(), JsValue> {
 pub fn move_group(handle: u32, group_uuid: &str, target_parent_uuid: &str) -> Result<(), JsValue> {
     catch_unwind_result(|| {
         let group_uuid = parse_uuid(group_uuid, "group")?;
-        let target_parent_uuid = parse_uuid(target_parent_uuid, "target parent")?;
+        let target_parent_uuid = if target_parent_uuid.is_empty() {
+            None
+        } else {
+            Some(parse_uuid(target_parent_uuid, "target parent")?)
+        };
         with_database_mut(handle, |db| {
+            let target_parent_uuid = target_parent_uuid.unwrap_or(db.root.uuid);
             move_group_in_db(&mut db.root, group_uuid, target_parent_uuid)
                 .map_err(|error| err_json("MOVE_ERROR", &error.to_string()))
         })?
@@ -588,12 +575,21 @@ mod tests {
 
         let mut entry = Entry::new();
         entry.set_unprotected(fields::TITLE, "WASM Entry");
+        entry.tags = vec!["work".to_string(), "favorite".to_string()];
         entry.custom_data.insert(
             "otp".to_string(),
             CustomDataItem {
                 value: Some(CustomDataValue::String(
                     "otpauth://totp/ManyKee:wasm?secret=DEF".to_string(),
                 )),
+                last_modification_time: None,
+                unknown_xml: Vec::new(),
+            },
+        );
+        entry.custom_data.insert(
+            "display_hint".to_string(),
+            CustomDataItem {
+                value: Some(CustomDataValue::String("login".to_string())),
                 last_modification_time: None,
                 unknown_xml: Vec::new(),
             },
@@ -623,7 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn wasm_read_entry_fields_includes_custom_data() {
+    fn wasm_read_entry_fields_omits_otp_seed_and_includes_safe_data() {
         let handle = open_test_handle();
         let entries_json = list_entries(handle, "").unwrap();
         let entries: Vec<serde_json::Value> = serde_json::from_str(&entries_json).unwrap();
@@ -631,38 +627,16 @@ mod tests {
 
         let payload = read_entry_fields(handle, entry_uuid).unwrap();
         let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert!(payload["custom_data"].get("otp").is_none());
         assert_eq!(
-            payload["custom_data"]["otp"].as_str(),
-            Some("otpauth://totp/ManyKee:wasm?secret=DEF")
+            payload["custom_data"]["display_hint"].as_str(),
+            Some("login")
         );
-
+        assert_eq!(
+            payload["tags"].as_array().unwrap(),
+            &[serde_json::json!("work"), serde_json::json!("favorite")]
+        );
         close_db(handle).unwrap();
-    }
-
-    #[test]
-    fn scrub_protected_values_zeroizes_underlying_bytes_not_just_length() {
-        let mut fields = EntryFields {
-            fields: BTreeMap::from([("Password".to_string(), "hunter2".to_string())]),
-            custom_data: BTreeMap::new(),
-            protected: BTreeMap::from([("Password".to_string(), true)]),
-        };
-
-        let value = fields.fields.get("Password").unwrap();
-        let ptr = value.as_ptr();
-        let original_len = value.len();
-
-        scrub_protected_values(&mut fields);
-
-        assert_eq!(fields.fields.get("Password").unwrap(), "");
-        // The allocation backing the string is untouched by `clear`/zeroize
-        // (same pointer, capacity retained), so the bytes it used to hold
-        // are still readable here, they must have actually been
-        // overwritten, not just logically truncated.
-        let leftover = unsafe { std::slice::from_raw_parts(ptr, original_len) };
-        assert!(
-            leftover.iter().all(|&b| b == 0),
-            "scrubbed plaintext bytes must be zeroed, not merely truncated"
-        );
     }
 
     #[test]
@@ -686,6 +660,72 @@ mod tests {
             read_entry_field(handle, entry_uuid, fields::PASSWORD).unwrap(),
             "hunter2"
         );
+
+        close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn wasm_list_entries_blanks_protected_summary_fields() {
+        let handle = open_test_handle();
+        let entries_json = list_entries(handle, "").unwrap();
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&entries_json).unwrap();
+        let entry_uuid = entries[0]["uuid"].as_str().unwrap();
+
+        set_entry_field(handle, entry_uuid, fields::USERNAME, "protected-user", true).unwrap();
+        set_entry_field(
+            handle,
+            entry_uuid,
+            fields::URL,
+            "https://manykee.test",
+            true,
+        )
+        .unwrap();
+        set_entry_field(handle, entry_uuid, fields::PASSWORD, "hunter2", true).unwrap();
+        set_entry_field(handle, entry_uuid, fields::NOTES, "private notes", true).unwrap();
+
+        let entries_json = list_entries(handle, "").unwrap();
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&entries_json).unwrap();
+        let summary = &entries[0];
+        assert_eq!(summary["title"].as_str(), Some("WASM Entry"));
+        assert_eq!(summary["username"].as_str(), Some(""));
+        assert_eq!(summary["url"].as_str(), Some(""));
+        assert_eq!(summary["protected"]["UserName"].as_bool(), Some(true));
+        assert_eq!(summary["protected"]["URL"].as_bool(), Some(true));
+        assert!(summary.get("password").is_none());
+        assert!(summary.get("notes").is_none());
+        assert!(!entries_json.contains("protected-user"));
+        assert!(!entries_json.contains("hunter2"));
+        assert!(!entries_json.contains("private notes"));
+
+        close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn wasm_moves_accept_empty_target_as_root() {
+        let handle = open_test_handle();
+        let target_json = create_group(handle, "", "Nested").unwrap();
+        let target: serde_json::Value = serde_json::from_str(&target_json).unwrap();
+        let target_uuid = target["uuid"].as_str().unwrap();
+        let child_json = create_group(handle, target_uuid, "Child").unwrap();
+        let child: serde_json::Value = serde_json::from_str(&child_json).unwrap();
+        let child_uuid = child["uuid"].as_str().unwrap();
+        let entry_json = create_entry(handle, target_uuid, "Move to root").unwrap();
+        let entry: serde_json::Value = serde_json::from_str(&entry_json).unwrap();
+        let entry_uuid = entry["uuid"].as_str().unwrap();
+
+        move_entry(handle, entry_uuid, "").unwrap();
+        move_group(handle, child_uuid, "").unwrap();
+
+        let root_entries: Vec<serde_json::Value> =
+            serde_json::from_str(&list_entries(handle, "").unwrap()).unwrap();
+        let root_groups: Vec<serde_json::Value> =
+            serde_json::from_str(&list_groups(handle, "").unwrap()).unwrap();
+        assert!(root_entries
+            .iter()
+            .any(|entry| entry["uuid"].as_str() == Some(entry_uuid)));
+        assert!(root_groups
+            .iter()
+            .any(|group| group["uuid"].as_str() == Some(child_uuid)));
 
         close_db(handle).unwrap();
     }

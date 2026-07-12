@@ -267,12 +267,17 @@ pub extern "C" fn kpxc_group_move(
             Ok(uuid) => uuid,
             Err(code) => return code,
         };
-        let target_parent_uuid = match parse_uuid(target_parent_uuid) {
-            Ok(uuid) => uuid,
-            Err(code) => return code,
+        let target_parent_uuid = if target_parent_uuid.is_empty() {
+            None
+        } else {
+            match parse_uuid(target_parent_uuid) {
+                Ok(uuid) => Some(uuid),
+                Err(code) => return code,
+            }
         };
 
         let db = unsafe { &mut *db };
+        let target_parent_uuid = target_parent_uuid.unwrap_or(db.0.root.uuid);
         match move_group(&mut db.0.root, group_uuid, target_parent_uuid) {
             Ok(()) => KPXC_OK,
             Err(error) => set_error_from_kpxc(&error),
@@ -311,6 +316,34 @@ mod tests {
             target_uuid.to_str().unwrap().parse::<Uuid>().unwrap()
         );
         assert_eq!(db.0.root.groups[0].groups.len(), 1);
+
+        crate::database::kpxc_database_free(db_ptr);
+    }
+
+    #[test]
+    fn group_move_accepts_empty_target_as_root() {
+        let mut db = Database::new(DatabaseConfig::default());
+        let mut parent = Group::new("Parent");
+        let child = Group::new("Child");
+        let child_uuid = child.uuid;
+        parent.groups.push(child);
+        db.root.groups.push(parent);
+
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));
+        let child_uuid = CString::new(child_uuid.to_string()).unwrap();
+        let root_target = CString::new("").unwrap();
+
+        let result = kpxc_group_move(db_ptr, child_uuid.as_ptr(), root_target.as_ptr());
+        assert_eq!(result, KPXC_OK);
+
+        let db = unsafe { &*db_ptr };
+        assert_eq!(db.0.root.groups.len(), 2);
+        assert!(db
+            .0
+            .root
+            .groups
+            .iter()
+            .any(|group| group.uuid == child_uuid.to_str().unwrap().parse::<Uuid>().unwrap()));
 
         crate::database::kpxc_database_free(db_ptr);
     }

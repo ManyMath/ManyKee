@@ -718,16 +718,7 @@ List<Map<String, dynamic>> _workerListEntries(
   final entries = groupUuid.isEmpty
       ? database.rootGroup.entries
       : Group(database, groupUuid).entries;
-  return entries
-      .map(
-        (entry) => <String, dynamic>{
-          'uuid': entry.uuid,
-          'title': entry.title ?? '',
-          'username': entry.userName ?? '',
-          'url': entry.url ?? '',
-        },
-      )
-      .toList();
+  return entries.map((entry) => entry.readInfo()).toList();
 }
 
 Map<String, dynamic> _workerReadEntryFields(
@@ -899,11 +890,28 @@ Map<String, dynamic> _normalizeEntryFieldsPayload(
 
   return <String, dynamic>{
     ...fields,
-    'custom_data': (payload['custom_data'] as Map?)?.cast<String, dynamic>() ??
-        <String, dynamic>{},
+    'custom_data': _safeCustomData(payload['custom_data']),
     'protected': (payload['protected'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{},
+    'Tags': _normalizeTags(payload['tags']),
   };
+}
+
+Map<String, dynamic> _safeCustomData(dynamic raw) {
+  final customData = Map<String, dynamic>.from(
+    (raw as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{},
+  );
+  customData.remove('otp');
+  return customData;
+}
+
+List<String> _normalizeTags(dynamic raw) {
+  final values = raw is List ? raw : <dynamic>[if (raw != null) raw];
+  return values
+      .expand((value) => value.toString().split(RegExp(r'[,;]')))
+      .map((tag) => tag.trim())
+      .where((tag) => tag.isNotEmpty)
+      .toList(growable: false);
 }
 
 List<int> _castBytes(dynamic value) {

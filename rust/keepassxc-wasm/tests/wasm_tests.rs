@@ -2,7 +2,7 @@
 
 use keepassxc::{Database, DatabaseKey};
 use keepassxc_wasm::*;
-use serde_json::Value;
+use serde_json::{json, Value};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -250,7 +250,79 @@ fn test_read_entry_fields_returns_structured_payload() {
     );
     assert_eq!(payload["fields"]["Title"].as_str(), Some("TOTPEntry"));
     assert_eq!(payload["fields"]["UserName"].as_str(), Some("totpuser"));
-    assert_eq!(payload["custom_data"]["otp"].as_str(), Some(TOTP_URL));
+    assert!(payload["custom_data"].get("otp").is_none());
+    assert!(payload["custom_data"]["KPXC_BROWSER_ENTRY"].as_str().is_some());
+    assert!(!payload.to_string().contains(TOTP_URL));
+    let totp: Value = parse_json(&get_totp(handle, &entry_uuid).unwrap());
+    assert!(totp["code"].as_str().is_some());
+    assert!(!totp.to_string().contains(TOTP_URL));
+
+    close_db(handle).unwrap();
+}
+
+#[wasm_bindgen_test]
+fn test_protected_summaries_and_full_reads_do_not_cross_wasm_boundary() {
+    install_panic_hook();
+    let handle = open_handle(TEST_DB_AES, PASSWORD);
+    let entry_uuid = create_entry_uuid(handle, "", "Public title");
+    set_entry_field(handle, &entry_uuid, "UserName", "protected-user", true).unwrap();
+    set_entry_field(handle, &entry_uuid, "URL", "https://private.test", true).unwrap();
+    set_entry_field(handle, &entry_uuid, "Password", "hunter2", true).unwrap();
+    set_entry_field(handle, &entry_uuid, "Notes", "private notes", true).unwrap();
+
+    let entries_json = list_entries(handle, "").unwrap();
+    let entries: Vec<Value> = serde_json::from_str(&entries_json).unwrap();
+    let summary = entries
+        .iter()
+        .find(|entry| entry["uuid"].as_str() == Some(entry_uuid.as_str()))
+        .unwrap();
+    assert_eq!(summary["title"].as_str(), Some("Public title"));
+    assert_eq!(summary["username"].as_str(), Some(""));
+    assert_eq!(summary["url"].as_str(), Some(""));
+    assert_eq!(summary["protected"]["UserName"].as_bool(), Some(true));
+    assert_eq!(summary["protected"]["URL"].as_bool(), Some(true));
+    assert!(summary.get("password").is_none());
+    assert!(summary.get("notes").is_none());
+    assert!(!entries_json.contains("protected-user"));
+    assert!(!entries_json.contains("hunter2"));
+    assert!(!entries_json.contains("private notes"));
+
+    let fields = read_fields_json(handle, &entry_uuid);
+    assert_eq!(fields["fields"]["UserName"].as_str(), Some(""));
+    assert_eq!(fields["fields"]["URL"].as_str(), Some(""));
+    assert_eq!(fields["fields"]["Password"].as_str(), Some(""));
+    assert_eq!(fields["fields"]["Notes"].as_str(), Some(""));
+    assert_eq!(
+        read_entry_field(handle, &entry_uuid, "Password").unwrap(),
+        "hunter2"
+    );
+
+    close_db(handle).unwrap();
+}
+
+#[wasm_bindgen_test]
+fn test_entry_tags_and_root_move_targets_cross_wasm_boundary() {
+    install_panic_hook();
+    let handle = open_handle(TEST_DB_RICHCONTENT, RICHCONTENT_PASSWORD);
+    let tagged_uuid = find_entry_uuid_by_title(handle, "", "TaggedEntry").expect("tagged entry");
+    let tagged_fields = read_fields_json(handle, &tagged_uuid);
+    assert_eq!(
+        tagged_fields["tags"].as_array().unwrap(),
+        &[json!("work,important,2fa")]
+    );
+
+    let parent_uuid = create_group_uuid(handle, "", "Move Parent");
+    let child_uuid = create_group_uuid(handle, &parent_uuid, "Move Child");
+    let entry_uuid = create_entry_uuid(handle, &parent_uuid, "Move Entry");
+    move_entry(handle, &entry_uuid, "").unwrap();
+    move_group(handle, &child_uuid, "").unwrap();
+
+    assert!(list_entries_json(handle, "")
+        .iter()
+        .any(|entry| entry["uuid"].as_str() == Some(entry_uuid.as_str())));
+    assert!(list_groups_json(handle, "")
+        .iter()
+        .any(|group| group["uuid"].as_str() == Some(child_uuid.as_str())));
 
     close_db(handle).unwrap();
 }

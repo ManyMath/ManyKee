@@ -7,6 +7,7 @@ void main() {
   late String passwordFixturePath;
   late String keyFileFixturePath;
   late String keyFilePath;
+  late String richContentFixturePath;
 
   setUpAll(() {
     passwordFixturePath = _firstExisting(<String>[
@@ -21,6 +22,10 @@ void main() {
     keyFilePath = _firstExisting(<String>[
       'rust/keepass-rs/tests/resources/test_db_kdbx4_with_keyfile_v2.keyx',
       '../../rust/keepass-rs/tests/resources/test_db_kdbx4_with_keyfile_v2.keyx',
+    ]);
+    richContentFixturePath = _firstExisting(<String>[
+      'rust/keepassxc/tests/resources/test_db_kdbx4_richcontent.kdbx',
+      '../../rust/keepassxc/tests/resources/test_db_kdbx4_richcontent.kdbx',
     ]);
   });
 
@@ -116,7 +121,8 @@ void main() {
 
       final fields = await api.readEntryFields(handle, entryUuid);
       expect(fields['Title'], 'Phase 21 Entry');
-      expect(fields['Password'], 'super-secret');
+      expect(fields['Password'], '');
+      expect(fields['protected']['Password'], isTrue);
 
       expect(
         await api.readEntryField(handle, entryUuid, 'Password'),
@@ -133,6 +139,13 @@ void main() {
         movedEntries.any((entry) => entry['uuid'] == entryUuid),
         isTrue,
       );
+      await api.moveEntry(handle, entryUuid, '');
+      expect(
+        (await api.listEntries(handle, ''))
+            .any((entry) => entry['uuid'] == entryUuid),
+        isTrue,
+      );
+      await api.moveEntry(handle, entryUuid, targetGroupUuid);
 
       final savedBytes = await api.saveDatabase(handle, password: 'demopass');
       final savedFile = await _writeTempDatabase(savedBytes, suffix: '.kdbx');
@@ -152,7 +165,12 @@ void main() {
           entryUuid,
         );
         expect(reopenedFields['Title'], 'Phase 21 Entry');
-        expect(reopenedFields['Password'], 'super-secret');
+        expect(reopenedFields['Password'], '');
+        expect(reopenedFields['protected']['Password'], isTrue);
+        expect(
+          await api.readEntryField(reopenedHandle, entryUuid, 'Password'),
+          'super-secret',
+        );
       } finally {
         await api.closeDatabase(reopenedHandle);
         await savedFile.delete();
@@ -186,9 +204,71 @@ void main() {
       groups = await api.listGroups(handle, targetUuid);
       expect(groups.any((group) => group['uuid'] == groupUuid), isTrue);
 
+      await api.moveGroup(handle, groupUuid, '');
+      groups = await api.listGroups(handle, '');
+      expect(groups.any((group) => group['uuid'] == groupUuid), isTrue);
+
       await api.deleteGroup(handle, groupUuid);
-      groups = await api.listGroups(handle, targetUuid);
+      groups = await api.listGroups(handle, '');
       expect(groups.any((group) => group['uuid'] == groupUuid), isFalse);
+    } finally {
+      await api.closeDatabase(handle);
+      await api.dispose();
+    }
+  });
+
+  test(
+      'native list summaries scrub protected fields and full reads include tags',
+      () async {
+    final api = KeePassNativeApi();
+    final handle = await api.openFromPath(
+      richContentFixturePath,
+      password: 'testpass123',
+    );
+
+    try {
+      final taggedEntries =
+          await _findEntriesByTitle(api, handle, 'TaggedEntry');
+      expect(taggedEntries, hasLength(1));
+      final taggedUuid = taggedEntries.single['uuid']! as String;
+      final fields = await api.readEntryFields(handle, taggedUuid);
+      expect(fields['Tags'], <String>['work', 'important', '2fa']);
+      expect(fields['Password'], '');
+      expect(fields['protected']['Password'], isTrue);
+      expect(await api.readEntryField(handle, taggedUuid, 'Password'),
+          'taggedpass');
+
+      final protectedUuid = await api.createEntry(handle, '');
+      await api.setEntryField(handle, protectedUuid, 'Title', 'Public title');
+      await api.setEntryField(
+        handle,
+        protectedUuid,
+        'UserName',
+        'protected-user',
+        isProtected: true,
+      );
+      await api.setEntryField(
+        handle,
+        protectedUuid,
+        'URL',
+        'https://private.test',
+        isProtected: true,
+      );
+      await api.setEntryField(
+        handle,
+        protectedUuid,
+        'Password',
+        'never-list-this',
+        isProtected: true,
+      );
+      final summary = (await api.listEntries(handle, ''))
+          .singleWhere((entry) => entry['uuid'] == protectedUuid);
+      expect(summary['username'], '');
+      expect(summary['url'], '');
+      expect(summary['protected']['UserName'], isTrue);
+      expect(summary['protected']['URL'], isTrue);
+      expect(summary, isNot(contains('password')));
+      expect(summary, isNot(contains('notes')));
     } finally {
       await api.closeDatabase(handle);
       await api.dispose();
@@ -424,6 +504,26 @@ Future<List<Map<String, dynamic>>> _listFirstAvailableEntries(
   final groups = await api.listGroups(handle, '');
   expect(groups, isNotEmpty);
   return api.listEntries(handle, groups.first['uuid']! as String);
+}
+
+Future<List<Map<String, dynamic>>> _findEntriesByTitle(
+  KeePassNativeApi api,
+  int handle,
+  String title, [
+  String groupUuid = '',
+]) async {
+  final matches = (await api.listEntries(handle, groupUuid))
+      .where((entry) => entry['title'] == title)
+      .toList();
+  for (final group in await api.listGroups(handle, groupUuid)) {
+    matches.addAll(await _findEntriesByTitle(
+      api,
+      handle,
+      title,
+      group['uuid']! as String,
+    ));
+  }
+  return matches;
 }
 
 Future<String> _firstWritableGroupUuid(KeePassNativeApi api, int handle) async {

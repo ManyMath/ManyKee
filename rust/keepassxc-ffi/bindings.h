@@ -71,6 +71,11 @@ char *kpxc_entry_get_field(struct KpxcDatabase *db,
                            const char *field_name)
 ;
 
+/**
+ * Return the safe list summary for one entry as JSON.
+ */
+ char *kpxc_entry_get_info(struct KpxcDatabase *db, const char *entry_uuid) ;
+
  char *kpxc_entry_read_fields(struct KpxcDatabase *db, const char *entry_uuid) ;
 
  char *kpxc_entry_get_totp(struct KpxcDatabase *db, const char *entry_uuid) ;

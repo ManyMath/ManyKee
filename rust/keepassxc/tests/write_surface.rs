@@ -160,7 +160,7 @@ fn save_atomic_failure_leaves_original_untouched() {
 }
 
 #[test]
-fn read_entry_fields_surfaces_custom_data() {
+fn read_entry_fields_omits_otp_seed() {
     let (db, _, _, _, entry_uuid) = make_db();
     let payload = read_entry_fields(db.root.find_entry_by_uuid(entry_uuid).unwrap());
 
@@ -168,10 +168,7 @@ fn read_entry_fields_surfaces_custom_data() {
         payload.fields.get(fields::TITLE).map(String::as_str),
         Some("Writable Entry")
     );
-    assert_eq!(
-        payload.custom_data.get("otp").map(String::as_str),
-        Some("otpauth://totp/ManyKee:test?secret=JBSWY3DPEHPK3PXP")
-    );
+    assert!(!payload.custom_data.contains_key("otp"));
 }
 
 #[test]

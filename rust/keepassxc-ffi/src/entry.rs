@@ -4,8 +4,8 @@ use std::ffi::{c_char, c_int, CString};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use keepassxc::{
-    delete_entry, move_entry, read_entry_fields, read_entry_totp_at, update_entry, Entry, EntryExt,
-    EntryFieldExt, GroupExt,
+    delete_entry, move_entry, read_entry_field, read_entry_fields, read_entry_totp_at,
+    update_entry, Entry, EntryExt, EntryFieldExt, GroupExt,
 };
 use uuid::Uuid;
 
@@ -21,17 +21,6 @@ fn parse_uuid(s: &str) -> Result<Uuid, c_int> {
         set_last_error(&format!("Invalid UUID '{}': {}", s, e));
         KPXC_ERR_INVALID_UTF8
     })
-}
-
-fn field_from_payload<'a>(
-    payload: &'a keepassxc::EntryReadFields,
-    field_name: &str,
-) -> Option<&'a str> {
-    payload
-        .fields
-        .get(field_name)
-        .or_else(|| payload.custom_data.get(field_name))
-        .map(String::as_str)
 }
 
 #[no_mangle]
@@ -60,8 +49,7 @@ pub extern "C" fn kpxc_entry_get_field(
             }
         };
 
-        let payload = read_entry_fields(entry);
-        match field_from_payload(&payload, field_str) {
+        match read_entry_field(entry, field_str) {
             Some(value) => match CString::new(value) {
                 Ok(cs) => cs.into_raw(),
                 Err(_) => {
@@ -80,7 +68,48 @@ pub extern "C" fn kpxc_entry_get_field(
     })
 }
 
-use keepassxc::serialization::{EntryFields, TotpInfo};
+use keepassxc::serialization::{EntryFields, EntryInfo, TotpInfo};
+
+/// Return the safe list summary for one entry as JSON.
+#[no_mangle]
+pub extern "C" fn kpxc_entry_get_info(
+    db: *mut KpxcDatabase,
+    entry_uuid: *const c_char,
+) -> *mut c_char {
+    crate::error::catch_unwind(std::ptr::null_mut(), move || {
+        clear_last_error();
+        check_live_db!(db, std::ptr::null_mut());
+        let uuid_str = cstr_to_str!(entry_uuid, std::ptr::null_mut());
+
+        let uuid = match parse_uuid(uuid_str) {
+            Ok(uuid) => uuid,
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let db = unsafe { &*db };
+        let entry = match db.0.root.find_entry_by_uuid(uuid) {
+            Some(entry) => entry,
+            None => {
+                set_last_error(&format!("Entry not found: {}", uuid));
+                return std::ptr::null_mut();
+            }
+        };
+
+        match serde_json::to_string(&EntryInfo::from(entry)) {
+            Ok(json) => match CString::new(json) {
+                Ok(json) => json.into_raw(),
+                Err(_) => {
+                    set_last_error("Entry summary JSON contains null byte");
+                    std::ptr::null_mut()
+                }
+            },
+            Err(error) => {
+                set_last_error(&format!("Failed to serialize entry summary: {}", error));
+                std::ptr::null_mut()
+            }
+        }
+    })
+}
 
 #[no_mangle]
 pub extern "C" fn kpxc_entry_read_fields(
@@ -340,12 +369,17 @@ pub extern "C" fn kpxc_entry_move(
             Ok(uuid) => uuid,
             Err(code) => return code,
         };
-        let target_group_uuid = match parse_uuid(target_group_uuid) {
-            Ok(uuid) => uuid,
-            Err(code) => return code,
+        let target_group_uuid = if target_group_uuid.is_empty() {
+            None
+        } else {
+            match parse_uuid(target_group_uuid) {
+                Ok(uuid) => Some(uuid),
+                Err(code) => return code,
+            }
         };
 
         let db = unsafe { &mut *db };
+        let target_group_uuid = target_group_uuid.unwrap_or(db.0.root.uuid);
         match move_entry(&mut db.0.root, entry_uuid, target_group_uuid) {
             Ok(()) => KPXC_OK,
             Err(error) => set_error_from_kpxc(&error),
@@ -369,6 +403,11 @@ mod tests {
 
         let mut entry = Entry::new();
         entry.set_unprotected(fields::TITLE, "Native OTP");
+        entry.set_protected(fields::USERNAME, "protected-user");
+        entry.set_protected(fields::PASSWORD, "hunter2");
+        entry.set_unprotected(fields::URL, "https://manykee.test");
+        entry.set_unprotected(fields::NOTES, "not for list summaries");
+        entry.tags = vec!["work".to_string(), "favorite".to_string()];
         entry.custom_data.insert(
             "otp".to_string(),
             keepassxc::CustomDataItem {
@@ -379,12 +418,20 @@ mod tests {
                 unknown_xml: Vec::new(),
             },
         );
+        entry.custom_data.insert(
+            "display_hint".to_string(),
+            keepassxc::CustomDataItem {
+                value: Some(keepassxc::CustomDataValue::String("login".to_string())),
+                last_modification_time: None,
+                unknown_xml: Vec::new(),
+            },
+        );
         db.root.entries.push(entry);
         (db, source_uuid, target_uuid)
     }
 
     #[test]
-    fn entry_read_fields_json_includes_custom_data() {
+    fn entry_read_fields_json_scrubs_secrets_and_includes_tags() {
         let db_ptr = crate::database::into_raw_registered(KpxcDatabase(make_db().0));
         let entry_uuid = unsafe { &*db_ptr }.0.root.entries[0].uuid;
         let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
@@ -392,10 +439,52 @@ mod tests {
         let result = kpxc_entry_read_fields(db_ptr, entry_uuid.as_ptr());
         let json = unsafe { CString::from_raw(result) }.into_string().unwrap();
         let payload: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(payload["custom_data"].get("otp").is_none());
         assert_eq!(
-            payload["custom_data"]["otp"].as_str(),
-            Some("otpauth://totp/ManyKee:native?secret=ABC")
+            payload["custom_data"]["display_hint"].as_str(),
+            Some("login")
         );
+        assert_eq!(payload["fields"]["Password"].as_str(), Some(""));
+        assert_eq!(payload["protected"]["Password"].as_bool(), Some(true));
+        assert_eq!(
+            payload["tags"].as_array().unwrap(),
+            &[serde_json::json!("work"), serde_json::json!("favorite")]
+        );
+
+        let field_name = CString::new(fields::PASSWORD).unwrap();
+        let result = kpxc_entry_get_field(db_ptr, entry_uuid.as_ptr(), field_name.as_ptr());
+        let value = unsafe { CString::from_raw(result) }.into_string().unwrap();
+        assert_eq!(value, "hunter2");
+
+        let result = kpxc_entry_get_totp(db_ptr, entry_uuid.as_ptr());
+        let json = unsafe { CString::from_raw(result) }.into_string().unwrap();
+        let totp: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(totp["code"].as_str().is_some());
+        assert!(!json.contains("otpauth"));
+        assert!(!json.contains("secret=ABC"));
+
+        crate::database::kpxc_database_free(db_ptr);
+    }
+
+    #[test]
+    fn entry_info_json_blanks_protected_summary_fields() {
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(make_db().0));
+        let entry_uuid = unsafe { &*db_ptr }.0.root.entries[0].uuid;
+        let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
+
+        let result = kpxc_entry_get_info(db_ptr, entry_uuid.as_ptr());
+        let json = unsafe { CString::from_raw(result) }.into_string().unwrap();
+        let payload: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(payload["title"].as_str(), Some("Native OTP"));
+        assert_eq!(payload["username"].as_str(), Some(""));
+        assert_eq!(payload["url"].as_str(), Some("https://manykee.test"));
+        assert_eq!(payload["protected"]["UserName"].as_bool(), Some(true));
+        assert!(payload.get("password").is_none());
+        assert!(payload.get("notes").is_none());
+        assert!(!json.contains("protected-user"));
+        assert!(!json.contains("hunter2"));
+        assert!(!json.contains("not for list summaries"));
 
         crate::database::kpxc_database_free(db_ptr);
     }
@@ -414,6 +503,36 @@ mod tests {
         let db = unsafe { &*db_ptr };
         assert!(db.0.root.entries.is_empty());
         assert_eq!(db.0.root.groups[0].entries.len(), 1);
+
+        crate::database::kpxc_database_free(db_ptr);
+    }
+
+    #[test]
+    fn entry_move_accepts_empty_target_as_root() {
+        let (mut db, _, target_uuid) = make_db();
+        let entry = db.root.entries.remove(0);
+        let entry_uuid = entry.uuid;
+        db.root.groups[0].entries.push(entry);
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));
+
+        let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
+        let root_target = CString::new("").unwrap();
+        let result = kpxc_entry_move(db_ptr, entry_uuid.as_ptr(), root_target.as_ptr());
+
+        assert_eq!(result, KPXC_OK);
+        let db = unsafe { &*db_ptr };
+        assert_eq!(db.0.root.entries.len(), 1);
+        assert_eq!(
+            db.0.root.entries[0].uuid,
+            entry_uuid.to_str().unwrap().parse::<Uuid>().unwrap()
+        );
+        assert!(db
+            .0
+            .root
+            .find_group_by_uuid(target_uuid)
+            .unwrap()
+            .entries
+            .is_empty());
 
         crate::database::kpxc_database_free(db_ptr);
     }

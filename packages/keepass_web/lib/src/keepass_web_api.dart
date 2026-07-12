@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'entry_payload.dart';
 import 'worker_bridge.dart';
 import 'worker_error.dart';
 
@@ -79,19 +80,7 @@ class KeePassWebApi {
       int handle, String entryUuid) async {
     final result = await _bridge.call('read_entry_fields', [handle, entryUuid]);
     final payload = jsonDecode(result) as Map<String, dynamic>;
-    final fields = (payload['fields'] as Map?)?.cast<String, dynamic>();
-    if (fields == null) {
-      return payload;
-    }
-
-    return <String, dynamic>{
-      ...fields,
-      'custom_data':
-          (payload['custom_data'] as Map?)?.cast<String, dynamic>() ??
-              <String, dynamic>{},
-      'protected': (payload['protected'] as Map?)?.cast<String, dynamic>() ??
-          <String, dynamic>{},
-    };
+    return normalizeEntryFieldsPayload(payload);
   }
 
   Future<String?> readEntryField(

@@ -56,6 +56,24 @@ class Entry {
   String? get url => getField('URL');
   String? get notes => getField('Notes');
 
+  /// A safe list summary containing only UUID, Title, UserName, URL, and
+  /// protection metadata. Protected summary values are blank.
+  Map<String, dynamic> readInfo() {
+    final uuidPtr = toNativeString(uuid);
+    try {
+      final jsonPtr = bindings.kpxc_entry_get_info(_db.handle, uuidPtr);
+      final jsonStr = readAndFreeStringOrThrow(
+        jsonPtr,
+        'Failed to read entry summary',
+      );
+      return Map<String, dynamic>.from(
+        json.decode(jsonStr) as Map<String, dynamic>,
+      );
+    } finally {
+      freeNativeString(uuidPtr);
+    }
+  }
+
   Map<String, dynamic> readFields() {
     final uuidPtr = toNativeString(uuid);
     try {

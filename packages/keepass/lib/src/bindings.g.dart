@@ -204,6 +204,25 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(ffi.Pointer<KpxcDatabase>,
           ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// Return the safe list summary for one entry as JSON.
+  ffi.Pointer<ffi.Char> kpxc_entry_get_info(
+    ffi.Pointer<KpxcDatabase> db,
+    ffi.Pointer<ffi.Char> entry_uuid,
+  ) {
+    return _kpxc_entry_get_info(
+      db,
+      entry_uuid,
+    );
+  }
+
+  late final _kpxc_entry_get_infoPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(ffi.Pointer<KpxcDatabase>,
+              ffi.Pointer<ffi.Char>)>>('kpxc_entry_get_info');
+  late final _kpxc_entry_get_info = _kpxc_entry_get_infoPtr.asFunction<
+      ffi.Pointer<ffi.Char> Function(
+          ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
+
   ffi.Pointer<ffi.Char> kpxc_entry_read_fields(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
