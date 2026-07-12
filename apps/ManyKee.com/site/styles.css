@@ -545,7 +545,7 @@ footer {
 
   .hero {
     height: calc(100svh - 152px);
-    min-height: 510px;
+    min-height: 430px;
     max-height: 680px;
   }
 
