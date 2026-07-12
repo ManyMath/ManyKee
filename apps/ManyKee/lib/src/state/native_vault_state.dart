@@ -21,6 +21,13 @@ class NativeVaultState extends ManyKeeVaultState {
   String? _lastFilePath;
   String? _lastKeyFilePath;
   String? _lastYubiKeySlot;
+  bool _disposed = false;
+
+  @override
+  bool get supportsDatabaseCreation => true;
+
+  @override
+  bool get supportsDatabaseMerge => true;
 
   @override
   String? get lastFilePath => _lastFilePath;
@@ -72,8 +79,7 @@ class NativeVaultState extends ManyKeeVaultState {
 
       selectedGroupValue = null;
       selectedEntryValue = null;
-      final maps = await _api.listEntries(createdHandle, '');
-      entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
+      await _loadRootEntries();
       isLockedValue = false;
       clearDirtyFlag();
       await saveDatabase(password: password);
@@ -177,8 +183,7 @@ class NativeVaultState extends ManyKeeVaultState {
     if (groups.isNotEmpty) {
       await selectGroup(groups.first);
     } else {
-      final maps = await _api.listEntries(handle, '');
-      entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
+      await _loadRootEntries();
     }
 
     isLockedValue = false;
@@ -216,8 +221,17 @@ class NativeVaultState extends ManyKeeVaultState {
     if (!isCurrentGroupSelection(generation)) {
       return;
     }
-    entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
+    entriesValue = maps
+        .map((m) => VaultEntry.fromMap(m, groupUuid: group.uuid))
+        .toList();
     notifyListeners();
+  }
+
+  @override
+  Future<void> selectRoot() async {
+    selectedGroupValue = null;
+    selectedEntryValue = null;
+    await _loadRootEntries();
   }
 
   @override
@@ -238,7 +252,10 @@ class NativeVaultState extends ManyKeeVaultState {
   @override
   Future<String> createEntry(String groupUuid) async {
     final entryUuid = await _api.createEntry(_requireHandle(), groupUuid);
-    await refreshSelectedGroupUsing(selectGroup);
+    await refreshSelectedGroupUsing(
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _selectEntryIfVisible(entryUuid);
     _scheduleCacheRefresh();
     markDirty();
@@ -261,7 +278,10 @@ class NativeVaultState extends ManyKeeVaultState {
         isProtected: protectedFields.contains(field.key),
       );
     }
-    await refreshSelectedGroupUsing(selectGroup);
+    await refreshSelectedGroupUsing(
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _selectEntryIfVisible(entryUuid);
     _scheduleCacheRefresh();
     markDirty();
@@ -270,7 +290,10 @@ class NativeVaultState extends ManyKeeVaultState {
   @override
   Future<void> deleteEntry(String entryUuid) async {
     await _api.deleteEntry(_requireHandle(), entryUuid);
-    await refreshSelectedGroupUsing(selectGroup);
+    await refreshSelectedGroupUsing(
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _scheduleCacheRefresh();
     markDirty();
   }
@@ -278,7 +301,10 @@ class NativeVaultState extends ManyKeeVaultState {
   @override
   Future<void> moveEntry(String entryUuid, String targetGroupUuid) async {
     await _api.moveEntry(_requireHandle(), entryUuid, targetGroupUuid);
-    await refreshSelectedGroupUsing(selectGroup);
+    await refreshSelectedGroupUsing(
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _scheduleCacheRefresh();
     markDirty();
   }
@@ -290,7 +316,11 @@ class NativeVaultState extends ManyKeeVaultState {
       parentGroupUuid,
       name,
     );
-    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    await refreshGroupTreeUsing(
+      _api.listGroups,
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _scheduleCacheRefresh();
     markDirty();
     return groupUuid;
@@ -299,7 +329,11 @@ class NativeVaultState extends ManyKeeVaultState {
   @override
   Future<void> renameGroup(String groupUuid, String name) async {
     await _api.renameGroup(_requireHandle(), groupUuid, name);
-    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    await refreshGroupTreeUsing(
+      _api.listGroups,
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _scheduleCacheRefresh();
     markDirty();
   }
@@ -307,7 +341,11 @@ class NativeVaultState extends ManyKeeVaultState {
   @override
   Future<void> deleteGroup(String groupUuid) async {
     await _api.deleteGroup(_requireHandle(), groupUuid);
-    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    await refreshGroupTreeUsing(
+      _api.listGroups,
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _scheduleCacheRefresh();
     markDirty();
   }
@@ -315,7 +353,11 @@ class NativeVaultState extends ManyKeeVaultState {
   @override
   Future<void> moveGroup(String groupUuid, String targetParentUuid) async {
     await _api.moveGroup(_requireHandle(), groupUuid, targetParentUuid);
-    await refreshGroupTreeUsing(_api.listGroups, selectGroup);
+    await refreshGroupTreeUsing(
+      _api.listGroups,
+      selectGroup,
+      loadRootEntries: _loadRootEntries,
+    );
     _scheduleCacheRefresh();
     markDirty();
   }
@@ -368,12 +410,32 @@ class NativeVaultState extends ManyKeeVaultState {
     return currentHandle;
   }
 
+  Future<void> _loadRootEntries() async {
+    final generation = beginGroupSelection();
+    final maps = await _api.listEntries(_requireHandle(), '');
+    if (!isCurrentGroupSelection(generation)) {
+      return;
+    }
+    selectedEntryValue = null;
+    entriesValue = maps
+        .map((m) => VaultEntry.fromMap(m, groupUuid: ''))
+        .toList();
+    notifyListeners();
+  }
+
   Future<List<int>?> _loadRememberedKeyFileBytes() async {
     final keyFilePath = _lastKeyFilePath;
     if (keyFilePath == null) {
       return null;
     }
     return File(keyFilePath).readAsBytes();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    unawaited(_api.dispose());
+    super.dispose();
   }
 
   void _selectEntryIfVisible(String entryUuid) {
@@ -390,7 +452,7 @@ class NativeVaultState extends ManyKeeVaultState {
       try {
         await cacheAllEntriesUsing(_api.listGroups, _api.listEntries);
       } catch (_) {
-        if (!isLocked) rethrow;
+        if (!_disposed && !isLocked) rethrow;
       }
     }());
   }

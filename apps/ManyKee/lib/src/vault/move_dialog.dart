@@ -47,10 +47,10 @@ Future<String?> showMoveDialog(
   String? excludeUuid,
   String? initialGroupUuid,
 }) {
-  final options = _flattenGroups(groups, excludeUuid: excludeUuid);
-  if (options.isEmpty) {
-    return Future<String?>.value(null);
-  }
+  final options = <_GroupOption>[
+    const _GroupOption('', 'Vault root'),
+    ..._flattenGroups(groups, excludeUuid: excludeUuid),
+  ];
   return showMDialog<String>(
     context,
     builder: (BuildContext ctx) => _MoveDialogContent(

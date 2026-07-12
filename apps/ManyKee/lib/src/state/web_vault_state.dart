@@ -26,6 +26,7 @@ class WebVaultState extends ManyKeeVaultState {
   Uint8List? _lastDbBytes;
   Uint8List? _lastKeyFileBytes;
   String? _lastFilePath;
+  bool _disposed = false;
 
   Uint8List? get lastDbBytes => _lastDbBytes;
 
@@ -155,8 +156,17 @@ class WebVaultState extends ManyKeeVaultState {
     if (!isCurrentGroupSelection(generation)) {
       return;
     }
-    entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
+    entriesValue = maps
+        .map((m) => VaultEntry.fromMap(m, groupUuid: group.uuid))
+        .toList();
     notifyListeners();
+  }
+
+  @override
+  Future<void> selectRoot() async {
+    selectedGroupValue = null;
+    selectedEntryValue = null;
+    await _loadRootEntries();
   }
 
   @override
@@ -334,9 +344,27 @@ class WebVaultState extends ManyKeeVaultState {
   }
 
   Future<void> _loadRootEntries() async {
+    final generation = beginGroupSelection();
     final maps = await _api.listEntries(_requireHandle(), '');
-    entriesValue = maps.map((m) => VaultEntry.fromMap(m)).toList();
+    if (!isCurrentGroupSelection(generation)) {
+      return;
+    }
+    selectedEntryValue = null;
+    entriesValue = maps
+        .map((m) => VaultEntry.fromMap(m, groupUuid: ''))
+        .toList();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _lastDbBytes?.fillRange(0, _lastDbBytes!.length, 0);
+    _lastKeyFileBytes?.fillRange(0, _lastKeyFileBytes!.length, 0);
+    _lastDbBytes = null;
+    _lastKeyFileBytes = null;
+    unawaited(_api.dispose());
+    super.dispose();
   }
 
   void _selectEntryIfVisible(String entryUuid) {
@@ -353,7 +381,7 @@ class WebVaultState extends ManyKeeVaultState {
       try {
         await cacheAllEntriesUsing(_api.listGroups, _api.listEntries);
       } catch (_) {
-        if (!isLocked) rethrow;
+        if (!_disposed && !isLocked) rethrow;
       }
     }());
   }

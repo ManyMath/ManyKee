@@ -9,6 +9,8 @@ class GroupTree extends HookWidget {
     required this.groups,
     required this.selectedUuid,
     required this.onSelect,
+    this.rootSelected = false,
+    this.onSelectRoot,
     this.onAddGroup,
     this.onRenameGroup,
     this.onMoveGroup,
@@ -19,6 +21,8 @@ class GroupTree extends HookWidget {
   final List<VaultGroup> groups;
   final String? selectedUuid;
   final ValueChanged<VaultGroup> onSelect;
+  final bool rootSelected;
+  final VoidCallback? onSelectRoot;
 
   /// Called with the group under which a new child group should be created,
   /// or null to add a top-level group.
@@ -41,18 +45,20 @@ class GroupTree extends HookWidget {
 
     final rows = <Widget>[];
     void addGroup(VaultGroup group, int depth) {
-      rows.add(_GroupRow(
-        group: group,
-        depth: depth,
-        selected: group.uuid == selectedUuid,
-        expanded: !collapsed.value.contains(group.uuid),
-        onTap: () => onSelect(group),
-        onToggle: group.children.isEmpty ? null : () => toggle(group.uuid),
-        onAddSubgroup: onAddGroup == null ? null : () => onAddGroup!(group),
-        onRename: onRenameGroup == null ? null : () => onRenameGroup!(group),
-        onMove: onMoveGroup == null ? null : () => onMoveGroup!(group),
-        onDelete: onDeleteGroup == null ? null : () => onDeleteGroup!(group),
-      ));
+      rows.add(
+        _GroupRow(
+          group: group,
+          depth: depth,
+          selected: group.uuid == selectedUuid,
+          expanded: !collapsed.value.contains(group.uuid),
+          onTap: () => onSelect(group),
+          onToggle: group.children.isEmpty ? null : () => toggle(group.uuid),
+          onAddSubgroup: onAddGroup == null ? null : () => onAddGroup!(group),
+          onRename: onRenameGroup == null ? null : () => onRenameGroup!(group),
+          onMove: onMoveGroup == null ? null : () => onMoveGroup!(group),
+          onDelete: onDeleteGroup == null ? null : () => onDeleteGroup!(group),
+        ),
+      );
       if (!collapsed.value.contains(group.uuid)) {
         for (final child in group.children) {
           addGroup(child, depth + 1);
@@ -67,27 +73,49 @@ class GroupTree extends HookWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'Groups',
+                  style: MTheme.of(context).typography.title,
+                ),
+              ),
+              if (onAddGroup != null)
+                MIconButton(
+                  icon: MIconData.plus,
+                  label: 'New group',
+                  size: MButtonSize.sm,
+                  onPressed: () => onAddGroup!(null),
+                ),
+            ],
+          ),
+        ),
+        const MDivider(),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            children: rows,
+            children: <Widget>[
+              if (onSelectRoot != null)
+                MListTile(
+                  leading: const MIcon(MIconData.home, size: 16),
+                  title: const Text('Vault root'),
+                  selected: rootSelected,
+                  semanticLabel: 'Vault root',
+                  onTap: onSelectRoot,
+                ),
+              ...rows,
+            ],
           ),
         ),
-        if (onAddGroup != null)
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: MButton(
-              variant: MButtonVariant.outline,
-              onPressed: () => onAddGroup!(null),
-              child: const Text('New group'),
-            ),
-          ),
       ],
     );
   }
 }
 
-class _GroupRow extends StatelessWidget {
+class _GroupRow extends HookWidget {
   const _GroupRow({
     required this.group,
     required this.depth,
@@ -135,17 +163,23 @@ class _GroupRow extends StatelessWidget {
     return MTreeListTile(
       title: Row(
         children: <Widget>[
-          Expanded(
-            child: Text(group.name, overflow: TextOverflow.ellipsis),
-          ),
+          const MIcon(MIconData.folder, size: 15),
+          const SizedBox(width: 7),
+          Expanded(child: Text(group.name, overflow: TextOverflow.ellipsis)),
           if (onAddSubgroup != null)
-            _ActionButton(label: '+', tooltip: 'New subgroup', onPressed: onAddSubgroup),
-          if (onRename != null)
-            _ActionButton(label: 'Rename', onPressed: onRename),
-          if (onMove != null)
-            _ActionButton(label: 'Move', onPressed: onMove),
-          if (onDelete != null)
-            _ActionButton(label: 'Delete', onPressed: onDelete),
+            MIconButton(
+              icon: MIconData.plus,
+              label: 'New subgroup in ${group.name}',
+              size: MButtonSize.xs,
+              onPressed: onAddSubgroup,
+            ),
+          if (onRename != null || onMove != null || onDelete != null)
+            _GroupOverflowButton(
+              groupName: group.name,
+              onRename: onRename,
+              onMove: onMove,
+              onDelete: onDelete,
+            ),
         ],
       ),
       depth: depth,
@@ -158,23 +192,98 @@ class _GroupRow extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.label, this.tooltip, this.onPressed});
+class _GroupOverflowButton extends HookWidget {
+  const _GroupOverflowButton({
+    required this.groupName,
+    required this.onRename,
+    required this.onMove,
+    required this.onDelete,
+  });
 
-  final String label;
-  final String? tooltip;
-  final VoidCallback? onPressed;
+  final String groupName;
+  final VoidCallback? onRename;
+  final VoidCallback? onMove;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 2),
-      child: MButton(
-        variant: MButtonVariant.ghost,
+    final controller = useMemoized(MPopoverController.new);
+    useEffect(() => controller.dispose, const <Object?>[]);
+
+    return MPopover(
+      controller: controller,
+      semanticLabel: 'Actions for $groupName',
+      popoverBuilder: (context, close) => SizedBox(
+        width: 190,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (onRename != null)
+              _MenuAction(
+                icon: MIconData.edit,
+                label: 'Rename group',
+                onPressed: () {
+                  close();
+                  onRename!();
+                },
+              ),
+            if (onMove != null)
+              _MenuAction(
+                icon: MIconData.arrowRight,
+                label: 'Move group',
+                onPressed: () {
+                  close();
+                  onMove!();
+                },
+              ),
+            if (onDelete != null)
+              _MenuAction(
+                icon: MIconData.trash,
+                label: 'Delete group',
+                destructive: true,
+                onPressed: () {
+                  close();
+                  onDelete!();
+                },
+              ),
+          ],
+        ),
+      ),
+      child: MIconButton(
+        icon: MIconData.moreHorizontal,
+        label: 'Actions for $groupName',
         size: MButtonSize.xs,
-        semanticLabel: tooltip ?? label,
-        onPressed: onPressed,
-        child: Text(label),
+        onPressed: controller.toggle,
+      ),
+    );
+  }
+}
+
+class _MenuAction extends StatelessWidget {
+  const _MenuAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.destructive = false,
+  });
+
+  final MIconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    return MButton(
+      variant: destructive ? MButtonVariant.destructive : MButtonVariant.ghost,
+      onPressed: onPressed,
+      child: Row(
+        children: <Widget>[
+          MIcon(icon, size: 15),
+          const SizedBox(width: 8),
+          Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
+        ],
       ),
     );
   }
