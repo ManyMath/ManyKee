@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -11,9 +10,11 @@ import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import '../settings/settings_page.dart';
 import '../state/recent_database.dart';
+import '../state/security_scoped_file_access.dart';
 import '../state/settings_state.dart';
 import '../state/unlock_error_mapper.dart';
 import '../state/vault_state_provider.dart';
+import '../state/vault_sessions.dart';
 import '../theme.dart';
 import '../vault/vault_sessions_dialog.dart';
 
@@ -43,22 +44,19 @@ class UnlockPage extends HookConsumerWidget {
               onPressed: () => showVaultSessionsDialog(context, sessions),
               child: const Text('Databases'),
             ),
-          MButton(
-            variant: MButtonVariant.ghost,
+          MIconButton(
+            icon: MIconData.settings,
+            label: 'Settings',
             onPressed: () => showSettingsPage(context),
-            child: const Text('Settings'),
           ),
-          MButton(
-            variant: MButtonVariant.ghost,
+          MIconButton(
+            icon: ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark
+                ? MIconData.sun
+                : MIconData.moon,
+            label: 'Toggle theme',
             onPressed: () => ref
                 .read(manyKeeSettingsControllerProvider)
                 .toggleLightDarkTheme(),
-            semanticLabel: 'Toggle theme',
-            child: MIcon(
-              ref.watchMThemeMode(themeModeProvider) == MThemeMode.dark
-                  ? MIconData.sun
-                  : MIconData.moon,
-            ),
           ),
         ],
       ),
@@ -66,7 +64,7 @@ class UnlockPage extends HookConsumerWidget {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
+            constraints: const BoxConstraints(maxWidth: 480),
             child: MCard(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -89,17 +87,19 @@ class _UnlockForm extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recents = ref.watch(recentDatabasesProvider);
+    final vault = ref.watch(vaultStateProvider);
 
     final filePath = useState<String?>(null);
     final databaseBytes = useState<Uint8List?>(null);
     final filename = useState<String?>(null);
+    final securityScopedBookmark = useState<String?>(null);
     final keyFilePath = useState<String?>(null);
     final keyFileBytes = useState<Uint8List?>(null);
     final keyFilename = useState<String?>(null);
-    final password = useState('');
     final unlocking = useState(false);
     final creating = useState(false);
     final passwordController = _usePasswordController();
+    final passwordValue = useMControllerValue(passwordController);
     final databaseFocus = useFocusNode();
     final keyFileFocus = useFocusNode();
     final passwordFocus = useFocusNode();
@@ -109,12 +109,13 @@ class _UnlockForm extends HookConsumerWidget {
 
     final busy = unlocking.value || creating.value;
     final canUnlock =
-        filePath.value != null && password.value.isNotEmpty && !busy;
+        filePath.value != null && passwordValue.isNotEmpty && !busy;
 
     void selectRecent(RecentDatabase recent) {
       filePath.value = recent.path;
       databaseBytes.value = null;
       filename.value = recent.label;
+      securityScopedBookmark.value = recent.securityScopedBookmark;
     }
 
     Future<void> pickDatabase() async {
@@ -126,9 +127,15 @@ class _UnlockForm extends HookConsumerWidget {
       );
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.single;
-        filePath.value = file.path ?? file.name;
+        final selectedPath = file.path ?? file.name;
+        filePath.value = selectedPath;
         databaseBytes.value = file.bytes;
         filename.value = file.name;
+        securityScopedBookmark.value = file.path == null
+            ? null
+            : await ref
+                  .read(securityScopedFileAccessProvider)
+                  .bookmarkForPath(file.path!);
       }
     }
 
@@ -153,9 +160,9 @@ class _UnlockForm extends HookConsumerWidget {
         context: context,
         ref: ref,
         unlocking: unlocking,
-        password: password,
         passwordController: passwordController,
         filePath: filePath.value!,
+        securityScopedBookmark: securityScopedBookmark.value,
         dbBytes: databaseBytes.value,
         keyFilePath: keyFilePath.value,
         keyFileBytes: keyFileBytes.value,
@@ -212,9 +219,16 @@ class _UnlockForm extends HookConsumerWidget {
         );
       }
       if (vault.errorCode == null && !vault.isLocked) {
+        final bookmark = await ref
+            .read(securityScopedFileAccessProvider)
+            .bookmarkForPath(databasePath);
         ref
             .read(recentDatabasesControllerProvider)
-            .recordOpened(databasePath, databaseName);
+            .recordOpened(
+              databasePath,
+              databaseName,
+              securityScopedBookmark: bookmark,
+            );
       }
       if (!context.mounted) return;
       creating.value = false;
@@ -229,11 +243,20 @@ class _UnlockForm extends HookConsumerWidget {
           description: 'Open a KeePass (.kdbx) file to get started.',
         ),
         const SizedBox(height: 16),
-        MButton(
-          variant: MButtonVariant.outline,
-          onPressed: busy ? null : createDatabase,
-          child: Text(creating.value ? 'Creating…' : 'Create new database…'),
-        ),
+        if (vault.supportsDatabaseCreation)
+          MButton(
+            variant: MButtonVariant.outline,
+            onPressed: busy ? null : createDatabase,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const MIcon(MIconData.plus, size: 16),
+                const SizedBox(width: 8),
+                Text(creating.value ? 'Creating…' : 'Create new database…'),
+              ],
+            ),
+          ),
         if (recents.isNotEmpty) ...[
           const SizedBox(height: 24),
           MField(
@@ -241,6 +264,7 @@ class _UnlockForm extends HookConsumerWidget {
             enabled: !busy,
             child: _RecentDatabasesList(
               recents: recents,
+              selectedPath: filePath.value,
               enabled: !busy,
               onSelect: selectRecent,
             ),
@@ -255,9 +279,18 @@ class _UnlockForm extends HookConsumerWidget {
             focusNode: databaseFocus,
             variant: MButtonVariant.outline,
             onPressed: busy ? null : pickDatabase,
-            child: Text(
-              filename.value ?? 'Choose file…',
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const MIcon(MIconData.folder, size: 16),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    filename.value ?? 'Choose file…',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -270,9 +303,18 @@ class _UnlockForm extends HookConsumerWidget {
             focusNode: keyFileFocus,
             variant: MButtonVariant.outline,
             onPressed: busy ? null : pickKeyFile,
-            child: Text(
-              keyFilename.value ?? 'Choose key file…',
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const MIcon(MIconData.folder, size: 16),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    keyFilename.value ?? 'Choose key file…',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -281,14 +323,12 @@ class _UnlockForm extends HookConsumerWidget {
           label: 'Master password',
           focusNode: passwordFocus,
           enabled: !busy,
-          child: MTextField(
+          child: MSecretField(
             focusNode: passwordFocus,
             controller: passwordController,
-            obscureText: true,
             placeholder: 'Password',
             semanticLabel: 'Master password',
             enabled: !busy,
-            onChanged: (value) => password.value = value,
             onSubmitted: (_) => unlock(),
           ),
         ),
@@ -364,9 +404,8 @@ class _CreateDatabaseDialogContent extends HookWidget {
             label: 'Master password',
             focusNode: passwordFocus,
             spacing: 4,
-            child: MTextField(
+            child: MSecretField(
               focusNode: passwordFocus,
-              obscureText: true,
               placeholder: 'Password',
               semanticLabel: 'New database master password',
               autofocus: true,
@@ -380,9 +419,8 @@ class _CreateDatabaseDialogContent extends HookWidget {
             focusNode: confirmFocus,
             spacing: 4,
             errorText: mismatch ? 'Passwords do not match.' : null,
-            child: MTextField(
+            child: MSecretField(
               focusNode: confirmFocus,
-              obscureText: true,
               placeholder: 'Password',
               semanticLabel: 'Confirm new database master password',
               error: mismatch,
@@ -417,13 +455,13 @@ class _ReUnlockForm extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final vault = ref.watch(vaultStateProvider);
 
-    final password = useState('');
     final unlocking = useState(false);
     final passwordController = _usePasswordController();
+    final passwordValue = useMControllerValue(passwordController);
     final passwordFocus = useFocusNode();
 
     final filePath = vault.lastFilePath!;
-    final canUnlock = password.value.isNotEmpty && !unlocking.value;
+    final canUnlock = passwordValue.isNotEmpty && !unlocking.value;
 
     Future<void> unlock() async {
       if (!canUnlock) return;
@@ -431,7 +469,6 @@ class _ReUnlockForm extends HookConsumerWidget {
         context: context,
         ref: ref,
         unlocking: unlocking,
-        password: password,
         passwordController: passwordController,
         filePath: filePath,
       );
@@ -441,21 +478,33 @@ class _ReUnlockForm extends HookConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        MSectionHeader(title: 'Vault locked', description: filePath),
+        MSectionHeader(
+          title: 'Vault locked',
+          description: _filenameForPath(filePath),
+        ),
+        const SizedBox(height: 12),
+        MInsetPanel(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: <Widget>[
+              const MIcon(MIconData.lock, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text(filePath, overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+        ),
         const SizedBox(height: 24),
         MField(
           label: 'Master password',
           focusNode: passwordFocus,
           enabled: !unlocking.value,
-          child: MTextField(
+          child: MSecretField(
             focusNode: passwordFocus,
             controller: passwordController,
-            obscureText: true,
             placeholder: 'Password',
             semanticLabel: 'Master password',
             enabled: !unlocking.value,
             autofocus: true,
-            onChanged: (value) => password.value = value,
             onSubmitted: (_) => unlock(),
           ),
         ),
@@ -491,18 +540,13 @@ class _UnlockStatus extends ConsumerWidget {
     final theme = MTheme.of(context);
     final vault = ref.watch(vaultStateProvider);
     final errorMessage = vault.errorMessage;
-    final errorDetail = vault.errorDetail;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         if (errorMessage != null && !unlocking) ...[
           const SizedBox(height: 12),
-          MAlert(
-            variant: MAlertVariant.destructive,
-            title: errorDetail == null ? null : errorMessage,
-            message: errorDetail ?? errorMessage,
-          ),
+          MAlert(variant: MAlertVariant.destructive, message: errorMessage),
         ],
         if (unlocking) ...[
           const SizedBox(height: 16),
@@ -637,11 +681,13 @@ class _YubiKeyOption extends StatelessWidget {
 class _RecentDatabasesList extends ConsumerWidget {
   const _RecentDatabasesList({
     required this.recents,
+    required this.selectedPath,
     required this.enabled,
     required this.onSelect,
   });
 
   final List<RecentDatabase> recents;
+  final String? selectedPath;
   final bool enabled;
   final ValueChanged<RecentDatabase> onSelect;
 
@@ -656,18 +702,19 @@ class _RecentDatabasesList extends ConsumerWidget {
             MListTile(
               title: Text(recent.label, overflow: TextOverflow.ellipsis),
               subtitle: Text(recent.path, overflow: TextOverflow.ellipsis),
+              leading: const MIcon(MIconData.folder, size: 16),
+              selected: recent.path == selectedPath,
               semanticLabel: recent.label,
               onTap: enabled ? () => onSelect(recent) : null,
-              trailing: MButton(
-                variant: MButtonVariant.ghost,
+              trailing: MIconButton(
+                icon: MIconData.trash,
+                label: 'Forget ${recent.label}',
                 size: MButtonSize.sm,
-                semanticLabel: 'Forget ${recent.label}',
                 onPressed: enabled
                     ? () => ref
                           .read(recentDatabasesControllerProvider)
                           .forget(recent.path)
                     : null,
-                child: const Text('Forget'),
               ),
             ),
         ],
@@ -696,35 +743,61 @@ Future<void> _runUnlock({
   required BuildContext context,
   required WidgetRef ref,
   required ValueNotifier<bool> unlocking,
-  required ValueNotifier<String> password,
   required MController<String> passwordController,
   required String filePath,
   String? keyFilePath,
+  String? securityScopedBookmark,
   Uint8List? dbBytes,
   Uint8List? keyFileBytes,
   String? filename,
   String? yubiKeySlot,
 }) async {
   final vault = ref.read(vaultStateProvider);
+  final recentDatabases = ref.read(recentDatabasesControllerProvider);
   unlocking.value = true;
+  SecurityScopedAccess? securityScopedAccess;
+  var retainedAccess = false;
+  var effectiveFilePath = filePath;
+  final fileAccess = ref.read(securityScopedFileAccessProvider);
   try {
+    securityScopedAccess = await fileAccess.startFromBookmark(
+      securityScopedBookmark,
+    );
+    if (fileAccess.isSupported &&
+        securityScopedBookmark != null &&
+        securityScopedBookmark.isNotEmpty &&
+        securityScopedAccess == null) {
+      vault.setErrorWithDetail(
+        'FILE_ACCESS_EXPIRED',
+        'ManyKee no longer has permission to open this file.',
+        detail: 'Choose the database file again to refresh macOS file access.',
+      );
+      return;
+    }
+    effectiveFilePath = securityScopedAccess?.path ?? filePath;
     if (dbBytes != null) {
       await vault.unlock(
         dbBytes: dbBytes,
-        filePath: filePath,
+        filePath: effectiveFilePath,
         password: passwordController.value,
         keyFileBytes: keyFileBytes,
         filename: filename,
       );
     } else {
       await vault.unlockFromPath(
-        filePath: filePath,
+        filePath: effectiveFilePath,
         password: passwordController.value,
         keyFilePath: keyFilePath,
         filename: filename,
         yubiKeySlot: yubiKeySlot,
       );
     }
+  } on PlatformException catch (e) {
+    vault.setErrorWithDetail(
+      'FILE_ACCESS_REQUIRED',
+      'Select this database again to restore file access.',
+      detail: truncateErrorDetail(e.message ?? e.toString()),
+    );
   } on UnimplementedError catch (e) {
     vault.setError(
       'UNSUPPORTED',
@@ -736,18 +809,33 @@ Future<void> _runUnlock({
       'Something went wrong while unlocking. Please try again.',
       detail: truncateErrorDetail(e.toString()),
     );
-  }
-  if (!context.mounted) return;
-  unlocking.value = false;
-  if (vault.errorCode == 'WRONG_PASSWORD') {
-    passwordController.value = '';
-    password.value = '';
-  }
-  if (vault.errorCode == null) {
-    if (!kIsWeb) {
-      ref
-          .read(recentDatabasesControllerProvider)
-          .recordOpened(filePath, filename ?? vault.lastFilename ?? filePath);
+  } finally {
+    if (vault.errorCode == null) {
+      final owner = vault is VaultSessionsController
+          ? vault.activeSessionId
+          : effectiveFilePath;
+      securityScopedAccess?.retain(owner: owner);
+      retainedAccess = securityScopedAccess != null;
+      var bookmark = securityScopedBookmark;
+      if ((securityScopedAccess?.stale ?? false) || bookmark == null) {
+        bookmark =
+            await fileAccess.bookmarkForPath(effectiveFilePath) ?? bookmark;
+      }
+      if (!kIsWeb) {
+        recentDatabases.recordOpened(
+          effectiveFilePath,
+          filename ?? vault.lastFilename ?? effectiveFilePath,
+          securityScopedBookmark: bookmark,
+          previousPath: filePath,
+        );
+      }
+    }
+    if (!retainedAccess) await securityScopedAccess?.stop();
+    if (context.mounted) {
+      unlocking.value = false;
+      if (vault.errorCode == 'WRONG_PASSWORD') {
+        passwordController.value = '';
+      }
     }
   }
 }

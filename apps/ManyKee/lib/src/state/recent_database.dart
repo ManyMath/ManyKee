@@ -19,6 +19,7 @@ class RecentDatabase {
     required this.path,
     required this.label,
     required this.lastOpened,
+    this.securityScopedBookmark,
   });
 
   /// Full filesystem path to the .kdbx file.
@@ -31,25 +32,38 @@ class RecentDatabase {
   /// most-recent-first.
   final DateTime lastOpened;
 
-  RecentDatabase copyWith({String? label, DateTime? lastOpened}) {
+  /// macOS security-scoped bookmark, base64-encoded. Present only for files
+  /// selected by a sandboxed macOS build.
+  final String? securityScopedBookmark;
+
+  RecentDatabase copyWith({
+    String? label,
+    DateTime? lastOpened,
+    String? securityScopedBookmark,
+  }) {
     return RecentDatabase(
       path: path,
       label: label ?? this.label,
       lastOpened: lastOpened ?? this.lastOpened,
+      securityScopedBookmark:
+          securityScopedBookmark ?? this.securityScopedBookmark,
     );
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'path': path,
-        'label': label,
-        'lastOpened': lastOpened.toIso8601String(),
-      };
+    'path': path,
+    'label': label,
+    'lastOpened': lastOpened.toIso8601String(),
+    if (securityScopedBookmark != null)
+      'securityScopedBookmark': securityScopedBookmark,
+  };
 
   factory RecentDatabase.fromJson(Map<String, Object?> json) {
     return RecentDatabase(
       path: json['path']! as String,
       label: json['label']! as String,
       lastOpened: DateTime.parse(json['lastOpened']! as String),
+      securityScopedBookmark: json['securityScopedBookmark'] as String?,
     );
   }
 
@@ -59,19 +73,22 @@ class RecentDatabase {
     return other is RecentDatabase &&
         other.path == path &&
         other.label == label &&
-        other.lastOpened == lastOpened;
+        other.lastOpened == lastOpened &&
+        other.securityScopedBookmark == securityScopedBookmark;
   }
 
   @override
-  int get hashCode => Object.hash(path, label, lastOpened);
+  int get hashCode =>
+      Object.hash(path, label, lastOpened, securityScopedBookmark);
 }
 
 /// All remembered databases, most-recently-opened first. Empty until
 /// [recentDatabasesLoaderProvider] runs (or forever, if none have been
 /// opened yet: unlike ManyTier's connections there's no seeded default,
 /// since "no recents" correctly means "show the full open-file form".
-final recentDatabasesProvider =
-    StateProvider<List<RecentDatabase>>((ref) => const <RecentDatabase>[]);
+final recentDatabasesProvider = StateProvider<List<RecentDatabase>>(
+  (ref) => const <RecentDatabase>[],
+);
 
 /// Loads previously persisted recents, if any, and seeds
 /// [recentDatabasesProvider] exactly once. `app.dart` watches this so the
@@ -85,8 +102,9 @@ final recentDatabasesLoaderProvider = FutureProvider<void>((ref) async {
     try {
       final List<Object?> decoded = jsonDecode(raw) as List<Object?>;
       recents = decoded
-          .map((Object? e) =>
-              RecentDatabase.fromJson(e! as Map<String, Object?>))
+          .map(
+            (Object? e) => RecentDatabase.fromJson(e! as Map<String, Object?>),
+          )
           .toList();
     } catch (_) {
       // Corrupt prefs value (e.g. from a future format), start with an
@@ -99,8 +117,10 @@ final recentDatabasesLoaderProvider = FutureProvider<void>((ref) async {
 
 /// Persists the recents list on every change.
 final recentDatabasesPersistenceProvider = Provider<void>((ref) {
-  ref.listen<List<RecentDatabase>>(recentDatabasesProvider,
-      (previous, next) async {
+  ref.listen<List<RecentDatabase>>(recentDatabasesProvider, (
+    previous,
+    next,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _prefsRecentsKey,
@@ -118,16 +138,35 @@ class RecentDatabasesController {
   /// Records that [path] (displayed as [label]) was just opened: moves it
   /// to the front if already present (refreshing its timestamp), otherwise
   /// inserts it, then truncates to [_maxRecents].
-  void recordOpened(String path, String label) {
+  void recordOpened(
+    String path,
+    String label, {
+    String? securityScopedBookmark,
+    String? previousPath,
+  }) {
     final now = DateTime.now();
     final existing = _ref.read(recentDatabasesProvider);
-    final withoutPath = existing.where((r) => r.path != path).toList();
+    final existingBookmark =
+        securityScopedBookmark ??
+        _securityScopedBookmarkFor(existing, path) ??
+        (previousPath == null
+            ? null
+            : _securityScopedBookmarkFor(existing, previousPath));
+    final withoutPath = existing
+        .where((recent) => recent.path != path && recent.path != previousPath)
+        .toList();
     final next = <RecentDatabase>[
-      RecentDatabase(path: path, label: label, lastOpened: now),
+      RecentDatabase(
+        path: path,
+        label: label,
+        lastOpened: now,
+        securityScopedBookmark: existingBookmark,
+      ),
       ...withoutPath,
     ];
-    _ref.read(recentDatabasesProvider.notifier).state =
-        next.take(_maxRecents).toList();
+    _ref.read(recentDatabasesProvider.notifier).state = next
+        .take(_maxRecents)
+        .toList();
   }
 
   /// Removes [path] from the recents list.
@@ -140,7 +179,15 @@ class RecentDatabasesController {
   }
 }
 
-final recentDatabasesControllerProvider =
-    Provider<RecentDatabasesController>((ref) {
+final recentDatabasesControllerProvider = Provider<RecentDatabasesController>((
+  ref,
+) {
   return RecentDatabasesController(ref);
 });
+
+String? _securityScopedBookmarkFor(List<RecentDatabase> recents, String path) {
+  for (final recent in recents) {
+    if (recent.path == path) return recent.securityScopedBookmark;
+  }
+  return null;
+}

@@ -100,6 +100,12 @@ abstract class VaultState extends ChangeNotifier {
   bool isCurrentGroupSelection(int generation) =>
       generation == _groupSelectionGeneration;
 
+  /// Invalidates an in-flight group fetch when navigation resolves locally,
+  /// such as selecting a search result in the already-visible group.
+  void cancelPendingGroupSelection() {
+    _groupSelectionGeneration++;
+  }
+
   Future<void> unlock({
     Uint8List? dbBytes,
     String? filePath,
@@ -150,10 +156,12 @@ abstract class VaultState extends ChangeNotifier {
     if (_searchQuery.length < 2 || !_allEntriesCached) return [];
     final q = _searchQuery.toLowerCase();
     return _allEntries
-        .where((e) =>
-            e.title.toLowerCase().contains(q) ||
-            e.username.toLowerCase().contains(q) ||
-            e.url.toLowerCase().contains(q))
+        .where(
+          (e) =>
+              (!e.titleProtected && e.title.toLowerCase().contains(q)) ||
+              (!e.usernameProtected && e.username.toLowerCase().contains(q)) ||
+              (!e.urlProtected && e.url.toLowerCase().contains(q)),
+        )
         .toList();
   }
 
@@ -301,7 +309,13 @@ abstract class VaultState extends ChangeNotifier {
 
     final entryMaps = await listEntries(handle, groupUuid);
     for (final m in entryMaps) {
-      out.add(VaultEntry.fromMap(m, breadcrumb: breadcrumb));
+      out.add(
+        VaultEntry.fromMap(
+          m,
+          groupUuid: groupUuid,
+          breadcrumb: breadcrumb,
+        ),
+      );
     }
 
     final childGroups = await listGroups(handle, groupUuid);

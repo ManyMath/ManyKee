@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import 'manykee_vault_state.dart';
+import 'security_scoped_file_access.dart';
 import 'vault_state_factory.dart';
 import 'vault_sessions.dart';
 
@@ -10,9 +11,13 @@ import 'vault_sessions.dart';
 /// database sessions open and delegates this legacy state contract to the
 /// active session. Tests may still override it with a single fake
 /// [ManyKeeVaultState].
-final vaultStateProvider = ChangeNotifierProvider<ManyKeeVaultState>(
-  (ref) => VaultSessionsController(createVaultState),
-);
+final vaultStateProvider = ChangeNotifierProvider<ManyKeeVaultState>((ref) {
+  final fileAccess = ref.read(securityScopedFileAccessProvider);
+  return VaultSessionsController(
+    createVaultState,
+    releaseAccessForOwner: fileAccess.releaseOwner,
+  );
+});
 
 final vaultSessionsControllerProvider = Provider<VaultSessionsController?>((
   ref,

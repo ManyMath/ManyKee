@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -12,6 +13,10 @@ import 'package:manykee/src/state/manykee_vault_state.dart';
 import 'package:manykee/src/state/unlock_error_mapper.dart';
 import 'package:manykee/src/state/vault_state_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+const _securityScopedFilesChannel = MethodChannel(
+  'com.manykee.native/security_scoped_files',
+);
 
 /// In-memory vault state: no native library, no file system.
 ///
@@ -24,11 +29,41 @@ class FakeVaultState extends ManyKeeVaultState {
   FakeVaultState({
     this.acceptedPassword = 'correct',
     this.yubiKeys = const <Map<String, dynamic>>[],
+    this.creationSupported = true,
+    this.mergeSupported = true,
+    this.entryFields = const <String, dynamic>{
+      'Title': 'Example',
+      'UserName': 'alice',
+      'URL': '',
+      'Notes': '',
+    },
+    this.entryFieldValues = const <String, String>{'Password': 'hunter2'},
+    this.entryFieldReadError,
+    this.entryFieldLoader,
+    this.selectGroupLoader,
+    this.unlockGate,
+    this.totp,
+    this.searchableEntries = const <VaultEntry>[],
+    this.initialGroups,
+    this.initialEntries,
     String? initialFilePath,
   }) : _lastFilePath = initialFilePath;
 
   final String acceptedPassword;
   final List<Map<String, dynamic>> yubiKeys;
+  final bool creationSupported;
+  final bool mergeSupported;
+  final Map<String, dynamic> entryFields;
+  final Map<String, String> entryFieldValues;
+  final Object? entryFieldReadError;
+  final Future<String?> Function(String entryUuid, String fieldName)?
+  entryFieldLoader;
+  final Future<void> Function(VaultGroup group)? selectGroupLoader;
+  final Future<void>? unlockGate;
+  final Map<String, dynamic>? totp;
+  final List<VaultEntry> searchableEntries;
+  final List<VaultGroup>? initialGroups;
+  final List<VaultEntry>? initialEntries;
   String? _lastFilePath;
   String? _lastYubiKeySlot;
   String? lastUnlockFilePath;
@@ -42,6 +77,36 @@ class FakeVaultState extends ManyKeeVaultState {
   final List<String> copiedDatabasePaths = <String>[];
   final List<String> copiedDatabasePasswords = <String>[];
   Object? saveError;
+  final List<Map<String, String?>> updatedEntryFields =
+      <Map<String, String?>>[];
+  final List<Set<String>> updatedProtectedFields = <Set<String>>[];
+  bool disposed = false;
+
+  @override
+  bool get supportsDatabaseCreation => creationSupported;
+
+  @override
+  bool get supportsDatabaseMerge => mergeSupported;
+
+  @override
+  bool get allEntriesCached => true;
+
+  @override
+  List<VaultEntry> get searchResults {
+    final query = searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return const <VaultEntry>[];
+    final source = searchableEntries.isEmpty ? entries : searchableEntries;
+    return source
+        .where(
+          (entry) => <String>[
+            if (!entry.titleProtected) entry.title,
+            if (!entry.usernameProtected) entry.username,
+            if (!entry.urlProtected) entry.url,
+            entry.breadcrumb ?? '',
+          ].any((value) => value.toLowerCase().contains(query)),
+        )
+        .toList(growable: false);
+  }
 
   @override
   String? get lastFilePath => _lastFilePath;
@@ -72,6 +137,7 @@ class FakeVaultState extends ManyKeeVaultState {
     String? filename,
     String? yubiKeySlot,
   }) async {
+    await unlockGate;
     clearError();
     lastUnlockFilePath = filePath;
     lastUnlockPassword = password;
@@ -89,11 +155,20 @@ class FakeVaultState extends ManyKeeVaultState {
     _lastYubiKeySlot = yubiKeySlot;
     handleValue = 1;
     lastFilenameValue = filename ?? filePath;
-    groupsValue = <VaultGroup>[VaultGroup(uuid: 'g1', name: 'General')];
+    groupsValue =
+        initialGroups ?? <VaultGroup>[VaultGroup(uuid: 'g1', name: 'General')];
     selectedGroupValue = groups.first;
-    entriesValue = <VaultEntry>[
-      VaultEntry(uuid: 'e1', title: 'Example', username: 'alice', url: ''),
-    ];
+    entriesValue =
+        initialEntries ??
+        <VaultEntry>[
+          VaultEntry(
+            uuid: 'e1',
+            title: 'Example',
+            username: 'alice',
+            url: '',
+            groupUuid: groups.first.uuid,
+          ),
+        ];
     isLockedValue = false;
     notifyListeners();
   }
@@ -165,27 +240,54 @@ class FakeVaultState extends ManyKeeVaultState {
 
   @override
   Future<void> selectGroup(VaultGroup group) async {
+    final generation = beginGroupSelection();
+    await selectGroupLoader?.call(group);
+    if (!isCurrentGroupSelection(generation)) return;
     selectedGroupValue = group;
     notifyListeners();
   }
 
   @override
+  void dispose() {
+    disposed = true;
+    super.dispose();
+  }
+
+  @override
+  Future<void> selectRoot() async {
+    selectedGroupValue = null;
+    selectedEntryValue = null;
+    notifyListeners();
+  }
+
+  @override
   Future<Map<String, dynamic>> readEntryFields(String entryUuid) async {
-    return <String, dynamic>{
-      'Title': 'Example',
-      'UserName': 'alice',
-      'URL': '',
-      'Notes': '',
-    };
+    return Map<String, dynamic>.of(entryFields);
   }
 
   @override
   Future<String?> readEntryField(String entryUuid, String fieldName) async {
-    return fieldName == 'Password' ? 'hunter2' : null;
+    final error = entryFieldReadError;
+    if (error != null) throw error;
+    final loader = entryFieldLoader;
+    if (loader != null) return loader(entryUuid, fieldName);
+    return entryFieldValues[fieldName];
   }
 
   @override
-  Future<Map<String, dynamic>?> getTotpCode(String entryUuid) async => null;
+  Future<Map<String, dynamic>?> getTotpCode(String entryUuid) async =>
+      totp == null ? null : Map<String, dynamic>.of(totp!);
+
+  @override
+  Future<void> updateEntry(
+    String entryUuid,
+    Map<String, String?> fields, {
+    Set<String> protectedFields = const <String>{},
+  }) async {
+    updatedEntryFields.add(Map<String, String?>.of(fields));
+    updatedProtectedFields.add(Set<String>.of(protectedFields));
+    markDirty();
+  }
 }
 
 class _FakeFilePicker extends FilePicker {
@@ -241,6 +343,12 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_securityScopedFilesChannel, null);
+  });
+
   testWidgets('fresh unlock form renders', (tester) async {
     await tester.pumpWidget(appWith(FakeVaultState()));
 
@@ -253,6 +361,15 @@ void main() {
     await tester.pump();
     expect(find.text('No YubiKey detected.'), findsOneWidget);
     expect(find.text('Re-detect'), findsOneWidget);
+  });
+
+  testWidgets('database creation is hidden when the platform cannot save it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(appWith(FakeVaultState(creationSupported: false)));
+
+    expect(find.text('Create new database…'), findsNothing);
+    expect(find.text('Choose file…'), findsOneWidget);
   });
 
   testWidgets('re-unlock view shows path and maps a wrong password error', (
@@ -273,12 +390,39 @@ void main() {
     await tester.pump();
 
     expect(find.text('Incorrect password. Please try again.'), findsOneWidget);
-    // The raw error rides along as a muted detail line, not in the message.
-    expect(
-      find.text('invalid credentials or corrupt database'),
-      findsOneWidget,
-    );
+    // Backend detail is retained in state for diagnostics, but not disclosed
+    // as primary UI copy on the unlock surface.
+    expect(find.text('invalid credentials or corrupt database'), findsNothing);
     expect(state.isLocked, isTrue);
+  });
+
+  testWidgets('re-unlock can retry after a wrong password', (tester) async {
+    final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
+    await tester.pumpWidget(appWith(state));
+
+    await tester.tap(find.byType(MTextField));
+    await tester.pump();
+    await tester.enterText(find.byType(EditableText), 'wrong-password');
+    await tester.pump();
+    await tester.tap(find.text('Unlock'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Incorrect password. Please try again.'), findsOneWidget);
+    expect(state.isLocked, isTrue);
+
+    await tester.enterText(find.byType(EditableText), 'correct');
+    await tester.pump();
+
+    final retry = find.widgetWithText(MButton, 'Unlock');
+    expect(tester.widget<MButton>(retry).onPressed, isNotNull);
+    await tester.tap(retry);
+    await tester.pump();
+    await tester.pump();
+
+    expect(state.lastUnlockPassword, 'correct');
+    expect(state.isLocked, isFalse);
+    expect(find.text('Lock'), findsOneWidget);
   });
 
   testWidgets('unlock page does NOT expose a merge-databases entry point '
@@ -311,6 +455,164 @@ void main() {
     );
   });
 
+  testWidgets('recent database unlock resolves a macOS security bookmark', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final methodCalls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_securityScopedFilesChannel, (call) async {
+          methodCalls.add(call.method);
+          switch (call.method) {
+            case 'startAccessingBookmark':
+              expect(call.arguments, <String, Object?>{
+                'bookmark': 'bookmark-data',
+              });
+              return <String, Object?>{
+                'token': 'access-token',
+                'path': '/resolved/one.kdbx',
+                'stale': false,
+              };
+            case 'stopAccessing':
+              return null;
+          }
+          fail('Unexpected method ${call.method}');
+        });
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manykee.recentDatabases':
+          '[{"path":"/tmp/one.kdbx","label":"one.kdbx",'
+          '"lastOpened":"2026-01-01T00:00:00.000",'
+          '"securityScopedBookmark":"bookmark-data"}]',
+    });
+    final state = FakeVaultState();
+    await tester.pumpWidget(appWith(state));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.text('one.kdbx'));
+    await tester.pump();
+    await tester.enterText(find.byType(EditableText), 'correct');
+    await tester.pump();
+    await tester.ensureVisible(find.text('Unlock'));
+    await tester.pump();
+    await tester.tap(find.text('Unlock'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(methodCalls, <String>['startAccessingBookmark']);
+    expect(state.lastUnlockFilePath, '/resolved/one.kdbx');
+    expect(state.isLocked, isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    final persisted = prefs.getString('manykee.recentDatabases');
+    expect(persisted, contains('/resolved/one.kdbx'));
+    expect(persisted, isNot(contains('/tmp/one.kdbx')));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('expired recent database bookmark leaves unlock retryable', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_securityScopedFilesChannel, (call) async {
+          if (call.method == 'startAccessingBookmark') {
+            throw PlatformException(
+              code: 'RESOLVE_FAILED',
+              message: 'Bookmark is stale.',
+            );
+          }
+          fail('Unexpected method ${call.method}');
+        });
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manykee.recentDatabases':
+          '[{"path":"/tmp/one.kdbx","label":"one.kdbx",'
+          '"lastOpened":"2026-01-01T00:00:00.000",'
+          '"securityScopedBookmark":"bookmark-data"}]',
+    });
+    final state = FakeVaultState();
+    await tester.pumpWidget(appWith(state));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.text('one.kdbx'));
+    await tester.pump();
+    await tester.enterText(find.byType(EditableText), 'correct');
+    await tester.pump();
+    await tester.ensureVisible(find.text('Unlock'));
+    await tester.pump();
+    await tester.tap(find.text('Unlock'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.text('ManyKee no longer has permission to open this file.'),
+      findsOneWidget,
+    );
+    final retry = find.widgetWithText(MButton, 'Unlock');
+    expect(tester.widget<MButton>(retry).onPressed, isNotNull);
+    expect(state.lastUnlockFilePath, isNull);
+    expect(state.isLocked, isTrue);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('failed unlock after unmount still stops security access', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final gate = Completer<void>();
+    final methodCalls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_securityScopedFilesChannel, (call) async {
+          methodCalls.add(call.method);
+          if (call.method == 'startAccessingBookmark') {
+            return <String, Object?>{
+              'token': 'access-token',
+              'path': '/resolved/one.kdbx',
+              'stale': false,
+            };
+          }
+          if (call.method == 'stopAccessing') return null;
+          fail('Unexpected method ${call.method}');
+        });
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manykee.recentDatabases':
+          '[{"path":"/tmp/one.kdbx","label":"one.kdbx",'
+          '"lastOpened":"2026-01-01T00:00:00.000",'
+          '"securityScopedBookmark":"bookmark-data"}]',
+    });
+    final state = FakeVaultState(
+      acceptedPassword: 'different',
+      unlockGate: gate.future,
+    );
+    final overrides = <Override>[
+      vaultStateProvider.overrideWith((ref) => state),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(overrides: overrides, child: const ManyKeeApp()),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('one.kdbx'));
+    await tester.pump();
+    await tester.enterText(find.byType(EditableText), 'correct');
+    await tester.ensureVisible(find.text('Unlock'));
+    await tester.pump();
+    await tester.tap(find.text('Unlock'));
+    await tester.pump();
+    expect(methodCalls, <String>['startAccessingBookmark']);
+
+    await tester.pumpWidget(
+      ProviderScope(overrides: overrides, child: const SizedBox()),
+    );
+    gate.complete();
+    await tester.pump();
+
+    expect(methodCalls, <String>['startAccessingBookmark', 'stopAccessing']);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('successful unlock opens the vault browser', (tester) async {
     final state = FakeVaultState(initialFilePath: '/tmp/vault.kdbx');
     await tester.pumpWidget(appWith(state));
@@ -325,11 +627,16 @@ void main() {
 
     expect(state.isLocked, isFalse);
     expect(find.text('Lock'), findsOneWidget);
-    expect(find.text('General'), findsOneWidget);
+    expect(find.text('General'), findsWidgets);
 
-    // Default test surface is 800x600 — the narrow, stacked layout. Tapping
-    // the group navigates to its entry list.
-    await tester.tap(find.text('General'));
+    // Default test surface is 800x600, so the tablet layout presents the
+    // group tree and selected group's entries side by side.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(MTreeListTile),
+        matching: find.text('General'),
+      ),
+    );
     await tester.pump();
     expect(find.text('Example'), findsOneWidget);
   });
@@ -413,5 +720,7 @@ void main() {
     expect(state.createdDatabaseFilename, 'fresh-vault.kdbx');
     expect(state.isLocked, isFalse);
     expect(find.text('Lock'), findsOneWidget);
+    expect(find.text('Vault root'), findsWidgets);
+    expect(find.bySemanticsLabel('New entry'), findsWidgets);
   });
 }

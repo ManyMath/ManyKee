@@ -11,6 +11,12 @@ import 'package:keepass_ui/keepass_ui.dart' show VaultState;
 abstract class ManyKeeVaultState extends VaultState {
   String? _errorDetail;
 
+  /// Whether the app has a complete create-and-save workflow on this target.
+  bool get supportsDatabaseCreation => false;
+
+  /// Whether the app can safely merge another database on this target.
+  bool get supportsDatabaseMerge => false;
+
   /// Raw error text behind the friendly [errorMessage], if any, for a muted
   /// detail line on the unlock page. Set via [setErrorWithDetail] on unlock
   /// failure; cleared with [clearError].
@@ -53,6 +59,11 @@ abstract class ManyKeeVaultState extends VaultState {
   /// descriptor maps from the keepass core. Empty on platforms without
   /// YubiKey support (web) or when none are plugged in.
   Future<List<Map<String, dynamic>>> listYubiKeys();
+
+  /// Selects the database root so root-level entries can be browsed and
+  /// created even when the database also contains groups.
+  Future<void> selectRoot() =>
+      throw UnimplementedError('root browsing is not supported');
 
   /// Creates a new database, saves it at [filePath], and opens it as the
   /// current vault.

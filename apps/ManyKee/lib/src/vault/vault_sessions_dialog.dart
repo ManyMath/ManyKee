@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:manyui/manyui.dart';
 
 import '../state/vault_sessions.dart';
+import 'save_password_dialog.dart';
+import 'unsaved_changes_dialog.dart';
 
 Future<void> showVaultSessionsDialog(
   BuildContext context,
@@ -44,14 +46,23 @@ class _VaultSessionsDialog extends StatelessWidget {
                       controller.switchToSession(session.id);
                       Navigator.of(context).pop();
                     },
-              trailing: session.isActive
-                  ? Text(
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (session.isActive)
+                    Text(
                       'Current',
                       style: theme.typography.caption.copyWith(
                         color: theme.colors.mutedForeground,
                       ),
-                    )
-                  : null,
+                    ),
+                  MIconButton(
+                    icon: MIconData.close,
+                    label: 'Close ${session.label}',
+                    onPressed: () => _closeSession(context, session),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -70,5 +81,39 @@ class _VaultSessionsDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _closeSession(
+    BuildContext context,
+    VaultSessionSummary session,
+  ) async {
+    var discardDirty = false;
+    if (session.isDirty) {
+      controller.switchToSession(session.id);
+      final action = await showUnsavedChangesDialog(context);
+      if (action == null || !context.mounted) return;
+      switch (action) {
+        case UnsavedChangesAction.save:
+          final password = await showSavePasswordDialog(context);
+          if (password == null || !context.mounted) return;
+          try {
+            await controller.saveDatabase(password: password);
+          } catch (error) {
+            if (context.mounted) {
+              showMToast(
+                context,
+                builder: (_) => Text('Could not save database: $error'),
+              );
+            }
+            return;
+          }
+          break;
+        case UnsavedChangesAction.discard:
+          discardDirty = true;
+          break;
+      }
+    }
+    await controller.closeSession(session.id, discardDirty: discardDirty);
+    if (context.mounted) Navigator.of(context).pop();
   }
 }

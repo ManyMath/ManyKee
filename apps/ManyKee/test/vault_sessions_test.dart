@@ -81,6 +81,54 @@ void main() {
     expect(controller.hasUnlockedCleanSessions, isFalse);
   });
 
+  test(
+    'closing a dirty session requires discard and releases its access',
+    () async {
+      final releasedOwners = <String>[];
+      final created = <FakeVaultState>[];
+      final controller = VaultSessionsController(() {
+        final state = FakeVaultState();
+        created.add(state);
+        return state;
+      }, releaseAccessForOwner: (owner) async => releasedOwners.add(owner));
+      addTearDown(controller.dispose);
+      await controller.unlockFromPath(
+        filePath: '/tmp/dirty.kdbx',
+        password: 'correct',
+      );
+      created.single.makeDirty();
+      final id = controller.activeSessionId;
+
+      expect(await controller.closeSession(id), isFalse);
+      expect(created.single.disposed, isFalse);
+      expect(releasedOwners, isEmpty);
+
+      expect(await controller.closeSession(id, discardDirty: true), isTrue);
+      expect(created.first.disposed, isTrue);
+      expect(releasedOwners, <String>[id]);
+      expect(controller.sessions, hasLength(1));
+      expect(controller.isLocked, isTrue);
+    },
+  );
+
+  test('locking a session releases its security-scoped access', () async {
+    final releasedOwners = <String>[];
+    final controller = VaultSessionsController(
+      () => FakeVaultState(),
+      releaseAccessForOwner: (owner) async => releasedOwners.add(owner),
+    );
+    addTearDown(controller.dispose);
+    await controller.unlockFromPath(
+      filePath: '/tmp/one.kdbx',
+      password: 'correct',
+    );
+    final id = controller.activeSessionId;
+
+    await controller.lock();
+
+    expect(releasedOwners, <String>[id]);
+  });
+
   testWidgets('databases dialog opens another session and switches back', (
     tester,
   ) async {
@@ -103,6 +151,8 @@ void main() {
     expect(find.text('first.kdbx'), findsOneWidget);
     expect(find.text('Unlock a database'), findsNothing);
 
+    await tester.tap(find.bySemanticsLabel('Vault actions').first);
+    await tester.pump();
     await tester.tap(find.widgetWithText(MButton, 'Databases'));
     await tester.pump();
     await tester.tap(find.text('Open another database'));
@@ -123,6 +173,63 @@ void main() {
     expect(controller.isLocked, isFalse);
     expect(find.text('Unlock a database'), findsNothing);
     expect(find.text('first.kdbx'), findsOneWidget);
+  });
+
+  testWidgets('same entry UUID reloads when the active vault changes', (
+    tester,
+  ) async {
+    final created = <FakeVaultState>[];
+    final fields = <Map<String, dynamic>>[
+      const <String, dynamic>{
+        'Title': 'First vault secret',
+        'UserName': 'alice',
+        'URL': '',
+        'Notes': '',
+      },
+      const <String, dynamic>{
+        'Title': 'Second vault secret',
+        'UserName': 'bob',
+        'URL': '',
+        'Notes': '',
+      },
+    ];
+    final controller = VaultSessionsController(() {
+      final state = FakeVaultState(entryFields: fields[created.length]);
+      created.add(state);
+      return state;
+    });
+
+    await controller.unlockFromPath(
+      filePath: '/tmp/first.kdbx',
+      password: 'correct',
+      filename: 'first.kdbx',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          vaultStateProvider.overrideWith((ref) => controller),
+        ],
+        child: const ManyKeeApp(),
+      ),
+    );
+    await tester.tap(find.text('Example'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('First vault secret'), findsOneWidget);
+
+    controller.openNewSession();
+    await controller.unlockFromPath(
+      filePath: '/tmp/second.kdbx',
+      password: 'correct',
+      filename: 'second.kdbx',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Example'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Second vault secret'), findsOneWidget);
+    expect(find.text('First vault secret'), findsNothing);
   });
 
   testWidgets('auto-lock locks inactive clean sessions', (tester) async {

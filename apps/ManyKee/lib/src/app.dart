@@ -8,6 +8,7 @@ import 'package:manyui_riverpod/manyui_riverpod.dart';
 
 import 'state/recent_database.dart';
 import 'state/manykee_vault_state.dart';
+import 'state/security_scoped_file_access.dart';
 import 'state/settings_state.dart';
 import 'state/vault_state_provider.dart';
 import 'state/vault_sessions.dart';
@@ -30,10 +31,12 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
   bool? _appliedLockedState;
   bool? _appliedDirtyState;
   bool? _appliedScreenProtectionState;
+  late final SecurityScopedFileAccess _securityScopedFileAccess;
 
   @override
   void initState() {
     super.initState();
+    _securityScopedFileAccess = ref.read(securityScopedFileAccessProvider);
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -42,6 +45,7 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
     WidgetsBinding.instance.removeObserver(this);
     _idleTimer?.cancel();
     unawaited(ScreenProtection.setSecure(false));
+    unawaited(_securityScopedFileAccess.releaseAll());
     super.dispose();
   }
 
@@ -73,8 +77,8 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
 
     return MWidgetsApp(
       title: 'ManyKee',
-      theme: MThemeData.light(),
-      darkTheme: MThemeData.dark(),
+      theme: manyKeeLightTheme,
+      darkTheme: manyKeeDarkTheme,
       themeMode: mode,
       debugShowCheckedModeBanner: false,
       home: Listener(
@@ -83,7 +87,6 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
         onPointerMove: (_) => _handleActivity(),
         onPointerSignal: (_) => _handleActivity(),
         child: Focus(
-          autofocus: true,
           onKeyEvent: (node, event) {
             _handleActivity();
             return KeyEventResult.ignored;

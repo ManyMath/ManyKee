@@ -7,6 +7,7 @@ import 'package:keepass_ui/keepass_ui.dart' show VaultEntry, VaultGroup;
 import 'manykee_vault_state.dart';
 
 typedef VaultStateFactory = ManyKeeVaultState Function();
+typedef ReleaseAccessForOwner = Future<void> Function(String owner);
 
 class VaultSessionSummary {
   const VaultSessionSummary({
@@ -36,13 +37,17 @@ class _VaultSession {
 /// Owns all currently-open vault sessions and delegates the legacy
 /// [ManyKeeVaultState] contract to the active session.
 class VaultSessionsController extends ManyKeeVaultState {
-  VaultSessionsController(this._createVault) {
+  VaultSessionsController(
+    this._createVault, {
+    ReleaseAccessForOwner? releaseAccessForOwner,
+  }) : _releaseAccessForOwner = releaseAccessForOwner {
     final initial = _newSession();
     _sessions.add(initial);
     _activeSessionId = initial.id;
   }
 
   final VaultStateFactory _createVault;
+  final ReleaseAccessForOwner? _releaseAccessForOwner;
   final List<_VaultSession> _sessions = <_VaultSession>[];
   final Map<String, VoidCallback> _listeners = <String, VoidCallback>{};
   int _nextId = 1;
@@ -75,6 +80,12 @@ class VaultSessionsController extends ManyKeeVaultState {
 
   ManyKeeVaultState get activeVault => _activeSession.vault;
 
+  @override
+  bool get supportsDatabaseCreation => activeVault.supportsDatabaseCreation;
+
+  @override
+  bool get supportsDatabaseMerge => activeVault.supportsDatabaseMerge;
+
   String get activeSessionId => _activeSessionId;
 
   void openNewSession() {
@@ -96,11 +107,38 @@ class VaultSessionsController extends ManyKeeVaultState {
     notifyListeners();
   }
 
+  Future<bool> closeSession(String id, {bool discardDirty = false}) async {
+    final session = _activeSessionById(id);
+    if (session.vault.isDirty && !discardDirty) return false;
+
+    final index = _sessions.indexOf(session);
+    final wasActive = id == _activeSessionId;
+    _sessions.removeAt(index);
+    final listener = _listeners.remove(id);
+    if (listener != null) session.vault.removeListener(listener);
+    session.vault.dispose();
+    await _releaseAccessForOwner?.call(id);
+
+    if (_sessions.isEmpty) {
+      final replacement = _newSession();
+      _sessions.add(replacement);
+      _activeSessionId = replacement.id;
+    } else if (wasActive) {
+      final replacementIndex = index < _sessions.length
+          ? index
+          : _sessions.length - 1;
+      _activeSessionId = _sessions[replacementIndex].id;
+    }
+    notifyListeners();
+    return true;
+  }
+
   Future<void> lockCleanSessions() async {
     for (final session in _sessions) {
       final vault = session.vault;
       if (!vault.isLocked && !vault.isDirty) {
         await vault.lock();
+        await _releaseAccessForOwner?.call(session.id);
       }
     }
     notifyListeners();
@@ -214,16 +252,29 @@ class VaultSessionsController extends ManyKeeVaultState {
   @override
   void openDifferentFile() {
     activeVault.openDifferentFile();
+    final release = _releaseAccessForOwner;
+    if (release != null) unawaited(release(_activeSessionId));
   }
 
   @override
-  Future<void> lock() {
-    return activeVault.lock();
+  Future<void> lock() async {
+    await activeVault.lock();
+    await _releaseAccessForOwner?.call(_activeSessionId);
   }
 
   @override
   Future<void> selectGroup(VaultGroup group) {
     return activeVault.selectGroup(group);
+  }
+
+  @override
+  Future<void> selectRoot() {
+    return activeVault.selectRoot();
+  }
+
+  @override
+  void cancelPendingGroupSelection() {
+    activeVault.cancelPendingGroupSelection();
   }
 
   @override
@@ -346,6 +397,8 @@ class VaultSessionsController extends ManyKeeVaultState {
         session.vault.removeListener(listener);
       }
       session.vault.dispose();
+      final release = _releaseAccessForOwner;
+      if (release != null) unawaited(release(session.id));
     }
     _sessions.clear();
     super.dispose();
