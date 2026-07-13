@@ -801,9 +801,7 @@
         }
       },
       "tags": [
-        "2fa",
-        "important",
-        "work"
+        "work,important,2fa"
       ],
       "times": {
         "creation": "2026-03-25 03:23:35",
