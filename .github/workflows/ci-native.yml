@@ -19,15 +19,33 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout
+      - name: Checkout ManyKee
         uses: actions/checkout@v4
+        with:
+          path: ManyKee
+
+      - name: Require dependency checkout token
+        env:
+          DEPENDENCY_CHECKOUT_TOKEN: ${{ secrets.DEPENDENCY_CHECKOUT_TOKEN }}
+        run: |
+          if [ -z "${DEPENDENCY_CHECKOUT_TOKEN:-}" ]; then
+            echo "DEPENDENCY_CHECKOUT_TOKEN must be a read-only PAT that can clone sneurlax/manyui" >&2
+            exit 1
+          fi
+
+      - name: Checkout pinned ManyUI
+        uses: actions/checkout@v4
+        with:
+          repository: sneurlax/manyui
+          ref: 7d0fc083eff35c2b5c035d4328f5ed2d6845ced2
+          path: ManyUI
+          token: ${{ secrets.DEPENDENCY_CHECKOUT_TOKEN }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-          pub-cache: true
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -35,7 +53,7 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: rust -> rust/target
+          workspaces: ManyKee/rust -> ManyKee/rust/target
 
       - name: Install Linux desktop dependencies
         run: |
@@ -54,13 +72,15 @@ jobs:
         run: flutter config --enable-linux-desktop
 
       - name: Install app dependencies
-        working-directory: apps/native
+        working-directory: ManyKee/apps/native
         run: flutter pub get
 
       - name: Pre-build Linux debug bundle
-        working-directory: apps/native
-        run: flutter build linux --debug
+        working-directory: ManyKee/apps/native
+        run: timeout --signal=TERM --kill-after=30s 20m flutter build linux --debug
 
       - name: Run native integration tests
-        working-directory: apps/native
-        run: xvfb-run --auto-servernum flutter test integration_test -d linux -r github
+        working-directory: ManyKee/apps/native
+        run: >-
+          timeout --signal=TERM --kill-after=30s 20m
+          xvfb-run --auto-servernum flutter test integration_test -d linux -r github
