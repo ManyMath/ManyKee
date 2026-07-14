@@ -16,6 +16,7 @@ trap cleanup EXIT
 
 required_site_assets=(
   index.html
+  404.html
   styles.css
   assets/manykee-mark.svg
   assets/manykee-vault.png
