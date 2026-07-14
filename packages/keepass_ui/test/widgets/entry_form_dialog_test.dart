@@ -123,8 +123,7 @@ void main() {
     expect(fetched, ['Password']);
   });
 
-  testWidgets(
-      'does not overwrite a password the user already started typing',
+  testWidgets('does not overwrite a password the user already started typing',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -146,7 +145,8 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextFormField, 'Password'), 'typed-by-user');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'), 'typed-by-user');
     await tester.tap(find.byTooltip('Show password'));
     await tester.pumpAndSettle();
 

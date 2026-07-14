@@ -169,7 +169,8 @@ class _GroupTreeState extends State<GroupTree> {
         parentGroup.uuid,
         name,
       );
-      final createdGroup = _findGroupByUuid(groupUuid, widget.vaultState.groups);
+      final createdGroup =
+          _findGroupByUuid(groupUuid, widget.vaultState.groups);
       final path = _pathToGroup(groupUuid, _visibleGroups);
       if (mounted) {
         setState(() {
@@ -202,7 +203,8 @@ class _GroupTreeState extends State<GroupTree> {
     await _setMutatingGroup(group.uuid);
     try {
       await widget.vaultState.renameGroup(group.uuid, name);
-      final refreshedGroup = _findGroupByUuid(group.uuid, widget.vaultState.groups);
+      final refreshedGroup =
+          _findGroupByUuid(group.uuid, widget.vaultState.groups);
       if (refreshedGroup != null && widget.selectedGroup?.uuid == group.uuid) {
         await widget.onGroupSelected(refreshedGroup);
       }

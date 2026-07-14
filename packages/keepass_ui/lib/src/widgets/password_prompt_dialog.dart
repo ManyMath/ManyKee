@@ -63,13 +63,15 @@ class _PasswordPromptDialogState extends State<_PasswordPromptDialog> {
               decoration: InputDecoration(
                 labelText: 'Master password',
                 suffixIcon: IconButton(
-                  icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                  icon:
+                      Icon(_obscure ? Icons.visibility_off : Icons.visibility),
                   tooltip: _obscure ? 'Show password' : 'Hide password',
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
               ),
-              validator: (value) =>
-                  (value == null || value.isEmpty) ? 'Password is required' : null,
+              validator: (value) => (value == null || value.isEmpty)
+                  ? 'Password is required'
+                  : null,
               onFieldSubmitted: (_) => _submit(),
             ),
           ],

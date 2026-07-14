@@ -412,8 +412,8 @@ class _EntryFormDialogState extends State<EntryFormDialog> {
                               onPressed: () {
                                 if (isVisible) {
                                   setState(
-                                    () => _visibleCustomFields
-                                        .remove(entry.key),
+                                    () =>
+                                        _visibleCustomFields.remove(entry.key),
                                   );
                                 } else {
                                   _revealCustomField(entry.key, rawValue);
