@@ -35,9 +35,10 @@ with socket.socket() as server:
 required_files=(
   index.html
   404.html
-  styles.css
-  assets/manykee-mark.svg
-  assets/manykee-vault.png
+  assets/site.css
+  assets/brand/marks/manykee.svg
+  assets/brand/og.png
+  assets/hero.png
   web/index.html
   web/flutter_bootstrap.js
   web/main.dart.js
@@ -102,11 +103,11 @@ fi
 
 curl --fail --silent --show-error "http://127.0.0.1:$port/web/" \
   --output "$download_dir/app.html"
-curl --fail --silent --show-error "http://127.0.0.1:$port/styles.css" \
+curl --fail --silent --show-error "http://127.0.0.1:$port/assets/site.css" \
   --output "$download_dir/styles.css"
-curl --fail --silent --show-error "http://127.0.0.1:$port/assets/manykee-mark.svg" \
+curl --fail --silent --show-error "http://127.0.0.1:$port/assets/brand/marks/manykee.svg" \
   --output "$download_dir/manykee-mark.svg"
-curl --fail --silent --show-error "http://127.0.0.1:$port/assets/manykee-vault.png" \
+curl --fail --silent --show-error "http://127.0.0.1:$port/assets/hero.png" \
   --output "$download_dir/manykee-vault.png"
 curl --fail --silent --show-error "http://127.0.0.1:$port/web/main.dart.js" \
   --output "$download_dir/main.dart.js"
@@ -119,16 +120,16 @@ curl --fail --silent --show-error \
 
 grep -Fq '<base href="/web/">' "$download_dir/app.html"
 if grep -Eiq '<!doctype html|<html' "$download_dir/styles.css"; then
-  echo "/styles.css returned HTML" >&2
+  echo "/assets/site.css returned HTML" >&2
   exit 1
 fi
 if ! grep -Fq '<svg' "$download_dir/manykee-mark.svg"; then
-  echo "/assets/manykee-mark.svg is not an SVG image" >&2
+  echo "/assets/brand/marks/manykee.svg is not an SVG image" >&2
   exit 1
 fi
 preview_magic="$(od -An -tx1 -N8 "$download_dir/manykee-vault.png" | tr -d '[:space:]')"
 if [[ "$preview_magic" != "89504e470d0a1a0a" ]]; then
-  echo "served manykee-vault.png is not a valid PNG image" >&2
+  echo "served assets/hero.png is not a valid PNG image" >&2
   exit 1
 fi
 if grep -Eiq '<!doctype html|<html' "$download_dir/main.dart.js"; then

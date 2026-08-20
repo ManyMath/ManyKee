@@ -1,178 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0d1714">
-    <meta
-      name="description"
-      content="ManyKee is a focused, local-first workspace for opening and editing KeePass-compatible KDBX vaults."
-    >
-    <meta property="og:title" content="ManyKee">
-    <meta
-      property="og:description"
-      content="Open your KeePass vault in a clear, private-minded browser workspace."
-    >
-    <meta property="og:type" content="website">
-    <meta property="og:image" content="/assets/manykee-vault.png">
-    <link rel="icon" type="image/svg+xml" href="/assets/manykee-mark.svg">
-    <link rel="stylesheet" href="/styles.css">
-    <title>ManyKee | A focused workspace for KeePass vaults</title>
-  </head>
-  <body>
-    <a class="skip-link" href="#main-content">Skip to content</a>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ManyKee | KeePass vault editor</title>
+  <meta name="description" content="Open, edit, and save KeePass KDBX vaults with ManyKee. Your browser processes the files on your device.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f6f4">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101512">
+  <link rel="canonical" href="https://manykee.com/">
+  <meta property="og:title" content="ManyKee">
+  <meta property="og:description" content="Open, edit, and save KeePass KDBX vaults with ManyKee. Your browser processes the files on your device.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://manykee.com/">
+  <meta property="og:image" content="https://manykee.com/assets/brand/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/svg+xml" href="/assets/brand/marks/manykee.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/raster/favicon-32.png">
+  <link rel="preload" href="/assets/brand/fonts/latinmodern/lmroman10-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/brand/fonts/inter/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/brand/tokens/manymath-brand.css">
+  <link rel="stylesheet" href="/assets/brand/tokens/fonts.css">
+  <link rel="stylesheet" href="/assets/brand/tokens/fallbacks.css">
+  <link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="ManyKee home"><img src="/assets/brand/marks/manykee.svg" alt="" width="30" height="30"><span>ManyKee</span></a>
+    <nav aria-label="Primary">
+      <a href="#capabilities">Capabilities</a>
+      <a href="#family">Products</a>
+      <a class="cta" href="/web/">Open ManyKee</a>
+    </nav>
+  </header>
 
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="ManyKee home">
-        <img src="/assets/manykee-mark.svg" alt="" width="34" height="34">
-        <span>ManyKee</span>
-      </a>
-      <nav aria-label="Primary navigation">
-        <a href="#workflow">How it works</a>
-        <a href="#ecosystem">Ecosystem</a>
-        <a class="nav-app" href="/web/">Open ManyKee</a>
-      </nav>
-    </header>
-
-    <main id="main-content">
-      <section class="hero" aria-labelledby="hero-title">
-        <img
-          class="hero-media"
-          src="/assets/manykee-vault.png"
-          alt="ManyKee showing an unlocked KeePass database with groups, entries, and entry details"
-        >
-        <div class="hero-scrim" aria-hidden="true"></div>
-        <div class="hero-inner">
-          <div class="hero-copy">
-            <p class="eyebrow">Credentials, without the clutter</p>
-            <h1 id="hero-title">ManyKee</h1>
-            <p class="hero-summary">
-              A focused, local-first workspace for opening and editing the
-              KeePass vaults you already own.
-            </p>
-            <div class="hero-actions">
-              <a class="button button-primary" href="/web/">
-                Open your vault
-                <span aria-hidden="true">&rarr;</span>
-              </a>
-              <a class="button button-quiet" href="#workflow">See how it works</a>
-            </div>
-            <p class="hero-note">No account required. Your KDBX file stays under your control.</p>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">KeePass vault editor</p>
+          <h1 id="hero-title">Open your KeePass vault in the browser.</h1>
+          <p class="summary">View and edit your passwords in a standard KeePass vault. Files are processed on your device, with no account required.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="/web/">Open ManyKee <span aria-hidden="true">→</span></a>
+            <a class="button button-quiet" href="#family">Explore our tools</a>
           </div>
         </div>
-      </section>
-
-      <section class="trust-band" aria-label="ManyKee at a glance">
-        <div class="section-inner trust-list">
-          <p><strong>KDBX</strong><span>KeePass-compatible files</span></p>
-          <p><strong>Local</strong><span>Processed in your browser</span></p>
-          <p><strong>Portable</strong><span>Open and save standard vaults</span></p>
-        </div>
-      </section>
-
-      <section class="workflow-band" id="workflow" aria-labelledby="workflow-title">
-        <div class="section-inner">
-          <div class="section-heading">
-            <p class="eyebrow">A direct path to what you need</p>
-            <h2 id="workflow-title">Your vault is the workspace.</h2>
-            <p>
-              ManyKee keeps groups, entries, and details visible together, so
-              finding or updating a credential takes fewer detours.
-            </p>
-          </div>
-
-          <ol class="workflow-list">
-            <li>
-              <span class="step-number" aria-hidden="true">01</span>
-              <div>
-                <h3>Choose a KDBX file</h3>
-                <p>Open an existing KeePass database directly from your device.</p>
-              </div>
-            </li>
-            <li>
-              <span class="step-number" aria-hidden="true">02</span>
-              <div>
-                <h3>Unlock in the browser</h3>
-                <p>Your database is handled locally by a dedicated WebAssembly worker.</p>
-              </div>
-            </li>
-            <li>
-              <span class="step-number" aria-hidden="true">03</span>
-              <div>
-                <h3>Work, then save</h3>
-                <p>Browse and edit entries, then download the updated standard vault.</p>
-              </div>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="principles-band" aria-labelledby="principles-title">
-        <div class="section-inner principles-layout">
-          <div>
-            <p class="eyebrow">Built around ownership</p>
-            <h2 id="principles-title">A password manager should not own your passwords.</h2>
-          </div>
-          <div class="principles-copy">
-            <p>
-              ManyKee works with the open KDBX format rather than a proprietary
-              account. Keep the file where you choose, use it with compatible
-              tools, and bring it to ManyKee when you want a calm workbench.
-            </p>
-            <a class="text-link" href="/web/">Open the web app <span aria-hidden="true">&rarr;</span></a>
-          </div>
-        </div>
-      </section>
-
-      <section class="ecosystem-band" id="ecosystem" aria-labelledby="ecosystem-title">
-        <div class="section-inner">
-          <div class="section-heading ecosystem-heading">
-            <p class="eyebrow">The ManyMath product family</p>
-            <h2 id="ecosystem-title">Purpose-built tools, one clear language.</h2>
-            <p>
-              ManyKee is part of a family of practical, private-minded tools
-              for technical work and the information around it.
-            </p>
-          </div>
-
-          <div class="product-grid">
-            <a class="product-link" href="https://manymath.com/">
-              <span class="product-mark math-mark" aria-hidden="true">&Sigma;</span>
-              <span><strong>ManyMath</strong><small>Mathematics</small></span>
-              <span class="product-arrow" aria-hidden="true">&nearr;</span>
-            </a>
-            <a class="product-link" href="https://manymatrix.com/">
-              <span class="product-mark matrix-mark" aria-hidden="true">
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-              </span>
-              <span><strong>ManyMatrix</strong><small>Communication</small></span>
-              <span class="product-arrow" aria-hidden="true">&nearr;</span>
-            </a>
-            <a class="product-link product-current" href="/" aria-current="page">
-              <span class="product-mark kee-mark" aria-hidden="true">K</span>
-              <span><strong>ManyKee</strong><small>Credentials</small></span>
-              <span class="product-arrow" aria-hidden="true">&rarr;</span>
-            </a>
-            <a class="product-link" href="https://manytype.com/">
-              <span class="product-mark type-mark" aria-hidden="true">T</span>
-              <span><strong>ManyType</strong><small>Knowledge</small></span>
-              <span class="product-arrow" aria-hidden="true">&nearr;</span>
-            </a>
-            <a class="product-link" href="https://manytier.com/">
-              <span class="product-mark tier-mark" aria-hidden="true">N</span>
-              <span><strong>ManyTier</strong><small>Networking</small></span>
-              <span class="product-arrow" aria-hidden="true">&nearr;</span>
-            </a>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer>
-      <div class="section-inner footer-inner">
-        <span>ManyKee by <a href="https://manymath.com/">ManyMath LLC</a></span>
-        <a href="/web/">Open ManyKee</a>
+        <figure class="app-frame" aria-label="ManyKee preview">
+          <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>manykee - personal.kdbx</span></div>
+          <!-- Add <source media="(prefers-color-scheme: dark)"> when dark-theme screenshots are available (BRAND.md section 4). -->
+          <img src="/assets/hero.png" alt="KeePass groups, entries, and entry details in ManyKee" width="1440" height="900" fetchpriority="high">
+        </figure>
       </div>
-    </footer>
-  </body>
+    </section>
+
+    <section class="band" id="capabilities" aria-labelledby="cap-title">
+      <div class="wrap">
+        <p class="eyebrow">Capabilities</p>
+        <h2 id="cap-title">Work with standard KeePass files</h2>
+        <div class="cols">
+          <div class="col"><h3>KDBX compatible</h3><p>Read and write KDBX 4 vaults that you can also open in KeePass and KeePassXC.</p></div>
+          <div class="col"><h3>Local by default</h3><p>Your browser opens and edits the vault on your device.</p></div>
+          <div class="col"><h3>Portable</h3><p>Download the edited vault and use it in another KeePass-compatible app.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="dark-band" aria-labelledby="principle-title">
+      <div class="wrap">
+        <p class="eyebrow">KeePass files</p>
+        <h2 id="principle-title">Keep using your KeePass files.</h2>
+        <p>ManyKee works directly with KDBX files. Open an existing vault, make your changes, and save a copy to your device.</p>
+      </div>
+    </section>
+
+    <section class="band" id="family" aria-labelledby="family-title">
+      <div class="wrap">
+        <p class="eyebrow">From ManyMath</p>
+        <h2 id="family-title">Explore our tools</h2>
+        <div class="eco-grid">
+          <article class="eco-card featured">
+            <img src="/assets/brand/marks/manykee.svg" alt=""><p class="cat">Credentials</p><h3>ManyKee</h3>
+            <p>Open and edit KeePass vaults in your browser.</p>
+            <a href="/web/">Open ManyKee <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="eco-card">
+            <img src="/assets/brand/marks/manymath.svg" alt=""><p class="cat">Mathematics</p><h3>ManyMath</h3>
+            <p>Write LaTeX and preview the typeset document on your device.</p>
+            <a href="https://manymath.com/">Visit ManyMath <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="eco-card">
+            <img src="/assets/brand/marks/manymatrix.svg" alt=""><p class="cat">Communication</p><h3>ManyMatrix</h3>
+            <p>A Matrix client for rooms, direct messages, and threads.</p>
+            <a href="https://manymatrix.com/">Visit ManyMatrix <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="eco-card">
+            <img src="/assets/brand/marks/manytype.svg" alt=""><p class="cat">Knowledge</p><h3>ManyType</h3>
+            <p>Organize pages with types, properties, and links, stored on your device.</p>
+            <a href="https://manytype.com/">Visit ManyType <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="eco-card">
+            <img src="/assets/brand/marks/manytier.svg" alt=""><p class="cat">Networking</p><h3>ManyTier</h3>
+            <p>Manage ZeroTier-compatible networks, peers, and controllers.</p>
+            <a href="https://manytier.com/">Visit ManyTier <span aria-hidden="true">↗</span></a>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot">
+      <span>ManyKee by ManyMath LLC</span>
+      <img src="/assets/brand/marks/family-lockup.svg" alt="ManyMath product family">
+    </div>
+  </footer>
+</body>
 </html>
