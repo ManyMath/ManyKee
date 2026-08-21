@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 class ManyKeeTheme {
   ManyKeeTheme._();
 
-  static const _seedColor = Color(0xFF1A73E8);
+  static const _seedColor = Color(0xFF2E7D32);
 
   static const _textTheme = TextTheme(
     bodyMedium: TextStyle(
