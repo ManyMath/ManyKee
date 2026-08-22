@@ -52,7 +52,7 @@ void main() {
       expect(secondCopy, isTrue);
       expect(
         manager.lastSuccessMessage,
-        'Copied to clipboard (10s clear or next resume)',
+        'Copied. Clears in 10s or when you return to the app.',
       );
       final data = await Clipboard.getData('text/plain');
       expect(data?.text, 'secret-b');
@@ -77,7 +77,7 @@ void main() {
       expect(data?.text, '');
       expect(
         manager.lastSuccessMessage,
-        'Copied to clipboard (clears on next resume)',
+        'Copied. Clears when you return to the app.',
       );
       manager.dispose();
     });

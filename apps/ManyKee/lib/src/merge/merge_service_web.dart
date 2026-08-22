@@ -4,7 +4,7 @@
 // the web build. `MergeResult` is duplicated here as a plain-Dart value
 // type with the same shape as `package:keepass`'s, purely so
 // `merge_page.dart` (shared across platforms) type-checks against whichever
-// `MergeService` this platform seam resolves to. It is never actually
+// `MergeService` this platform adapter resolves to. It is never actually
 // populated on web: every method below throws before returning one.
 class MergeResult {
   MergeResult({

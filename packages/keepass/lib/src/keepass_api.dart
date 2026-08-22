@@ -6,7 +6,7 @@ import 'dart:async';
 /// - Native: `packages/keepass` Database class (dart:ffi)
 ///
 /// `packages/keepass_web` exposes a `KeePassWebApi` with the same method
-/// shape, but intentionally does not implement this interface so browser
+/// shape, but does not implement this interface so browser
 /// builds never import `dart:ffi`.
 ///
 /// The web implementation communicates with a WASM module via postMessage RPC.
@@ -52,7 +52,7 @@ abstract class KeePassApi {
   ///
   /// Protected field values come back as an empty string on every platform.
   /// Only [readEntryField] fetches their plaintext, so it crosses an FFI or
-  /// WASM boundary only when a caller actually needs it (e.g. the user clicked
+  /// WASM boundary only when a caller needs it (e.g. the user clicked
   /// "reveal" or "copy").
   Future<Map<String, dynamic>> readEntryFields(int handle, String entryUuid);
 

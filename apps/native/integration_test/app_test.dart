@@ -639,7 +639,7 @@ void main() {
           expect(afterRows, isNotEmpty,
               reason: 'Search should filter entries or show no matches');
 
-          // Verify the remaining results actually match the query, rather
+          // Verify the remaining results match the query, rather
           // than the list just happening to show unrelated entries.
           final visibleText = tester
               .widgetList<Text>(find.descendant(

@@ -108,7 +108,7 @@ fn catch_unwind_result<T>(
 
 /// Installs a panic hook that forwards panic messages to the browser/Node
 /// console, and is called automatically on module instantiation. Diagnostic
-/// only, `catch_unwind_result` above is what actually prevents a panic from
+/// only, `catch_unwind_result` above is what prevents a panic from
 /// trapping the instance.
 #[wasm_bindgen(start)]
 pub fn init_panic_hook() {
@@ -184,7 +184,7 @@ pub fn open_db_with_key_file(
     // Owned `Vec<u8>` (not `&[u8]`), matching open_db/save_db: wasm-bindgen's
     // generated glue for a `Vec<u8>` parameter hands over the real owned
     // buffer backing the WASM-linear-memory copy the JS side made, so
-    // wrapping it in Zeroizing actually zeroes those bytes before dealloc.
+    // wrapping it in Zeroizing zeroes those bytes before dealloc.
     // A `&[u8]` parameter's backing buffer is instead owned/dropped by
     // wasm-bindgen's own generated wrapper with no way for this function to
     // reach in and zero it first.
@@ -299,7 +299,7 @@ pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValu
 /// Fetches a single field's plaintext value on demand, instead of the whole
 /// entry via `read_entry_fields`. Lets callers avoid pulling protected
 /// values (e.g. Password) across the WASM/JS boundary until the caller
-/// actually needs one, e.g. when a user clicks "reveal" or "copy", rather
+/// needs one, e.g. when a user clicks "reveal" or "copy", rather
 /// than every time the entry is opened for viewing or editing.
 #[wasm_bindgen]
 pub fn read_entry_field(handle: u32, entry_uuid: &str, field_name: &str) -> Result<String, JsValue> {

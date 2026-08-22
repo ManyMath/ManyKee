@@ -170,7 +170,7 @@ class EntryFormDialog extends StatefulWidget {
   /// name (e.g. `'Password'`, or a custom field's key). Some backends (the
   /// web/WASM implementation) omit protected values from [initialFields]/
   /// [customFields] entirely -- their plaintext only crosses the WASM/JS
-  /// boundary once the user actually reveals a value, via this callback,
+  /// boundary once the user reveals a value, via this callback,
   /// rather than every time the entry is opened for editing. Null on the
   /// "Create Entry" flow, where there's nothing to fetch yet.
   final Future<String?> Function(String fieldKey)? fetchFieldValue;

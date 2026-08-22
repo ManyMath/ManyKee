@@ -125,7 +125,7 @@ class _EntryFormDialogContent extends HookWidget {
 
     String? unchangedDescription(bool scrubbed, bool touched) =>
         scrubbed && !touched
-        ? 'Stored protected value stays unchanged unless you replace it.'
+        ? 'Leave this field unchanged to keep the saved value.'
         : null;
 
     Future<void> toggleReveal() async {

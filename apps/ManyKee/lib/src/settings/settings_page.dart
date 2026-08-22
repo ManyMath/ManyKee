@@ -76,8 +76,8 @@ class SettingsPage extends ConsumerWidget {
                   _SettingRow(
                     title: 'Screen protection',
                     description: ScreenProtection.isSupported
-                        ? 'Hide unlocked vault content when the app leaves the foreground, and block capture where supported.'
-                        : 'This platform does not expose reliable screen-capture protection.',
+                        ? 'Hide the open vault when you switch apps, and block screenshots where supported.'
+                        : 'Screenshot protection is not available on this platform.',
                     trailing: ScreenProtection.isSupported
                         ? MSwitch(
                             key: ValueKey<bool>(
@@ -116,7 +116,7 @@ class SettingsPage extends ConsumerWidget {
                   _SettingRow(
                     title: 'Clear clipboard on resume',
                     description:
-                        'Clear copied secrets the first time the app resumes.',
+                        'Clear copied secrets when you return to the app.',
                     trailing: MSwitch(
                       key: ValueKey<bool>(settings.clipboardPasteOnce),
                       initialValue: settings.clipboardPasteOnce,
@@ -133,7 +133,7 @@ class SettingsPage extends ConsumerWidget {
                   _SettingRow(
                     title: 'Theme',
                     description:
-                        'Use the system appearance or pin ManyKee to one mode.',
+                        'Follow the system theme or choose a light or dark theme.',
                     trailing: _Select<ManyKeeThemePreference>(
                       key: ValueKey<ManyKeeThemePreference>(
                         settings.themePreference,

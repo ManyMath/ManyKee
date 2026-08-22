@@ -3,13 +3,13 @@
 Dart SDK for KeePass KDBX databases, powered by a Rust core via `dart:ffi`.
 
 `package:keepass` is the low-level, Flutter-free entry point to ManyKee's
-KeePass surface. It exposes `Database`, `Group`, `Entry`, and merge primitives
+KeePass API. It exposes `Database`, `Group`, `Entry`, and merge primitives
 on top of a prebuilt native library (`libkeepassxc_ffi.{so,dylib,dll}`).
 
 ## Most users want `keepass_flutter`
 
-This package does NOT ship a prebuilt native library and does NOT build one
-for you at `pub get` time. You must build `libkeepassxc_ffi` yourself from
+This package neither includes a prebuilt native library nor builds one
+during `pub get`. You must build `libkeepassxc_ffi` yourself from
 the ManyKee monorepo and place it on the dynamic library search path before
 `Database.open` will succeed.
 
@@ -96,7 +96,7 @@ The ManyKee monorepo ships several examples:
 - [`keepass_web`](https://github.com/ManyMath/ManyKee/tree/main/packages/keepass_web): WASM Worker bridge for Flutter Web.
 - [`keepass_ui`](https://github.com/ManyMath/ManyKee/tree/main/packages/keepass_ui): shared platform-agnostic vault widgets.
 
-## API surface
+## API
 
 - `Database.open`, `Database.openWithKeyFile`, `Database.openWithYubiKey`
 - `Database.save`, `Database.saveWithKeyFile`, `Database.saveBytes`

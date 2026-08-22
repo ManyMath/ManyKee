@@ -16,7 +16,7 @@ import 'merge_service.dart';
 /// its own independent password entry, not silently trusted), and only
 /// prompts the user to pick database B (a divergent copy of the same
 /// database, e.g. synced from another device, see `preview()`'s
-/// doc comment on what the Rust merge engine actually supports).
+/// doc comment on what the Rust merge engine supports).
 Future<void> showMergeDatabasesPage(
   BuildContext context, {
   required String currentFilePath,

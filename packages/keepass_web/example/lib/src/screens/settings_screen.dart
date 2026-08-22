@@ -78,7 +78,7 @@ class SettingsScreen extends StatelessWidget {
               SwitchListTile(
                 title: const Text('Paste-once clipboard'),
                 subtitle: const Text(
-                  'Clear copied secrets on the first app resume after copying',
+                  'Clear copied secrets when you return to the app',
                 ),
                 value: settingsState.clipboardPasteOnce,
                 onChanged: (value) =>

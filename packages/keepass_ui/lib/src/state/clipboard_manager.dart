@@ -48,10 +48,10 @@ class ClipboardManager {
 
   String _buildSuccessMessage() {
     if (_pasteOnceEnabled && _clearDelay > Duration.zero) {
-      return 'Copied to clipboard (${_clearDelay.inSeconds}s clear or next resume)';
+      return 'Copied. Clears in ${_clearDelay.inSeconds}s or when you return to the app.';
     }
     if (_pasteOnceEnabled) {
-      return 'Copied to clipboard (clears on next resume)';
+      return 'Copied. Clears when you return to the app.';
     }
     if (_clearDelay > Duration.zero) {
       return 'Copied to clipboard (clears in ${_clearDelay.inSeconds}s)';

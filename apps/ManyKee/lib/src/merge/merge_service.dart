@@ -1,4 +1,4 @@
-/// Platform seam for the merge-databases flow, mirroring
+/// Platform adapter for the merge-databases flow, mirroring
 /// `state/vault_state_factory.dart`: the native implementation opens
 /// databases through `package:keepass`'s direct FFI `Database` bindings
 /// (`dart:ffi`), so it must never be pulled into the web build.

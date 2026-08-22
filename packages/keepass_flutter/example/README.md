@@ -11,7 +11,7 @@ Use this example to verify the supported native Flutter surface locally:
 - entry and group CRUD plus save/reload continuity
 - settings behavior and stub-provider rows
 
-The example intentionally consumes `package:keepass_flutter` as a downstream app would. It is the primary GUI proof surface for v1.5.
+The example consumes `package:keepass_flutter` as a downstream app would. It is the primary GUI proof surface for v1.5.
 
 ## Repo position
 

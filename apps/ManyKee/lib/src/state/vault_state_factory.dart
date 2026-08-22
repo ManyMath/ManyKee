@@ -1,4 +1,4 @@
-/// Platform seam: picks the vault state implementation at compile time so
+/// Platform adapter: picks the vault state implementation at compile time so
 /// `flutter build web` never sees dart:ffi (and native never sees js).
 library;
 

@@ -1,11 +1,11 @@
 # ManyKee.com
 
-ManyKee.com ships two web surfaces in one static distribution:
+ManyKee.com packages its website and app in one static distribution:
 
 - `/` briefly introduces ManyKee and the wider ManyMath product family.
 - `/web/` is the canonical ManyKee Flutter application.
 
-The older `apps/web` host is a legacy reference and is intentionally not part
+The older `apps/web` host is a legacy reference and is not part
 of this distribution. The app at `apps/ManyKee` is the current product entry
 point for web and native targets.
 
@@ -25,7 +25,7 @@ The build compiles the KeePassXC WebAssembly worker, builds Flutter with a
 apps/ManyKee.com/build/dist
 ```
 
-To inspect that exact artifact locally:
+To preview the build locally:
 
 ```sh
 python3 -m http.server 8080 --directory apps/ManyKee.com/build/dist
@@ -37,14 +37,14 @@ deployment, upload the contents of `apps/ManyKee.com/build/dist`.
 
 The production host must serve `.wasm` files as `application/wasm` and must
 not rewrite missing JavaScript or WASM requests to an HTML entry point. The
-verification script checks those conditions using a literal static server.
+verification script checks those conditions using a local static server.
 
 ## Source layout
 
-- `site/` contains the semantic HTML, responsive CSS, brand mark, and a current
-  screenshot of the canonical ManyKee app.
+- `site/` contains the HTML, responsive CSS, brand mark, and a current
+  screenshot of the ManyKee app.
 - `tool/build_web.sh` compiles both the app and its KeePassXC worker before
-  composing the deployable distribution.
+  assembling the distribution.
 - `tool/assemble_web_dist.sh` can reassemble an existing Flutter build.
 - `tool/verify_web_dist.sh` validates files, paths, content types, and live
   static-server responses.

@@ -74,7 +74,7 @@ abstract class ManyKeeVaultState extends VaultState {
     required String filePath,
     required String password,
     String? filename,
-  }) => throw UnimplementedError('database creation lands in a later phase');
+  }) => throw UnimplementedError('Database creation is not implemented.');
 
   /// Forgets [lastFilePath] and any remembered key file so the unlock page
   /// returns to the full "choose a database" view.
@@ -82,49 +82,49 @@ abstract class ManyKeeVaultState extends VaultState {
 
   @override
   Future<String> createEntry(String groupUuid) =>
-      throw UnimplementedError('editing lands in a later phase');
+      throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<void> updateEntry(
     String entryUuid,
     Map<String, String?> fields, {
     Set<String> protectedFields = const <String>{},
-  }) => throw UnimplementedError('editing lands in a later phase');
+  }) => throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<void> deleteEntry(String entryUuid) =>
-      throw UnimplementedError('editing lands in a later phase');
+      throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<void> moveEntry(String entryUuid, String targetGroupUuid) =>
-      throw UnimplementedError('editing lands in a later phase');
+      throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<String> createGroup(String parentGroupUuid, String name) =>
-      throw UnimplementedError('editing lands in a later phase');
+      throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<void> renameGroup(String groupUuid, String name) =>
-      throw UnimplementedError('editing lands in a later phase');
+      throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<void> deleteGroup(String groupUuid) =>
-      throw UnimplementedError('editing lands in a later phase');
+      throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<void> moveGroup(String groupUuid, String targetParentUuid) =>
-      throw UnimplementedError('editing lands in a later phase');
+      throw UnimplementedError('Editing is not implemented.');
 
   @override
   Future<List<int>> saveDatabase({
     required String password,
     List<int>? keyFileBytes,
-  }) => throw UnimplementedError('saving lands in a later phase');
+  }) => throw UnimplementedError('Saving is not implemented.');
 
   /// Writes a copy of the current in-memory database to [filePath] without
   /// changing the currently-open database path or clearing dirty state.
   Future<void> saveCopyAs({
     required String filePath,
     required String password,
-  }) => throw UnimplementedError('save copy lands in a later phase');
+  }) => throw UnimplementedError('Saving a copy is not implemented.');
 }

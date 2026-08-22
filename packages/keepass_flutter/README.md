@@ -53,7 +53,7 @@ support.
 
 ## What ships in the plugin
 
-The plugin is intentionally thin. It exposes:
+The plugin is thin. It exposes:
 
 - All symbols from `package:keepass` (re-exported).
 - A Flutter plugin manifest that wires cargokit into your native build.

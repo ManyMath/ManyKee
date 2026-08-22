@@ -10,7 +10,7 @@ import 'package:web/web.dart' as web;
 /// mirror below. Must be enabled via `--dart-define=MANYKEE_E2E_SEMANTICS=true`
 /// at build time (see scripts/build_extension.sh); a plain `kDebugMode`
 /// gate isn't usable here because the E2E suite exercises a `--release`
-/// build (matching what's actually shipped), so this is the only gate that
+/// build (matching what's shipped), so this is the only gate that
 /// can never be toggled at runtime by an untrusted URL.
 const bool _e2eSemanticsEnabled =
     bool.fromEnvironment('MANYKEE_E2E_SEMANTICS');

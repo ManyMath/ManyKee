@@ -49,7 +49,7 @@ DynamicLibrary _loadLibrary() {
   for (final libraryFileName in libraryFileNames) {
     final candidates = <String>[
       // Trusted: next to the running executable, where bundled/packaged
-      // native libraries actually live.
+      // native libraries live.
       '$executableDir/$libraryFileName',
       '$executableDir/lib/$libraryFileName',
       // Untrusted: only searched in debug/JIT runs (local `cargo

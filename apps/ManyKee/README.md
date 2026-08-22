@@ -1,9 +1,9 @@
 # ManyKee
 
-Canonical Flutter application for the ManyKee password-manager surface.
+The main Flutter app for the ManyKee password manager.
 
-This is the product app. New user-facing work should land here unless a
-package-level API or compatibility harness needs to change first.
+Add user-facing features here. Update package APIs and compatibility tests
+when those features require changes below the app layer.
 
 ## Run and Verify
 
@@ -24,7 +24,6 @@ scripts/build_manykee_web.sh
 
 ## Legacy App Hosts
 
-The older `apps/native` and `apps/web` hosts are legacy transitional/reference
-surfaces. They are not the product entry points and should not receive new
-features. Keep them only while they are useful for comparison or while their
-remaining tests are being ported into this app or package-level coverage.
+The older `apps/native` and `apps/web` hosts remain as references while
+their tests move into this app or the packages. Add new features to
+`apps/ManyKee`.

@@ -99,7 +99,7 @@ pub fn read_entry_fields(entry: &Entry) -> EntryReadFields {
 /// UserName, Password, ...) before custom data (e.g. `otp`). Lets callers
 /// fetch one value on demand instead of the full [`read_entry_fields`]
 /// payload, so a protected value only needs to cross a process/IPC boundary
-/// when it's actually requested rather than every time an entry is read.
+/// when it's requested rather than every time an entry is read.
 pub fn read_entry_field(entry: &Entry, field_name: &str) -> Option<String> {
     if let Some(value) = entry.fields.get(field_name) {
         return Some(value.get().clone());

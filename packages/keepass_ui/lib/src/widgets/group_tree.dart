@@ -445,7 +445,7 @@ Future<bool> showGroupDeleteConfirmation(BuildContext context) async {
         title: const Text('Delete this group?'),
         content: const Text(
           'The group will be removed from the main tree. '
-          'When the recycle bin is available, the backend moves it there.',
+          'It moves to the recycle bin if one is available.',
         ),
         actions: [
           TextButton(
