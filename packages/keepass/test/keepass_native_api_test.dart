@@ -46,6 +46,41 @@ void main() {
     }
   });
 
+  test('openDatabase from bytes keeps the temp copy until the worker opens it',
+      () async {
+    final api = KeePassNativeApi();
+    final bytes = await File(passwordFixturePath).readAsBytes();
+    final handle = await api.openDatabase(bytes, password: 'demopass');
+
+    try {
+      expect(handle, greaterThan(0));
+      await _expectDatabaseHasContent(api, handle);
+    } finally {
+      await api.closeDatabase(handle);
+      await api.dispose();
+    }
+  });
+
+  test('openDatabaseWithKeyFile from bytes opens before temp cleanup',
+      () async {
+    final api = KeePassNativeApi();
+    final dbBytes = await File(keyFileFixturePath).readAsBytes();
+    final keyBytes = await File(keyFilePath).readAsBytes();
+    final handle = await api.openDatabaseWithKeyFile(
+      dbBytes,
+      password: 'demopass',
+      keyFileBytes: keyBytes,
+    );
+
+    try {
+      final entries = await _listFirstAvailableEntries(api, handle);
+      expect(entries, isNotEmpty);
+    } finally {
+      await api.closeDatabase(handle);
+      await api.dispose();
+    }
+  });
+
   test('openFromPathWithKeyFile still works after isolate offload', () async {
     final api = KeePassNativeApi();
     final handle = await api.openFromPathWithKeyFile(

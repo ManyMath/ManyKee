@@ -42,7 +42,7 @@ class KeePassNativeApi implements KeePassApi {
   }) async {
     final tempFile = await _writeTempFile(dbBytes);
     try {
-      return _openFromWorker(
+      return await _openFromWorker(
         'openFromPath',
         <String, Object?>{
           'filePath': tempFile.path,
@@ -65,7 +65,7 @@ class KeePassNativeApi implements KeePassApi {
     final tempDbFile = await _writeTempFile(dbBytes);
     final tempKeyFile = await _writeTempFile(keyFileBytes, suffix: '.key');
     try {
-      return _openFromWorker(
+      return await _openFromWorker(
         'openFromPathWithKeyFile',
         <String, Object?>{
           'filePath': tempDbFile.path,
@@ -91,7 +91,7 @@ class KeePassNativeApi implements KeePassApi {
   }) async {
     final tempFile = await _writeTempFile(dbBytes);
     try {
-      return _openFromWorker(
+      return await _openFromWorker(
         'openFromPathWithYubiKey',
         <String, Object?>{
           'filePath': tempFile.path,
