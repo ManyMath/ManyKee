@@ -57,15 +57,16 @@ class ShowCommand extends BaseCommand {
         totp = entry.getTotpCode();
       }
 
-      if (!revealPassword) {
-        for (final key in fields.keys.toList()) {
-          if (protectedFields[key] == true) {
-            fields[key] = '********';
-          }
+      // The bridge payload blanks protected values so they never travel in
+      // bulk; fetch them individually only when the user asked to reveal.
+      for (final key in fields.keys.toList()) {
+        if (protectedFields[key] != true) {
+          continue;
         }
-        if (totp != null) {
-          totp['code'] = '********';
-        }
+        fields[key] = revealPassword ? entry.getField(key) ?? '' : '********';
+      }
+      if (!revealPassword && totp != null) {
+        totp['code'] = '********';
       }
 
       if (fieldName != null) {
