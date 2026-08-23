@@ -9,7 +9,8 @@ class RmCommand extends BaseCommand {
   final description = 'Delete a group or entry';
 
   RmCommand() {
-    argParser.addFlag('permanent', help: 'Permanently delete (don\'t move to Trash)', negatable: false);
+    argParser.addFlag('permanent',
+        help: 'Permanently delete (don\'t move to Trash)', negatable: false);
   }
 
   @override

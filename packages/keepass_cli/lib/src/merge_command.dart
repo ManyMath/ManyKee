@@ -14,9 +14,12 @@ class MergeCommand extends BaseCommand {
     argParser
       ..addOption('db1', mandatory: true, help: 'Path to first database')
       ..addOption('db2', mandatory: true, help: 'Path to second database')
-      ..addOption('out', mandatory: true, help: 'Output path for merged database')
-      ..addOption('password1', help: 'Password for first database (visible in ps)')
-      ..addOption('password2', help: 'Password for second database (visible in ps)');
+      ..addOption('out',
+          mandatory: true, help: 'Output path for merged database')
+      ..addOption('password1',
+          help: 'Password for first database (visible in ps)')
+      ..addOption('password2',
+          help: 'Password for second database (visible in ps)');
   }
 
   @override
@@ -36,8 +39,7 @@ class MergeCommand extends BaseCommand {
           'Error: --password is not used by merge; use --password1/--password2 instead.');
       exit(1);
     }
-    if (argResults!['keyfile'] != null ||
-        argResults!['yubikey-slot'] != null) {
+    if (argResults!['keyfile'] != null || argResults!['yubikey-slot'] != null) {
       stderr.writeln(
           'Error: merge does not support --keyfile/--yubikey-slot; only password-protected databases can be merged.');
       exit(1);
@@ -70,7 +72,7 @@ class MergeCommand extends BaseCommand {
       db2 = Database.open(db2Path, password: password2);
       final result = db1.merge(db2);
       db1.save(outPath, password: password1);
-      
+
       if (isJson) {
         formatOutput(result.toJson());
       } else {

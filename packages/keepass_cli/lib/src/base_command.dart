@@ -114,7 +114,8 @@ abstract class BaseCommand extends Command {
 
     try {
       final entry = Entry(db, trimmed);
-      entry.readFields(); // Force FFI validation that this UUID actually exists.
+      entry
+          .readFields(); // Force FFI validation that this UUID actually exists.
       return entry;
     } on KeePassError {
       final normalized =

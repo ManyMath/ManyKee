@@ -11,7 +11,8 @@ class MoveCommand extends BaseCommand {
   @override
   void run() {
     if (argResults!.rest.length < 3) {
-      stderr.writeln('Usage: keepass_cli move <db_path> <uuid> <target_parent_uuid>');
+      stderr.writeln(
+          'Usage: keepass_cli move <db_path> <uuid> <target_parent_uuid>');
       exit(64);
     }
     final dbPath = argResults!.rest[0];
@@ -62,7 +63,8 @@ class MoveCommand extends BaseCommand {
             'newParentUuid': targetParentUuid,
           });
         } else {
-          stdout.writeln('Successfully moved $type: $name ($uuid) to $targetParentUuid');
+          stdout.writeln(
+              'Successfully moved $type: $name ($uuid) to $targetParentUuid');
         }
       }
     } finally {

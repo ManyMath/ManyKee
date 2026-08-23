@@ -22,13 +22,15 @@ class AddGroupSubcommand extends BaseCommand {
   final description = 'Add a new group';
 
   AddGroupSubcommand() {
-    argParser.addOption('parent', abbr: 'a', help: 'Parent group UUID (defaults to root)');
+    argParser.addOption('parent',
+        abbr: 'a', help: 'Parent group UUID (defaults to root)');
   }
 
   @override
   void run() {
     if (argResults!.rest.isEmpty) {
-      stderr.writeln('Usage: keepass_cli add group <db_path> <group_name> [--parent <uuid>]');
+      stderr.writeln(
+          'Usage: keepass_cli add group <db_path> <group_name> [--parent <uuid>]');
       exit(64);
     }
     final dbPath = argResults!.rest[0];
@@ -42,9 +44,9 @@ class AddGroupSubcommand extends BaseCommand {
     try {
       final parentUuid = argResults?['parent'] as String?;
       final parent = parentUuid != null ? Group(db, parentUuid) : db.rootGroup;
-      
+
       final newGroup = parent.createGroup(groupName);
-      
+
       saveDatabase(db, dbPath);
 
       if (isJson) {
@@ -55,7 +57,8 @@ class AddGroupSubcommand extends BaseCommand {
           'name': newGroup.name,
         });
       } else {
-        stdout.writeln('Successfully created group: ${newGroup.name} (${newGroup.uuid})');
+        stdout.writeln(
+            'Successfully created group: ${newGroup.name} (${newGroup.uuid})');
       }
     } finally {
       db.close();
@@ -70,7 +73,8 @@ class AddEntrySubcommand extends BaseCommand {
   final description = 'Add a new entry';
 
   AddEntrySubcommand() {
-    argParser.addOption('parent', abbr: 'a', help: 'Parent group UUID (defaults to root)');
+    argParser.addOption('parent',
+        abbr: 'a', help: 'Parent group UUID (defaults to root)');
     argParser.addOption('title', abbr: 't', help: 'Entry title');
     argParser.addOption('user', abbr: 'u', help: 'Username');
     argParser.addOption('pass', abbr: 'w', help: 'Password (visible in ps)');
@@ -81,7 +85,8 @@ class AddEntrySubcommand extends BaseCommand {
   @override
   void run() {
     if (argResults!.rest.isEmpty) {
-      stderr.writeln('Usage: keepass_cli add entry <db_path> [--parent <uuid>] [--title <title>] ...');
+      stderr.writeln(
+          'Usage: keepass_cli add entry <db_path> [--parent <uuid>] [--title <title>] ...');
       exit(64);
     }
     final dbPath = argResults!.rest[0];
@@ -90,14 +95,18 @@ class AddEntrySubcommand extends BaseCommand {
     try {
       final parentUuid = argResults?['parent'] as String?;
       final parent = parentUuid != null ? Group(db, parentUuid) : db.rootGroup;
-      
+
       final entry = parent.createEntry();
-      
-      if (argResults?['title'] != null) entry.setField('Title', argResults?['title']);
-      if (argResults?['user'] != null) entry.setField('UserName', argResults?['user']);
-      if (argResults?['pass'] != null) entry.setField('Password', argResults?['pass'], protected: true);
+
+      if (argResults?['title'] != null)
+        entry.setField('Title', argResults?['title']);
+      if (argResults?['user'] != null)
+        entry.setField('UserName', argResults?['user']);
+      if (argResults?['pass'] != null)
+        entry.setField('Password', argResults?['pass'], protected: true);
       if (argResults?['url'] != null) entry.setField('URL', argResults?['url']);
-      if (argResults?['notes'] != null) entry.setField('Notes', argResults?['notes']);
+      if (argResults?['notes'] != null)
+        entry.setField('Notes', argResults?['notes']);
 
       saveDatabase(db, dbPath);
 
@@ -109,7 +118,8 @@ class AddEntrySubcommand extends BaseCommand {
           'title': entry.title,
         });
       } else {
-        stdout.writeln('Successfully created entry: ${entry.title} (${entry.uuid})');
+        stdout.writeln(
+            'Successfully created entry: ${entry.title} (${entry.uuid})');
       }
     } finally {
       db.close();

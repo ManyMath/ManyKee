@@ -8,8 +8,7 @@ class InfoCommand extends BaseCommand {
   @override
   final description = 'Show database metadata';
 
-  InfoCommand() {
-  }
+  InfoCommand() {}
 
   @override
   void run() {

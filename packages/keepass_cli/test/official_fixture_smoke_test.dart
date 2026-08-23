@@ -260,8 +260,7 @@ String? _findOfficialFixture(String name) {
 /// staged file, or null if no source `.so` was found. Mirrors the helper in
 /// `packages/keepass/test/official_fixture_smoke_test.dart`.
 Future<File?> _tryStageNativeLibrary() async {
-  final stagedPath =
-      p.join(Directory.current.path, 'libkeepassxc_ffi.so');
+  final stagedPath = p.join(Directory.current.path, 'libkeepassxc_ffi.so');
   final staged = File(stagedPath);
   if (await staged.exists()) {
     return staged;

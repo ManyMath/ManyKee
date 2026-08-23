@@ -244,7 +244,8 @@ void main() {
       'path-pass',
       '--json',
     ]);
-    expect(addEntryResult.exitCode, 0, reason: addEntryResult.stderr.toString());
+    expect(addEntryResult.exitCode, 0,
+        reason: addEntryResult.stderr.toString());
 
     final showResult = await runCli([
       'show',
@@ -255,7 +256,8 @@ void main() {
       '--json',
     ]);
     expect(showResult.exitCode, 0, reason: showResult.stderr.toString());
-    final data = json.decode(showResult.stdout as String) as Map<String, dynamic>;
+    final data =
+        json.decode(showResult.stdout as String) as Map<String, dynamic>;
     expect(data['title'], 'Path Entry');
   });
 
@@ -456,9 +458,8 @@ void main() {
     final infoResult = await runCli(
         ['info', tempVault.path, '--password', password, '--json']);
     expect(infoResult.exitCode, 0, reason: infoResult.stderr.toString());
-    final rootUuid =
-        (json.decode(infoResult.stdout as String) as Map<String, dynamic>)
-            ['root_uuid'] as String;
+    final rootUuid = (json.decode(infoResult.stdout as String)
+        as Map<String, dynamic>)['root_uuid'] as String;
 
     final result = await runCli([
       'rm',
