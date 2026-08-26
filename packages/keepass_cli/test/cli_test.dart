@@ -476,6 +476,18 @@ void main() {
     expect(result.stderr, isNot(contains('not found as group or entry')));
   });
 
+  test('rm of an unknown UUID reports it as not found', () async {
+    final result = await runCli([
+      'rm',
+      tempVault.path,
+      '--password',
+      password,
+      '00000000-0000-0000-0000-000000000000',
+    ]);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('not found as group or entry'));
+  });
+
   test('invalid password returns error', () async {
     final result =
         await runCli(['info', tempVault.path, '--password', 'wrong-password']);

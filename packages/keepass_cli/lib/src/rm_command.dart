@@ -40,7 +40,8 @@ class RmCommand extends BaseCommand {
       } catch (_) {
         final entry = Entry(db, uuid);
         try {
-          name = entry.title ?? 'Untitled'; // Throws if not a valid entry UUID.
+          entry.readFields(); // Throws if not a valid entry UUID.
+          name = entry.title ?? 'Untitled';
           resolvedType = 'entry';
         } catch (_) {
           stderr.writeln('Error: UUID $uuid not found as group or entry');
