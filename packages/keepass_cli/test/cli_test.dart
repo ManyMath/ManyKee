@@ -488,6 +488,47 @@ void main() {
     expect(result.stderr, contains('not found as group or entry'));
   });
 
+  test('key-file databases keep their key file across a write', () async {
+    final keyVaultSource = File(_firstExisting(<String>[
+      'rust/keepass-rs/tests/resources/test_db_kdbx4_with_keyfile_v2.kdbx',
+      '../../rust/keepass-rs/tests/resources/test_db_kdbx4_with_keyfile_v2.kdbx',
+    ]));
+    final keyFile = _firstExisting(<String>[
+      'rust/keepass-rs/tests/resources/test_db_kdbx4_with_keyfile_v2.keyx',
+      '../../rust/keepass-rs/tests/resources/test_db_kdbx4_with_keyfile_v2.keyx',
+    ]);
+    final keyVault = File(p.join(tempVault.parent.path, 'keyed.kdbx'));
+    await keyVaultSource.copy(keyVault.path);
+
+    final added = await runCli([
+      'add',
+      'entry',
+      keyVault.path,
+      '--password',
+      password,
+      '--keyfile',
+      keyFile,
+      '--title',
+      'Keyed Entry',
+    ]);
+    expect(added.exitCode, 0, reason: added.stderr.toString());
+
+    final withKey = await runCli([
+      'ls',
+      keyVault.path,
+      '--password',
+      password,
+      '--keyfile',
+      keyFile,
+    ]);
+    expect(withKey.exitCode, 0, reason: withKey.stderr.toString());
+    expect(withKey.stdout, contains('Keyed Entry'));
+
+    final withoutKey =
+        await runCli(['ls', keyVault.path, '--password', password]);
+    expect(withoutKey.exitCode, isNot(0));
+  });
+
   test('invalid password returns error', () async {
     final result =
         await runCli(['info', tempVault.path, '--password', 'wrong-password']);
@@ -501,4 +542,13 @@ void main() {
     expect(result.exitCode, isNot(0));
     expect(result.stderr, contains('No such file or directory'));
   });
+}
+
+String _firstExisting(List<String> candidates) {
+  for (final candidate in candidates) {
+    if (File(candidate).existsSync()) {
+      return candidate;
+    }
+  }
+  throw StateError('No fixture found for candidates: ${candidates.join(', ')}');
 }

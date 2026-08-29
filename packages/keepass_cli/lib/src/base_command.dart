@@ -38,16 +38,26 @@ abstract class BaseCommand extends Command {
         int.tryParse(argResults?['yubikey-serial'] as String? ?? '');
 
     try {
-      if (_yubikeySlot != null) {
+      final keyFile = _keyFile;
+      final slot = _yubikeySlot;
+      if (keyFile != null && slot != null) {
+        return Database.openWithKeyFileAndYubiKey(
+          path,
+          password: _password!,
+          keyFilePath: keyFile,
+          slot: slot,
+          serial: _yubikeySerial ?? 0,
+        );
+      } else if (slot != null) {
         return Database.openWithYubiKey(
           path,
           password: _password!,
-          slot: _yubikeySlot!,
+          slot: slot,
           serial: _yubikeySerial ?? 0,
         );
-      } else if (_keyFile != null) {
+      } else if (keyFile != null) {
         return Database.openWithKeyFile(path,
-            password: _password!, keyFilePath: _keyFile!);
+            password: _password!, keyFilePath: keyFile);
       } else {
         return Database.open(path, password: _password!);
       }
@@ -58,15 +68,28 @@ abstract class BaseCommand extends Command {
   }
 
   void saveDatabase(Database db, String path) {
+    // Save with exactly the factors the database was opened with so a write
+    // never silently re-keys the vault to password-only.
     try {
-      if (_yubikeySlot != null) {
-        // Rust kpxc_database_save currently doesn't support YubiKey directly
-        // in the same way as kpxc_database_save_with_keyfile.
-        // Usually, the YubiKey is part of the master key.
-        // Let's check bindings.g.dart to see what save functions we have.
-        db.save(path, password: _password!);
-      } else if (_keyFile != null) {
-        db.saveWithKeyFile(path, password: _password!, keyFilePath: _keyFile!);
+      final keyFile = _keyFile;
+      final slot = _yubikeySlot;
+      if (keyFile != null && slot != null) {
+        db.saveWithKeyFileAndYubiKey(
+          path,
+          password: _password!,
+          keyFilePath: keyFile,
+          slot: slot,
+          serial: _yubikeySerial ?? 0,
+        );
+      } else if (slot != null) {
+        db.saveWithYubiKey(
+          path,
+          password: _password!,
+          slot: slot,
+          serial: _yubikeySerial ?? 0,
+        );
+      } else if (keyFile != null) {
+        db.saveWithKeyFile(path, password: _password!, keyFilePath: keyFile);
       } else {
         db.save(path, password: _password!);
       }
