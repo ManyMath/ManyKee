@@ -59,6 +59,10 @@ class YubiKeyUnlockCommand extends BaseCommand {
       exit(64);
     }
     final dbPath = argResults!.rest.first;
+    if (argResults!['yubikey-slot'] == null) {
+      stderr.writeln('Error: --yubikey-slot is required for yubikey unlock');
+      exit(64);
+    }
     final db = openDatabase(dbPath);
     try {
       if (isJson) {

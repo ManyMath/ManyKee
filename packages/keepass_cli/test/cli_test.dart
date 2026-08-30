@@ -529,6 +529,18 @@ void main() {
     expect(withoutKey.exitCode, isNot(0));
   });
 
+  test('yubikey unlock requires --yubikey-slot', () async {
+    final result = await runCli([
+      'yubikey',
+      'unlock',
+      tempVault.path,
+      '--password',
+      password,
+    ]);
+    expect(result.exitCode, 64);
+    expect(result.stderr, contains('--yubikey-slot is required'));
+  });
+
   test('invalid password returns error', () async {
     final result =
         await runCli(['info', tempVault.path, '--password', 'wrong-password']);
