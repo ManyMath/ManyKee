@@ -541,6 +541,16 @@ void main() {
     expect(result.stderr, contains('--yubikey-slot is required'));
   });
 
+  test('missing password without a terminal is a usage error', () async {
+    final result = await Process.run(
+      'dart',
+      [cliPath, 'info', tempVault.path],
+      environment: <String, String>{'KEEPASS_PASSWORD': ''},
+    );
+    expect(result.exitCode, 64);
+    expect(result.stderr, contains('stdin is not a terminal'));
+  });
+
   test('invalid password returns error', () async {
     final result =
         await runCli(['info', tempVault.path, '--password', 'wrong-password']);

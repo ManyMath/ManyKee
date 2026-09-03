@@ -1,6 +1,13 @@
 import 'dart:io';
 
 String promptPassword(String label) {
+  if (!stdin.hasTerminal) {
+    stderr.writeln(
+      'Error: no password supplied and stdin is not a terminal; '
+      'pass --password or set KEEPASS_PASSWORD.',
+    );
+    exit(64);
+  }
   stdout.write('$label: ');
   stdin.echoMode = false;
   try {
