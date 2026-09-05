@@ -37,12 +37,12 @@ class MergeCommand extends BaseCommand {
     if (argResults!['password'] != null) {
       stderr.writeln(
           'Error: --password is not used by merge; use --password1/--password2 instead.');
-      exit(1);
+      exit(64);
     }
     if (argResults!['keyfile'] != null || argResults!['yubikey-slot'] != null) {
       stderr.writeln(
           'Error: merge does not support --keyfile/--yubikey-slot; only password-protected databases can be merged.');
-      exit(1);
+      exit(64);
     }
 
     if (!File(db1Path).existsSync()) {

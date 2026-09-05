@@ -448,7 +448,7 @@ void main() {
       '/nonexistent.key',
     ]);
 
-    expect(result.exitCode, isNot(0));
+    expect(result.exitCode, 64);
     expect(result.stderr, contains('does not support --keyfile'));
     expect(File(outputPath).existsSync(), isFalse);
   });
