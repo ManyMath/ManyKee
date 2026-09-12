@@ -46,6 +46,9 @@ jobs:
           workspaces: ManyKee/rust
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build native library for app tests
+        working-directory: ManyKee/rust
+        run: cargo build --locked -p keepassxc-ffi
       - name: Resolve app dependencies
         working-directory: ManyKee/apps/ManyKee
         run: flutter pub get
@@ -64,10 +67,10 @@ jobs:
           timeout --signal=TERM --kill-after=30s 25m
           flutter test --concurrency=1
       - name: Test shared vault UI package
-        working-directory: ManyKee
+        working-directory: ManyKee/packages/keepass_ui
         run: >-
           timeout --signal=TERM --kill-after=30s 10m
-          flutter test packages/keepass_ui/test
+          flutter test
       - name: Build canonical site and app
         working-directory: ManyKee
         run: >-
