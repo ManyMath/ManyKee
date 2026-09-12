@@ -758,9 +758,10 @@ mod tests {
             data: crate::db::Value::unprotected(vec![1, 2, 3]),
         }];
 
-        let result = xml_entry
-            .0
-            .xml_to_db_handle(&mut target, &header_attachments, &HashMap::new(), &mut cipher);
+        let result =
+            xml_entry
+                .0
+                .xml_to_db_handle(&mut target, &header_attachments, &HashMap::new(), &mut cipher);
 
         assert!(matches!(result, Err(UnprotectError::InvalidBinaryReference(3))));
     }

@@ -292,7 +292,8 @@ mod tests {
         let db_ptr = into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())));
         kpxc_database_free(db_ptr);
 
-        let path = std::env::temp_dir().join(format!("ffi-save-freed-{}.kdbx", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("ffi-save-freed-{}.kdbx", uuid::Uuid::new_v4()));
         let path_c = CString::new(path.to_string_lossy().as_ref()).unwrap();
         let password = CString::new("test").unwrap();
 

@@ -22,7 +22,8 @@ use std::sync::{LazyLock, Mutex};
 
 use crate::database::KpxcDatabase;
 
-static LIVE_DATABASE_HANDLES: LazyLock<Mutex<HashSet<usize>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+static LIVE_DATABASE_HANDLES: LazyLock<Mutex<HashSet<usize>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 /// Marks `ptr` as a live, allocated handle. Every FFI entry point that hands
 /// a freshly-allocated `*mut KpxcDatabase` back to the caller must call this
@@ -33,14 +34,20 @@ pub(crate) fn register_database_handle(ptr: *mut KpxcDatabase) {
 
 /// Whether `ptr` currently refers to a registered, not-yet-freed handle.
 pub(crate) fn is_database_handle_live(ptr: *const KpxcDatabase) -> bool {
-    LIVE_DATABASE_HANDLES.lock().unwrap().contains(&(ptr as usize))
+    LIVE_DATABASE_HANDLES
+        .lock()
+        .unwrap()
+        .contains(&(ptr as usize))
 }
 
 /// Unregisters `ptr`, returning whether it was live beforehand -
 /// `false` means double-free or a handle that was never (successfully)
 /// registered.
 pub(crate) fn unregister_database_handle(ptr: *mut KpxcDatabase) -> bool {
-    LIVE_DATABASE_HANDLES.lock().unwrap().remove(&(ptr as usize))
+    LIVE_DATABASE_HANDLES
+        .lock()
+        .unwrap()
+        .remove(&(ptr as usize))
 }
 
 #[cfg(test)]

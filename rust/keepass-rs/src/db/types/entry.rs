@@ -107,7 +107,11 @@ impl<'a> Entry {
     /// means "unlimited".
     ///
     /// Returns whether or not a new history entry was added.
-    pub fn update_history_with_limits(&mut self, history_max_items: Option<isize>, history_max_size: Option<isize>) -> bool {
+    pub fn update_history_with_limits(
+        &mut self,
+        history_max_items: Option<isize>,
+        history_max_size: Option<isize>,
+    ) -> bool {
         if self.history.is_none() {
             self.history = Some(History::default());
         }

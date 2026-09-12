@@ -25,9 +25,8 @@ const TEST_DB_RICHCONTENT: &[u8] =
 const OFFICIAL_DB_PASSWORD_BASIC: &[u8] = include_bytes!(
     "../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-password-basic.kdbx"
 );
-const OFFICIAL_DB_RICHCONTENT: &[u8] = include_bytes!(
-    "../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-richcontent.kdbx"
-);
+const OFFICIAL_DB_RICHCONTENT: &[u8] =
+    include_bytes!("../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-richcontent.kdbx");
 const OFFICIAL_FIXTURE_PASSWORD: &str = "manykee-fixture-password";
 
 const PASSWORD: &str = "demopass";
@@ -251,7 +250,9 @@ fn test_read_entry_fields_returns_structured_payload() {
     assert_eq!(payload["fields"]["Title"].as_str(), Some("TOTPEntry"));
     assert_eq!(payload["fields"]["UserName"].as_str(), Some("totpuser"));
     assert!(payload["custom_data"].get("otp").is_none());
-    assert!(payload["custom_data"]["KPXC_BROWSER_ENTRY"].as_str().is_some());
+    assert!(payload["custom_data"]["KPXC_BROWSER_ENTRY"]
+        .as_str()
+        .is_some());
     assert!(!payload.to_string().contains(TOTP_URL));
     let totp: Value = parse_json(&get_totp(handle, &entry_uuid).unwrap());
     assert!(totp["code"].as_str().is_some());
@@ -468,7 +469,10 @@ fn test_read_entry_field_fetches_single_value() {
     );
 
     let missing = read_entry_field(handle, entry_uuid, "NoSuchField");
-    assert!(missing.is_err(), "should fail for a field that doesn't exist");
+    assert!(
+        missing.is_err(),
+        "should fail for a field that doesn't exist"
+    );
 
     close_db(handle).unwrap();
 }
@@ -554,7 +558,10 @@ fn test_extract_challenge_on_crafted_huge_length_does_not_trap_instance() {
     crafted.extend_from_slice(&u32::MAX.to_le_bytes());
 
     let result = extract_challenge(&crafted);
-    assert!(result.is_err(), "crafted huge length must be rejected, not panic");
+    assert!(
+        result.is_err(),
+        "crafted huge length must be rejected, not panic"
+    );
 
     // Confirm the instance survived: a normal call still works.
     let handle = open_handle(TEST_DB_AES, PASSWORD);

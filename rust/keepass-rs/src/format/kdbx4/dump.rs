@@ -80,15 +80,19 @@ pub fn dump_kdbx4(
         kdf.transform_key(cipher::generic_array::GenericArray::from_slice(&composite_key))?
             .to_vec(),
     );
-    let master_key = zeroize::Zeroizing::new(crypt::calculate_sha256(&[&master_seed, &transformed_key]).to_vec());
+    let master_key =
+        zeroize::Zeroizing::new(crypt::calculate_sha256(&[&master_seed, &transformed_key]).to_vec());
 
     // verify credentials
     let hmac_key = zeroize::Zeroizing::new(
         crypt::calculate_sha512(&[&master_seed, &transformed_key, &hmac_block_stream::HMAC_KEY_END]).to_vec(),
     );
     let header_hmac_key = zeroize::Zeroizing::new(
-        hmac_block_stream::get_hmac_block_key(u64::MAX, cipher::generic_array::GenericArray::from_slice(&hmac_key))
-            .to_vec(),
+        hmac_block_stream::get_hmac_block_key(
+            u64::MAX,
+            cipher::generic_array::GenericArray::from_slice(&hmac_key),
+        )
+        .to_vec(),
     );
     let header_hmac =
         crypt::calculate_hmac(&[&header_data], &header_hmac_key).expect("HMAC key always correctly sized");

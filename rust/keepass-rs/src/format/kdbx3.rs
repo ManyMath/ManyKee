@@ -349,7 +349,11 @@ pub(crate) fn decrypt_kdbx3(
 /// this format; anything else (Argon2, ChaCha20, public custom data) returns
 /// [`DatabaseSaveError::IncompatibleWithVersion`].
 #[cfg(feature = "save_kdbx3")]
-pub fn dump_kdbx3(db: &Database, db_key: &DatabaseKey, writer: &mut dyn Write) -> Result<(), DatabaseSaveError> {
+pub fn dump_kdbx3(
+    db: &Database,
+    db_key: &DatabaseKey,
+    writer: &mut dyn Write,
+) -> Result<(), DatabaseSaveError> {
     if !matches!(db.config.version, DatabaseVersion::KDB3(_)) {
         return Err(DatabaseSaveError::UnsupportedVersion);
     }
@@ -381,7 +385,12 @@ pub fn dump_kdbx3(db: &Database, db_key: &DatabaseKey, writer: &mut dyn Write) -
         ));
     }
 
-    if db.config.public_custom_data.as_ref().is_some_and(|d| !d.data.is_empty()) {
+    if db
+        .config
+        .public_custom_data
+        .as_ref()
+        .is_some_and(|d| !d.data.is_empty())
+    {
         return Err(DatabaseSaveError::IncompatibleWithVersion(
             "KDBX3 has no public custom data header field",
         ));
@@ -484,11 +493,7 @@ struct KDBX3OuterHeader {
 }
 
 #[cfg(feature = "save_kdbx3")]
-fn write_kdbx3_header_entry(
-    writer: &mut dyn Write,
-    entry_type: u8,
-    data: &[u8],
-) -> Result<(), std::io::Error> {
+fn write_kdbx3_header_entry(writer: &mut dyn Write, entry_type: u8, data: &[u8]) -> Result<(), std::io::Error> {
     // Unlike KDBX4 (which length-prefixes header entries with a u32, see
     // `format::io::WriteLengthTaggedExt`), KDBX3 uses a u16 entry length -
     // see the `entry_length` read in `parse_outer_header` above.
@@ -627,7 +632,11 @@ mod kdbx3_dump_tests {
 
     #[test]
     fn test_rejects_argon2_kdf() {
-        let mut config = test_config(OuterCipherConfig::AES256, InnerCipherConfig::Salsa20, CompressionConfig::GZip);
+        let mut config = test_config(
+            OuterCipherConfig::AES256,
+            InnerCipherConfig::Salsa20,
+            CompressionConfig::GZip,
+        );
         config.kdf_config = KdfConfig::Argon2 {
             iterations: 1,
             memory: 1024,
@@ -645,7 +654,11 @@ mod kdbx3_dump_tests {
 
     #[test]
     fn test_rejects_chacha20_outer_cipher() {
-        let config = test_config(OuterCipherConfig::ChaCha20, InnerCipherConfig::Salsa20, CompressionConfig::GZip);
+        let config = test_config(
+            OuterCipherConfig::ChaCha20,
+            InnerCipherConfig::Salsa20,
+            CompressionConfig::GZip,
+        );
 
         let db = Database::new(config);
         let mut buf = Vec::new();
@@ -657,7 +670,11 @@ mod kdbx3_dump_tests {
 
     #[test]
     fn test_rejects_chacha20_inner_cipher() {
-        let config = test_config(OuterCipherConfig::AES256, InnerCipherConfig::ChaCha20, CompressionConfig::GZip);
+        let config = test_config(
+            OuterCipherConfig::AES256,
+            InnerCipherConfig::ChaCha20,
+            CompressionConfig::GZip,
+        );
 
         let db = Database::new(config);
         let mut buf = Vec::new();
@@ -675,7 +692,11 @@ mod kdbx3_dump_tests {
     fn test_rejects_public_custom_data() {
         use crate::format::variant_dictionary::VariantDictionary;
 
-        let mut config = test_config(OuterCipherConfig::AES256, InnerCipherConfig::Salsa20, CompressionConfig::GZip);
+        let mut config = test_config(
+            OuterCipherConfig::AES256,
+            InnerCipherConfig::Salsa20,
+            CompressionConfig::GZip,
+        );
         let mut public_custom_data = VariantDictionary::new();
         public_custom_data.set("example", 42);
         config.public_custom_data = Some(public_custom_data);

@@ -27,8 +27,9 @@ use keepassxc::{
 
 /// Known-good source fixture. Pinned at compile time so a missing fixture fails
 /// the build rather than a test runtime: .
-const FIXTURE: &[u8] =
-    include_bytes!("../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-password-basic.kdbx");
+const FIXTURE: &[u8] = include_bytes!(
+    "../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-password-basic.kdbx"
+);
 
 // Password matches the fixture's credential: see
 // tests/bidirectional_parity.rs::FIXTURE_PASSWORD. The slice plan snapshot used
@@ -57,13 +58,11 @@ fn find_kdf_uuid_value_offset(bytes: &[u8], entry_buffer_start: usize) -> Option
         if value_type == 0 {
             return None;
         }
-        let key_len =
-            u32::from_le_bytes(bytes.get(pos..pos + 4)?.try_into().ok()?) as usize;
+        let key_len = u32::from_le_bytes(bytes.get(pos..pos + 4)?.try_into().ok()?) as usize;
         pos += 4;
         let key = bytes.get(pos..pos + key_len)?;
         pos += key_len;
-        let value_len =
-            u32::from_le_bytes(bytes.get(pos..pos + 4)?.try_into().ok()?) as usize;
+        let value_len = u32::from_le_bytes(bytes.get(pos..pos + 4)?.try_into().ok()?) as usize;
         pos += 4;
         let value_start = pos;
         pos += value_len;
@@ -196,7 +195,11 @@ fn test_outer_header_kdf_invalid_uuid() {
     let uuid_value_offset = find_kdf_uuid_value_offset(FIXTURE, kdf_buffer_start)
         .expect("$UUID key present inside KDF VariantDictionary");
     // Flip the first byte of the UUID payload.
-    let mutated = mutate_bytes(FIXTURE, uuid_value_offset, &[FIXTURE[uuid_value_offset] ^ 0xFF]);
+    let mutated = mutate_bytes(
+        FIXTURE,
+        uuid_value_offset,
+        &[FIXTURE[uuid_value_offset] ^ 0xFF],
+    );
 
     let err = open_bytes(&mutated, fixture_key()).expect_err("bogus KDF UUID must fail");
     match err {
@@ -226,7 +229,10 @@ fn test_block_stream_block0_hmac_mismatch() {
         KeePassXcError::Open(DatabaseOpenError::Format(DatabaseFormatError::Kdbx4(
             Kdbx4OpenError::BlockStream(BlockStreamError::BlockHashMismatch { block_index: 0 }),
         ))) => {}
-        other => panic!("expected BlockStream(BlockHashMismatch {{ 0 }}), got {:?}", other),
+        other => panic!(
+            "expected BlockStream(BlockHashMismatch {{ 0 }}), got {:?}",
+            other
+        ),
     }
 }
 
@@ -289,11 +295,8 @@ fn empty_db() -> Database {
 
 #[test]
 fn test_wrong_password_asserts_incorrect_key() {
-    let bytes = save_bytes(
-        &empty_db(),
-        DatabaseKey::new().with_password("alpha"),
-    )
-    .expect("save with password alpha must succeed");
+    let bytes = save_bytes(&empty_db(), DatabaseKey::new().with_password("alpha"))
+        .expect("save with password alpha must succeed");
 
     let err = open_bytes(&bytes, DatabaseKey::new().with_password("beta"))
         .expect_err("opening with a different password must fail");
@@ -333,8 +336,8 @@ fn test_wrong_keyfile_asserts_incorrect_key() {
         .with_password("shared")
         .with_keyfile(&mut keyfile_b.as_slice())
         .expect("with_keyfile B must succeed");
-    let err = open_bytes(&bytes, wrong_key)
-        .expect_err("opening with a different keyfile must fail");
+    let err =
+        open_bytes(&bytes, wrong_key).expect_err("opening with a different keyfile must fail");
     match err {
         KeePassXcError::Open(DatabaseOpenError::Key(DatabaseKeyError::IncorrectKey)) => {}
         other => panic!("expected Key(IncorrectKey), got {:?}", other),
@@ -382,4 +385,3 @@ fn test_wrong_local_challenge_asserts_specific_variant() {
         ),
     }
 }
-

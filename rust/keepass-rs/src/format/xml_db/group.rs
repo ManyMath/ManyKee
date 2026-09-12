@@ -165,14 +165,13 @@ impl Group {
             Some(source.custom_data.clone().into())
         };
 
-        let custom_icon_uuid = if let (Some(uuid), Some(data)) =
-            (source.custom_icon_uuid, source.custom_icon_data.as_ref())
-        {
-            custom_icons.insert(uuid, data.clone());
-            Some(UUID(uuid))
-        } else {
-            source.custom_icon_uuid.map(UUID)
-        };
+        let custom_icon_uuid =
+            if let (Some(uuid), Some(data)) = (source.custom_icon_uuid, source.custom_icon_data.as_ref()) {
+                custom_icons.insert(uuid, data.clone());
+                Some(UUID(uuid))
+            } else {
+                source.custom_icon_uuid.map(UUID)
+            };
 
         Ok(Group {
             uuid: UUID(source.uuid),
@@ -210,10 +209,9 @@ mod tests {
         let mut cipher = crate::crypt::ciphers::PlainCipher;
         let missing_uuid = xml_group.0.custom_icon_uuid.as_ref().unwrap().0;
 
-        let result =
-            xml_group
-                .0
-                .xml_to_db_handle(&mut target, &[], &HashMap::new(), &mut cipher);
+        let result = xml_group
+            .0
+            .xml_to_db_handle(&mut target, &[], &HashMap::new(), &mut cipher);
 
         assert!(matches!(
             result,

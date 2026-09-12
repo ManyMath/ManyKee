@@ -88,8 +88,12 @@ fn entry_is_kdbx3_compatible(entry: &Entry) -> bool {
         .all(|history_entry| history_entry.custom_data.is_empty())
 }
 
-fn meta_custom_data_is_kdbx3_compatible(custom_data: &std::collections::HashMap<String, CustomDataItem>) -> bool {
-    custom_data.values().all(|item| item.last_modification_time.is_none())
+fn meta_custom_data_is_kdbx3_compatible(
+    custom_data: &std::collections::HashMap<String, CustomDataItem>,
+) -> bool {
+    custom_data
+        .values()
+        .all(|item| item.last_modification_time.is_none())
 }
 
 #[cfg(test)]

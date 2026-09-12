@@ -223,7 +223,10 @@ impl Database {
             self_meta.database_description_changed = other_meta.database_description_changed;
         }
 
-        if newer(self_meta.default_username_changed, other_meta.default_username_changed) {
+        if newer(
+            self_meta.default_username_changed,
+            other_meta.default_username_changed,
+        ) {
             self_meta.default_username = other_meta.default_username.clone();
             self_meta.default_username_changed = other_meta.default_username_changed;
         }
@@ -261,7 +264,10 @@ impl Database {
         for (key, other_item) in &other_meta.custom_data {
             match self_meta.custom_data.get(key) {
                 Some(self_item)
-                    if !newer(self_item.last_modification_time, other_item.last_modification_time) =>
+                    if !newer(
+                        self_item.last_modification_time,
+                        other_item.last_modification_time,
+                    ) =>
                 {
                     // Destination's item is at least as new; keep it.
                 }
@@ -1032,7 +1038,10 @@ impl Entry {
                 "Entry {} from destination database has uncommitted changes.",
                 self.uuid
             ));
-            let previous_latest = destination_history.entries.first().and_then(|e| e.times.last_modification);
+            let previous_latest = destination_history
+                .entries
+                .first()
+                .and_then(|e| e.times.last_modification);
             let mut commit_time = Times::now();
             if let Some(previous_latest) = previous_latest {
                 if commit_time <= previous_latest {
@@ -1167,8 +1176,8 @@ mod merge_tests {
     use std::{thread, time};
     use uuid::{uuid, Uuid};
 
-    use crate::db::{fields, Entry, Group, History, Times};
     use crate::db::merge::MergeError;
+    use crate::db::{fields, Entry, Group, History, Times};
     use crate::Database;
 
     fn get_all_groups(parent: &Group) -> Vec<&Group> {
@@ -2269,11 +2278,7 @@ mod merge_tests {
         // duplicate-UUID check (see `check_no_duplicate_uuids`), with a more
         // specific error.
         let colliding_uuid = destination_db.root.uuid;
-        source_db
-            .root
-            .group_by_path_mut(&["group1"])
-            .unwrap()
-            .uuid = colliding_uuid;
+        source_db.root.group_by_path_mut(&["group1"]).unwrap().uuid = colliding_uuid;
 
         let result = destination_db.merge(&source_db);
         assert!(matches!(result, Err(MergeError::DuplicateGroupUuid(uuid, _)) if uuid == colliding_uuid));
@@ -2444,8 +2449,15 @@ mod merge_tests {
             .expect("duplicate same-second timestamps within the destination should not hard-error");
 
         assert_eq!(merge_log.warnings.len(), 1);
-        assert_eq!(destination.entries.len(), 1, "the later duplicate should be dropped");
-        assert_eq!(destination.entries[0].uuid, ENTRY1_ID, "the first entry seen should win");
+        assert_eq!(
+            destination.entries.len(),
+            1,
+            "the later duplicate should be dropped"
+        );
+        assert_eq!(
+            destination.entries[0].uuid, ENTRY1_ID,
+            "the first entry seen should win"
+        );
     }
 
     #[test]
@@ -2459,8 +2471,15 @@ mod merge_tests {
         let merge_log = destination.merge_with(&other).unwrap();
 
         assert_eq!(merge_log.warnings.len(), 1);
-        assert_eq!(destination.entries.len(), 1, "the later duplicate should be dropped");
-        assert_eq!(destination.entries[0].uuid, ENTRY1_ID, "the first entry seen should win");
+        assert_eq!(
+            destination.entries.len(),
+            1,
+            "the later duplicate should be dropped"
+        );
+        assert_eq!(
+            destination.entries[0].uuid, ENTRY1_ID,
+            "the first entry seen should win"
+        );
     }
 
     #[test]
@@ -2505,7 +2524,10 @@ mod merge_tests {
 
         destination_db.merge(&source_db).unwrap();
 
-        assert_eq!(destination_db.meta.database_name, Some("destination name".to_string()));
+        assert_eq!(
+            destination_db.meta.database_name,
+            Some("destination name".to_string())
+        );
         assert_eq!(
             destination_db.meta.database_description,
             Some("source description".to_string())
@@ -2527,7 +2549,10 @@ mod merge_tests {
         destination_db.merge(&source_db).unwrap();
 
         assert_eq!(destination_db.meta.history_max_items, Some(50));
-        assert_eq!(destination_db.meta.settings_changed, source_db.meta.settings_changed);
+        assert_eq!(
+            destination_db.meta.settings_changed,
+            source_db.meta.settings_changed
+        );
     }
 
     #[test]

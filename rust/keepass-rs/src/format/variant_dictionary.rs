@@ -33,11 +33,7 @@ impl VariantDictionary {
     }
 
     pub(crate) fn parse(buffer: &[u8]) -> Result<VariantDictionary, VariantDictionaryError> {
-        let version = LittleEndian::read_u16(
-            buffer
-                .get(0..2)
-                .ok_or(VariantDictionaryError::UnexpectedEof)?,
-        );
+        let version = LittleEndian::read_u16(buffer.get(0..2).ok_or(VariantDictionaryError::UnexpectedEof)?);
 
         if version != VARIANT_DICTIONARY_VERSION {
             return Err(VariantDictionaryError::InvalidVersion { version });

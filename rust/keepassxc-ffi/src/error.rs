@@ -103,7 +103,9 @@ macro_rules! check_null {
 macro_rules! check_live_db {
     ($ptr:expr, $ret:expr) => {
         check_null!($ptr, $ret);
-        if !$crate::handle_registry::is_database_handle_live($ptr as *const $crate::database::KpxcDatabase) {
+        if !$crate::handle_registry::is_database_handle_live(
+            $ptr as *const $crate::database::KpxcDatabase,
+        ) {
             $crate::error::set_last_error("invalid or already-freed database handle");
             return $ret;
         }

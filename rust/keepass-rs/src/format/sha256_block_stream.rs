@@ -22,7 +22,8 @@ pub(crate) fn write_sha256_block_stream(data: &[u8]) -> Vec<u8> {
 fn write_block(out: &mut Vec<u8>, block_id: u32, block: &[u8]) {
     let block_hash = calculate_sha256(&[block]);
 
-    out.write_u32::<LittleEndian>(block_id).expect("write to Vec cannot fail");
+    out.write_u32::<LittleEndian>(block_id)
+        .expect("write to Vec cannot fail");
     out.extend_from_slice(&block_hash);
     out.write_u32::<LittleEndian>(block.len() as u32)
         .expect("write to Vec cannot fail");

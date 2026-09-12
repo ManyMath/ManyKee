@@ -1156,9 +1156,7 @@ fn check_generated(project_root: &Path, generated: &GeneratedEvidence) -> Result
     }
 
     let mut manifest = load_manifest(&project_root.join(MANIFEST_PATH))?;
-    manifest
-        .not_observed
-        .extend(delegated_manykee_claims());
+    manifest.not_observed.extend(delegated_manykee_claims());
     let evidence = load_evidence_dir(&project_root.join(EVIDENCE_DIR))?;
     validate_source_backing(&manifest, &evidence)?;
 
@@ -1552,7 +1550,8 @@ fn optional_keepass_claims_for(
             lane: Some(EvidenceLane::KeepassOptional),
             evidence_path: Some(evidence_path.to_string()),
             notes: vec![
-                "KeePass 2.61/KPScript optional evidence has not been observed for this fixture.".to_string(),
+                "KeePass 2.61/KPScript optional evidence has not been observed for this fixture."
+                    .to_string(),
             ],
         })
         .collect()

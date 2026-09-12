@@ -381,7 +381,10 @@ mod key_tests {
             .with_keyfile(&mut xml_keyfile_v2.trim().as_bytes())
             .expect("reading the keyfile bytes should succeed")
             .get_key_elements();
-        assert!(result.is_err(), "a keyfile whose data doesn't match its Hash should be rejected");
+        assert!(
+            result.is_err(),
+            "a keyfile whose data doesn't match its Hash should be rejected"
+        );
     }
 
     #[test]
@@ -417,7 +420,10 @@ mod key_tests {
             .with_keyfile(&mut xml_keyfile_v2_bad_hash.trim().as_bytes())
             .expect("reading the keyfile bytes should succeed")
             .get_key_elements();
-        assert!(result.is_err(), "a keyfile whose data doesn't match its Hash should be rejected");
+        assert!(
+            result.is_err(),
+            "a keyfile whose data doesn't match its Hash should be rejected"
+        );
     }
 
     #[test]

@@ -205,10 +205,10 @@ fn test_merge_winner_uncommitted_changes_preserved_in_history() {
     assert_eq!(merged_entry.get(fields::USERNAME), Some("UncommittedA"));
 
     let history = merged_entry.history.as_ref().expect("history should exist");
-    let has_uncommitted_snapshot = history
-        .get_entries()
-        .iter()
-        .any(|e| e.get(fields::TITLE) == Some("Committed A") && e.get(fields::USERNAME) == Some("UncommittedA"));
+    let has_uncommitted_snapshot = history.get_entries().iter().any(|e| {
+        e.get(fields::TITLE) == Some("Committed A")
+            && e.get(fields::USERNAME) == Some("UncommittedA")
+    });
     assert!(
         has_uncommitted_snapshot,
         "the winner's uncommitted state should have been captured into history, not dropped"

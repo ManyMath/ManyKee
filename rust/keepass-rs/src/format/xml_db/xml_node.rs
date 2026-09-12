@@ -243,10 +243,15 @@ fn times_known_tags() -> HashSet<&'static str> {
 /// Direct children of an `<AutoType>` block that carry known data. Unknown
 /// content nested inside a known `<Association>` isn't tracked by this phase.
 fn autotype_known_tags() -> HashSet<&'static str> {
-    ["Enabled", "DataTransferObfuscation", "DefaultSequence", "Association"]
-        .iter()
-        .copied()
-        .collect()
+    [
+        "Enabled",
+        "DataTransferObfuscation",
+        "DefaultSequence",
+        "Association",
+    ]
+    .iter()
+    .copied()
+    .collect()
 }
 
 /// Direct children of a `<MemoryProtection>` block that carry known data.
@@ -534,7 +539,9 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> Result<(String, UnknownMap), Preproce
                         // deeper, e.g. inside a known <Association>).
                         if !parent_stack.is_empty() {
                             let parent = parent_stack.last().unwrap();
-                            if current_depth == parent.depth + 1 && opens_container(tag.as_str(), parent.tag.as_str()) {
+                            if current_depth == parent.depth + 1
+                                && opens_container(tag.as_str(), parent.tag.as_str())
+                            {
                                 let (mut key_path, identity, occurrence) = parent.unknown_key();
                                 key_path.push(tag.clone());
                                 container_ctx = Some(ContainerCtx {
@@ -736,10 +743,13 @@ pub fn preprocess_xml(xml_bytes: &[u8]) -> Result<(String, UnknownMap), Preproce
 
                                 if let Some(known_set) = known {
                                     if !known_set.contains(tag.as_str()) {
-                                        unknown_map.entry(parent.unknown_key()).or_default().push(XmlNode {
-                                            name: tag,
-                                            inner_xml: String::new(),
-                                        });
+                                        unknown_map
+                                            .entry(parent.unknown_key())
+                                            .or_default()
+                                            .push(XmlNode {
+                                                name: tag,
+                                                inner_xml: String::new(),
+                                            });
                                         buf.clear();
                                         continue;
                                     }
@@ -813,9 +823,8 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
             }
             [owner, container] if container == "AutoType" => {
                 let autotype = match owner.as_str() {
-                    "Entry" => {
-                        decode_uuid(identity).and_then(|uuid| db.root.entry_by_uuid_occurrence_mut(uuid, *occurrence))
-                    }
+                    "Entry" => decode_uuid(identity)
+                        .and_then(|uuid| db.root.entry_by_uuid_occurrence_mut(uuid, *occurrence)),
                     "HistoryEntry" => history_revision_mut(db, identity),
                     _ => None,
                 }
@@ -870,7 +879,9 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
                         .map(|entry| &mut entry.custom_data),
                     "HistoryEntry" => owner_identity
                         .split_once(':')
-                        .and_then(|(uuid_b64, index)| Some((decode_uuid(uuid_b64)?, index.parse::<usize>().ok()?)))
+                        .and_then(|(uuid_b64, index)| {
+                            Some((decode_uuid(uuid_b64)?, index.parse::<usize>().ok()?))
+                        })
                         .and_then(|(uuid, index)| {
                             db.root
                                 .entry_by_uuid_mut(uuid)
@@ -892,7 +903,10 @@ pub fn attach_unknowns(unknown_map: &UnknownMap, db: &mut crate::db::Database) {
 /// Resolve a `"uuid_base64:revision_index"` identity (the `HistoryEntry`
 /// convention, see `StackEntry::unknown_key`) to the corresponding history
 /// revision.
-fn history_revision_mut<'a>(db: &'a mut crate::db::Database, identity: &str) -> Option<&'a mut crate::db::Entry> {
+fn history_revision_mut<'a>(
+    db: &'a mut crate::db::Database,
+    identity: &str,
+) -> Option<&'a mut crate::db::Entry> {
     let (uuid_b64, index) = identity.split_once(':')?;
     let uuid = decode_uuid(uuid_b64)?;
     let index: usize = index.parse().ok()?;
@@ -923,13 +937,8 @@ pub fn inject_unknowns_into_xml(xml: &mut String, db: &crate::db::Database) {
     if let Some(meta_start) = xml.find("<Meta>") {
         if let Some(mut meta_end) = xml[meta_start..].find("</Meta>").map(|i| meta_start + i) {
             if let Some(mp) = db.meta.memory_protection.as_ref() {
-                meta_end += inject_container_unknowns(
-                    xml,
-                    meta_start,
-                    meta_end,
-                    "MemoryProtection",
-                    &mp.unknown_xml,
-                );
+                meta_end +=
+                    inject_container_unknowns(xml, meta_start, meta_end, "MemoryProtection", &mp.unknown_xml);
             }
             inject_custom_data_unknowns(xml, meta_start, meta_end, &db.meta.custom_data);
         }
@@ -960,10 +969,16 @@ fn inject_custom_data_unknowns(
     region_end: usize,
     custom_data: &std::collections::HashMap<String, crate::db::CustomDataItem>,
 ) -> usize {
-    let Some(cd_start) = xml[region_start..region_end].find("<CustomData>").map(|i| region_start + i) else {
+    let Some(cd_start) = xml[region_start..region_end]
+        .find("<CustomData>")
+        .map(|i| region_start + i)
+    else {
         return 0;
     };
-    let Some(mut cd_end) = xml[cd_start..region_end].find("</CustomData>").map(|i| cd_start + i) else {
+    let Some(mut cd_end) = xml[cd_start..region_end]
+        .find("</CustomData>")
+        .map(|i| cd_start + i)
+    else {
         return 0;
     };
 
@@ -1010,9 +1025,15 @@ fn inject_container_unknowns(
 
     let open_tag = format!("<{}>", container_tag);
     let close_tag = format!("</{}>", container_tag);
-    if let Some(open_pos) = xml[region_start..region_end].find(&open_tag).map(|i| region_start + i) {
+    if let Some(open_pos) = xml[region_start..region_end]
+        .find(&open_tag)
+        .map(|i| region_start + i)
+    {
         let search_from = open_pos + open_tag.len();
-        if let Some(close_pos) = xml[search_from..region_end].find(&close_tag).map(|i| search_from + i) {
+        if let Some(close_pos) = xml[search_from..region_end]
+            .find(&close_tag)
+            .map(|i| search_from + i)
+        {
             xml.insert_str(close_pos, &s);
             return s.len();
         }
@@ -1022,7 +1043,10 @@ fn inject_container_unknowns(
     // The container serialized as self-closing (no known fields set) -
     // expand it in place so the unknown content has somewhere to live.
     let self_close = format!("<{}/>", container_tag);
-    if let Some(pos) = xml[region_start..region_end].find(&self_close).map(|i| region_start + i) {
+    if let Some(pos) = xml[region_start..region_end]
+        .find(&self_close)
+        .map(|i| region_start + i)
+    {
         let replacement = format!("<{container_tag}>{s}</{container_tag}>");
         let inserted = replacement.len() - self_close.len();
         xml.replace_range(pos..pos + self_close.len(), &replacement);
@@ -1123,10 +1147,16 @@ fn inject_history_unknowns(
     if history.entries.is_empty() {
         return 0;
     }
-    let Some(hist_start) = xml[region_start..region_end].find("<History>").map(|i| region_start + i) else {
+    let Some(hist_start) = xml[region_start..region_end]
+        .find("<History>")
+        .map(|i| region_start + i)
+    else {
         return 0;
     };
-    let Some(mut hist_end) = xml[hist_start..region_end].find("</History>").map(|i| hist_start + i) else {
+    let Some(mut hist_end) = xml[hist_start..region_end]
+        .find("</History>")
+        .map(|i| hist_start + i)
+    else {
         return 0;
     };
 
@@ -1148,7 +1178,8 @@ fn inject_history_unknowns(
         };
 
         let mut close_pos = entry_close;
-        close_pos += inject_container_unknowns(xml, entry_open, close_pos, "Times", &revision.times.unknown_xml);
+        close_pos +=
+            inject_container_unknowns(xml, entry_open, close_pos, "Times", &revision.times.unknown_xml);
         if let Some(at) = revision.autotype.as_ref() {
             close_pos += inject_container_unknowns(xml, entry_open, close_pos, "AutoType", &at.unknown_xml);
         }
@@ -1414,7 +1445,11 @@ mod tests {
         assert!(cleaned.contains("<Name>R</Name>"));
         assert!(cleaned.contains("<Tags>t</Tags>"));
 
-        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string(), 0);
+        let gk = (
+            vec!["Group".to_string()],
+            "AAECAwQFBgcICQoLDA0ODw==".to_string(),
+            0,
+        );
         assert!(
             map.contains_key(&gk),
             "Missing group key. Keys: {:?}",
@@ -1423,7 +1458,11 @@ mod tests {
         assert_eq!(map[&gk][0].name, "UnknownThing");
         assert!(map[&gk][0].inner_xml.contains("42"));
 
-        let ek = (vec!["Entry".to_string()], "EBESExQVFhcYGRobHB0eHw==".to_string(), 0);
+        let ek = (
+            vec!["Entry".to_string()],
+            "EBESExQVFhcYGRobHB0eHw==".to_string(),
+            0,
+        );
         assert!(
             map.contains_key(&ek),
             "Missing entry key. Keys: {:?}",
@@ -1664,7 +1703,11 @@ mod tests {
         let db = crate::format::xml_db::parse_xml(xml.as_bytes(), &[], &mut cipher).unwrap();
 
         let entry = &db.root.entries[0];
-        assert_eq!(entry.unknown_xml.len(), 1, "live entry should keep only its own unknown");
+        assert_eq!(
+            entry.unknown_xml.len(),
+            1,
+            "live entry should keep only its own unknown"
+        );
         assert_eq!(entry.unknown_xml[0].name, "LiveEntryUnknown");
         assert!(entry.unknown_xml[0].inner_xml.contains("live"));
 
@@ -1820,11 +1863,13 @@ mod tests {
         assert!(reparsed.root.custom_data.get("group_key").unwrap().unknown_xml[0]
             .inner_xml
             .contains("group-plugin"));
-        assert!(
-            reparsed.root.entries[0].custom_data.get("entry_key").unwrap().unknown_xml[0]
-                .inner_xml
-                .contains("entry-plugin")
-        );
+        assert!(reparsed.root.entries[0]
+            .custom_data
+            .get("entry_key")
+            .unwrap()
+            .unknown_xml[0]
+            .inner_xml
+            .contains("entry-plugin"));
     }
 
     #[test]
@@ -1846,9 +1891,17 @@ mod tests {
         assert!(cleaned.contains("<IconID>48</IconID>"));
         assert!(cleaned.contains("<IsExpanded>True</IsExpanded>"));
 
-        let gk = (vec!["Group".to_string()], "AAECAwQFBgcICQoLDA0ODw==".to_string(), 0);
+        let gk = (
+            vec!["Group".to_string()],
+            "AAECAwQFBgcICQoLDA0ODw==".to_string(),
+            0,
+        );
         let names: Vec<_> = map[&gk].iter().map(|n| n.name.as_str()).collect();
-        assert_eq!(names, vec!["UnknownOne", "UnknownTwo"], "both unknown siblings should be captured, not just the first");
+        assert_eq!(
+            names,
+            vec!["UnknownOne", "UnknownTwo"],
+            "both unknown siblings should be captured, not just the first"
+        );
     }
 
     #[test]
@@ -1935,7 +1988,11 @@ mod tests {
         let mut cipher = crate::crypt::ciphers::PlainCipher;
         let db = crate::format::xml_db::parse_xml(xml.as_bytes(), &[], &mut cipher).unwrap();
 
-        let mp = db.meta.memory_protection.as_ref().expect("memory protection present");
+        let mp = db
+            .meta
+            .memory_protection
+            .as_ref()
+            .expect("memory protection present");
         assert_eq!(mp.unknown_xml.len(), 1);
         assert_eq!(mp.unknown_xml[0].name, "FutureProtectionFlag");
 
@@ -1995,7 +2052,9 @@ mod tests {
         assert!(mp.unknown_xml[0].inner_xml.contains("mp"));
 
         assert_eq!(reparsed.root.times.unknown_xml[0].name, "FutureTimeFlag");
-        assert!(reparsed.root.times.unknown_xml[0].inner_xml.contains("group-times"));
+        assert!(reparsed.root.times.unknown_xml[0]
+            .inner_xml
+            .contains("group-times"));
 
         let entry = &reparsed.root.entries[0];
         assert!(entry.times.unknown_xml[0].inner_xml.contains("entry-times"));

@@ -25,8 +25,8 @@ use tempfile::TempDir;
 
 #[test]
 fn official_tool_calls_use_shared_helper_policy() {
-    let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/keepassxc_compat.rs");
+    let source_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/keepassxc_compat.rs");
     let source = std::fs::read_to_string(source_path).expect("failed to read test source");
     let direct_command = ["Command::new(", "\"keepassxc-cli\"", ")"].concat();
     let direct_stdio = ["Stdio", "::", "piped"].concat();

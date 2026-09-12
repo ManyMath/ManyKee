@@ -112,8 +112,9 @@ pub(crate) fn decrypt_kdbx4(
             .transform_key(GenericArray::from_slice(&composite_key))?
             .to_vec(),
     );
-    let master_key =
-        Zeroizing::new(crypt::calculate_sha256(&[outer_header.master_seed.as_ref(), &transformed_key]).to_vec());
+    let master_key = Zeroizing::new(
+        crypt::calculate_sha256(&[outer_header.master_seed.as_ref(), &transformed_key]).to_vec(),
+    );
 
     // verify credentials
     let hmac_key = Zeroizing::new(
@@ -139,7 +140,9 @@ pub(crate) fn decrypt_kdbx4(
     // read encrypted payload from hmac-verified block stream
     let payload_encrypted =
         hmac_block_stream::read_hmac_block_stream(hmac_block_stream, GenericArray::from_slice(&hmac_key))
-            .map_err(|e| DatabaseOpenError::Format(DatabaseFormatError::Kdbx4(Kdbx4OpenError::BlockStream(e))))?;
+            .map_err(|e| {
+                DatabaseOpenError::Format(DatabaseFormatError::Kdbx4(Kdbx4OpenError::BlockStream(e)))
+            })?;
 
     // Decrypt and decompress encrypted payload
     let payload_compressed = outer_header

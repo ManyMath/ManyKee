@@ -846,7 +846,10 @@ fn owned_fixtures(
     fixtures
 }
 
-fn owned_features(features: &[FeatureRow], owned_feature_ids: &BTreeSet<String>) -> Vec<FeatureRow> {
+fn owned_features(
+    features: &[FeatureRow],
+    owned_feature_ids: &BTreeSet<String>,
+) -> Vec<FeatureRow> {
     let mut features: Vec<FeatureRow> = features
         .iter()
         .filter(|feature| owned_feature_ids.contains(&feature.feature_id))
@@ -856,7 +859,10 @@ fn owned_features(features: &[FeatureRow], owned_feature_ids: &BTreeSet<String>)
     features
 }
 
-fn owned_claims(claims: &[FeatureClaim], owned_fixture_ids: &BTreeSet<String>) -> Vec<FeatureClaim> {
+fn owned_claims(
+    claims: &[FeatureClaim],
+    owned_fixture_ids: &BTreeSet<String>,
+) -> Vec<FeatureClaim> {
     let mut claims: Vec<FeatureClaim> = claims
         .iter()
         .filter(|claim| claim_owned_by_fixture(claim, owned_fixture_ids))

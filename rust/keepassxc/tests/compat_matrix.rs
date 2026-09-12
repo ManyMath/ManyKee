@@ -492,7 +492,11 @@ fn manifest_section_merge_preserves_unowned_fixtures() {
 
 #[test]
 fn manifest_section_check_ignores_unowned_fixtures() {
-    let starter = fixture_metadata("starter-richcontent", vec!["group_tree"], SupportStatus::Partial);
+    let starter = fixture_metadata(
+        "starter-richcontent",
+        vec!["group_tree"],
+        SupportStatus::Partial,
+    );
     let mut stale_official = fixture_metadata(
         "keepassxc-password-basic",
         vec!["credential_password_only"],
@@ -591,9 +595,7 @@ fn committed_starter_manifest_uses_expanded_schema() {
     assert!(fixture
         .provenance
         .contains("not the broad official KeePassXC corpus"));
-    assert!(fixture
-        .feature_ids
-        .contains(&"group_tree".to_string()));
+    assert!(fixture.feature_ids.contains(&"group_tree".to_string()));
     assert!(fixture
         .feature_ids
         .contains(&"broad_official_fixture_corpus".to_string()));
@@ -638,8 +640,7 @@ fn fixture_metadata(
         artifacts: vec![FixtureArtifact {
             path: format!("fixtures/{fixture_id}.kdbx"),
             kind: "kdbx".to_string(),
-            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-                .to_string(),
+            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
         }],
         generation: FixtureGeneration {
             kind: "preexisting".to_string(),

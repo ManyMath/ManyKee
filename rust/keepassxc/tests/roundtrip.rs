@@ -452,7 +452,8 @@ fn test_roundtrip_no_modification() {
             assert!(
                 output.status.success(),
                 "KeePassXC cannot open round-tripped {} .\nstderr: {}",
-                name, output.stderr,
+                name,
+                output.stderr,
             );
         }
     }

@@ -201,12 +201,14 @@ fn build_fid01_database_with_alternate_insertion_order() -> Database {
     entry.set_unprotected(fields::TITLE, "Snapshot Entry");
 
     entry.custom_data.clear();
-    entry
-        .custom_data
-        .insert("entry-binary".to_string(), binary_custom_data(b"entry-bytes"));
-    entry
-        .custom_data
-        .insert("entry-string".to_string(), string_custom_data("entry-value"));
+    entry.custom_data.insert(
+        "entry-binary".to_string(),
+        binary_custom_data(b"entry-bytes"),
+    );
+    entry.custom_data.insert(
+        "entry-string".to_string(),
+        string_custom_data("entry-value"),
+    );
 
     entry.attachments.clear();
     entry.attachments.insert(

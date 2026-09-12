@@ -575,7 +575,10 @@ fn optional_keepass_lane_is_separate_and_non_required() -> Result<(), Box<dyn st
     let contents = std::fs::read_to_string(&evidence_path)?;
     let record: keepassxc::compat_evidence::EvidenceRecord = serde_json::from_str(&contents)?;
 
-    assert_eq!(record.evidence_id, "keepass-optional-cipher-kdf-not-observed");
+    assert_eq!(
+        record.evidence_id,
+        "keepass-optional-cipher-kdf-not-observed"
+    );
     assert_eq!(record.lane, EvidenceLane::KeepassOptional);
     assert_eq!(record.status, SupportStatus::NotObserved);
     assert!(record

@@ -22,8 +22,9 @@ use keepassxc::{
 // Known-good KDBX4 source fixture, pinned at compile time so a missing or
 // moved fixture fails the build rather than at runtime, matching the
 // convention in `negative_corpus.rs`.
-const FIXTURE: &[u8] =
-    include_bytes!("../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-password-basic.kdbx");
+const FIXTURE: &[u8] = include_bytes!(
+    "../../../fixtures/compat/official/keepassxc/2.7.12/keepassxc-password-basic.kdbx"
+);
 
 const FIXTURE_PASSWORD: &str = "manykee-fixture-password";
 
@@ -237,8 +238,8 @@ fn test_error_formatting_does_not_leak_credentials() {
             .with_password(SHARED_PASSWORD)
             .with_keyfile(&mut keyfile_b.as_slice())
             .expect("with_keyfile B must succeed");
-        let err = open_bytes(&bytes, wrong_key)
-            .expect_err("opening with a different keyfile must fail");
+        let err =
+            open_bytes(&bytes, wrong_key).expect_err("opening with a different keyfile must fail");
         let display = format!("{}", err);
         let debug = format!("{:?}", err);
 

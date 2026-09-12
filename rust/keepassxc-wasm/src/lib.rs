@@ -194,9 +194,9 @@ pub fn open_db_with_key_file(
         if !password.is_empty() {
             key = key.with_password(password);
         }
-        key = key.with_keyfile(&mut key_file_bytes.as_slice()).map_err(|e| {
-            err_json("KEY_FILE_ERROR", &format!("Failed to read key file: {}", e))
-        })?;
+        key = key
+            .with_keyfile(&mut key_file_bytes.as_slice())
+            .map_err(|e| err_json("KEY_FILE_ERROR", &format!("Failed to read key file: {}", e)))?;
 
         let db =
             open_bytes(db_bytes, key).map_err(|e| err_json("OPEN_ERROR", &format!("{}", e)))?;
@@ -302,7 +302,11 @@ pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValu
 /// needs one, e.g. when a user clicks "reveal" or "copy", rather
 /// than every time the entry is opened for viewing or editing.
 #[wasm_bindgen]
-pub fn read_entry_field(handle: u32, entry_uuid: &str, field_name: &str) -> Result<String, JsValue> {
+pub fn read_entry_field(
+    handle: u32,
+    entry_uuid: &str,
+    field_name: &str,
+) -> Result<String, JsValue> {
     let uuid_owned = entry_uuid.to_string();
     let field_name = field_name.to_string();
     catch_unwind_result(|| {
@@ -336,8 +340,7 @@ pub fn get_totp(handle: u32, entry_uuid: &str) -> Result<String, JsValue> {
             match payload {
                 Some(payload) => {
                     let info = TotpInfo::from(payload);
-                    serde_json::to_string(&info)
-                        .map_err(|e| err_json("JSON_ERROR", &e.to_string()))
+                    serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
                 }
                 None => Ok("null".to_string()),
             }
@@ -814,7 +817,10 @@ mod tests {
 
         assert!(result.is_err());
         DATABASES.with(|dbs| {
-            assert!(dbs.borrow().contains_key(&handle_b), "handle_b must survive a panicking merge");
+            assert!(
+                dbs.borrow().contains_key(&handle_b),
+                "handle_b must survive a panicking merge"
+            );
         });
 
         close_db(handle_a).unwrap();

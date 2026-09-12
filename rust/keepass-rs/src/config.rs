@@ -475,7 +475,11 @@ pub enum KdfConfigError {
     InvalidKDFUUID { uuid: Vec<u8> },
 
     #[error("KDF parameter '{name}' out of bounds: {value} exceeds maximum of {max}")]
-    KdfParameterOutOfBounds { name: &'static str, value: u64, max: u64 },
+    KdfParameterOutOfBounds {
+        name: &'static str,
+        value: u64,
+        max: u64,
+    },
 
     #[error(transparent)]
     VariantDictionary(#[from] VariantDictionaryError),

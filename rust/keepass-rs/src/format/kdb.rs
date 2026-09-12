@@ -338,9 +338,8 @@ pub(crate) fn parse_kdb(data: &[u8], db_key: &DatabaseKey) -> Result<Database, D
     // header field read before any authentication check, so it must be capped
     // the same way kdbx3/kdbx4 already cap it, or a crafted file with rounds
     // near u32::MAX hangs the opening thread for an unbounded duration.
-    crate::config::validate_aes_kdf_rounds(u64::from(header.transform_rounds)).map_err(|e| {
-        DatabaseOpenError::Format(DatabaseFormatError::Kdb(KdbOpenError::from(e)))
-    })?;
+    crate::config::validate_aes_kdf_rounds(u64::from(header.transform_rounds))
+        .map_err(|e| DatabaseOpenError::Format(DatabaseFormatError::Kdb(KdbOpenError::from(e))))?;
     let kdf_config = KdfConfig::Aes {
         rounds: u64::from(header.transform_rounds),
     };
@@ -352,9 +351,8 @@ pub(crate) fn parse_kdb(data: &[u8], db_key: &DatabaseKey) -> Result<Database, D
             .to_vec(),
     );
 
-    let master_key: Zeroizing<Vec<u8>> = Zeroizing::new(
-        calculate_sha256(&[&header.master_seed, &transformed_key]).to_vec(),
-    );
+    let master_key: Zeroizing<Vec<u8>> =
+        Zeroizing::new(calculate_sha256(&[&header.master_seed, &transformed_key]).to_vec());
 
     let outer_cipher_config = if header.flags & 2 != 0 {
         OuterCipherConfig::AES256

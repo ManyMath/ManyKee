@@ -3,7 +3,9 @@
 use std::ffi::{c_char, CString};
 
 use crate::database::KpxcDatabase;
-use crate::error::{check_live_db, check_null, clear_last_error, set_error_from_kpxc, set_last_error};
+use crate::error::{
+    check_live_db, check_null, clear_last_error, set_error_from_kpxc, set_last_error,
+};
 
 use keepassxc::serialization::MergeInfo;
 
