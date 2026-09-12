@@ -1,13 +1,17 @@
 name: CI -- Native Integration Tests
 
 on:
+  push:
+    branches: [main]
   pull_request:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   integration-test-linux:
