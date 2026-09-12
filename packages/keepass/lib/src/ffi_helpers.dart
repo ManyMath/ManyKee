@@ -13,25 +13,25 @@ Pointer<Char> toNativeString(String s) => s.toNativeUtf8().cast<Char>();
 /// [toNativeString] don't linger in freed heap pages (and thus in core
 /// dumps/swap) after `malloc.free` alone would leave them.
 void freeNativeString(Pointer<Char> ptr) {
- if (ptr == nullptr) return;
- final length = ptr.cast<Utf8>().length;
- ptr.cast<Uint8>().asTypedList(length).fillRange(0, length, 0);
- malloc.free(ptr);
+  if (ptr == nullptr) return;
+  final length = ptr.cast<Utf8>().length;
+  ptr.cast<Uint8>().asTypedList(length).fillRange(0, length, 0);
+  malloc.free(ptr);
 }
 
 String? readAndFreeString(Pointer<Char> ptr) {
- if (ptr == nullptr) return null;
- try {
- return ptr.cast<Utf8>().toDartString();
- } finally {
- bindings.kpxc_string_free(ptr);
- }
+  if (ptr == nullptr) return null;
+  try {
+    return ptr.cast<Utf8>().toDartString();
+  } finally {
+    bindings.kpxc_string_free(ptr);
+  }
 }
 
 String readAndFreeStringOrThrow(Pointer<Char> ptr, String context) {
- final result = readAndFreeString(ptr);
- if (result == null) {
- throw KeePassError.fromLastError(context);
- }
- return result;
+  final result = readAndFreeString(ptr);
+  if (result == null) {
+    throw KeePassError.fromLastError(context);
+  }
+  return result;
 }

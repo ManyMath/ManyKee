@@ -94,8 +94,7 @@ void main() {
           '${Directory.systemTemp.path}/manykee_test_created.kdbx';
       File(reopenPath).writeAsBytesSync(bytes);
       try {
-        final reopened =
-            Database.open(reopenPath, password: 'a-new-password');
+        final reopened = Database.open(reopenPath, password: 'a-new-password');
         try {
           expect(reopened.rootGroup.uuid, root.uuid);
         } finally {
