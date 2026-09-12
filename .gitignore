@@ -7,3 +7,7 @@ pubspec.lock
 
 apps/native/.flutter-plugins-dependencies
 build/
+
+# Web E2E tooling
+node_modules/
+.downloads/
