@@ -1,13 +1,10 @@
 .DS_Store
 .idea
 *.iml
-Cargo.lock
 
 demo.kdbx
 
 #####=== Rust ===#####
-
-Cargo.lock
 
 # Compiled files
 *.o
