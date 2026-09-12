@@ -102,6 +102,6 @@
   ],
   "notes": [
     "Official-created rich-content fixture behavior is not observed in starter evidence.",
-    "Broad official corpus generation and required official-tool execution remain deferred to and later parity gates."
+    "Broad official corpus generation and required official-tool execution remain deferred to the official fixture corpus and later parity gates."
   ]
 }

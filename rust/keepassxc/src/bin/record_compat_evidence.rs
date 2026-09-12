@@ -461,7 +461,7 @@ fn build_manifest_section(project_root: &Path) -> Result<ManifestSection, DynErr
                     "broad_official_fixture_corpus",
                     *lane,
                     SupportStatus::NotObserved,
-                    "Broad official fixture generation is deferred to .",
+                    "Broad official fixture generation is deferred to the official fixture corpus gate.",
                 )
             })
             .collect(),
@@ -585,7 +585,7 @@ fn not_observed_official_record(
         non_goals: vec!["byte_identical_output".to_string()],
         notes: vec![
             "Official-created rich-content fixture behavior is not observed in starter evidence.".to_string(),
-            "Broad official corpus generation and required official-tool execution remain deferred to and later parity gates.".to_string(),
+            "Broad official corpus generation and required official-tool execution remain deferred to the official fixture corpus and later parity gates.".to_string(),
         ],
     })
 }

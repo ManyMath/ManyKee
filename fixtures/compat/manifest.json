@@ -906,7 +906,7 @@
       "fixture_id": "keepassxc-attachments",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -915,7 +915,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -924,7 +924,7 @@
       "fixture_id": "starter-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        "Broad official fixture generation is deferred to ."
+        "Broad official fixture generation is deferred to the official fixture corpus gate."
       ]
     },
     {
@@ -933,7 +933,7 @@
       "fixture_id": "starter-richcontent",
       "lane": "keepass_xc",
       "notes": [
-        "Broad official fixture generation is deferred to ."
+        "Broad official fixture generation is deferred to the official fixture corpus gate."
       ]
     },
     {
@@ -942,7 +942,7 @@
       "fixture_id": "starter-richcontent",
       "lane": "many_kee_read",
       "notes": [
-        "Broad official fixture generation is deferred to ."
+        "Broad official fixture generation is deferred to the official fixture corpus gate."
       ]
     },
     {
@@ -951,7 +951,7 @@
       "fixture_id": "starter-richcontent",
       "lane": "many_kee_write",
       "notes": [
-        "Broad official fixture generation is deferred to ."
+        "Broad official fixture generation is deferred to the official fixture corpus gate."
       ]
     },
     {
@@ -987,7 +987,7 @@
       "fixture_id": "keepassxc-keyfile-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -996,7 +996,7 @@
       "fixture_id": "keepassxc-password-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1005,7 +1005,7 @@
       "fixture_id": "keepassxc-password-keyfile",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1068,7 +1068,7 @@
       "fixture_id": "keepassxc-keyfile-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1077,7 +1077,7 @@
       "fixture_id": "keepassxc-password-keyfile",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1086,7 +1086,7 @@
       "fixture_id": "keepassxc-password-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1095,7 +1095,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1104,7 +1104,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1113,7 +1113,7 @@
       "fixture_id": "keepassxc-history-recycle-deleted",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1122,7 +1122,7 @@
       "fixture_id": "keepassxc-attachments",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1131,7 +1131,7 @@
       "fixture_id": "keepassxc-history-recycle-deleted",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1140,7 +1140,7 @@
       "fixture_id": "keepassxc-password-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1149,7 +1149,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1158,7 +1158,7 @@
       "fixture_id": "keepassxc-history-recycle-deleted",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1167,7 +1167,7 @@
       "fixture_id": "keepassxc-keyfile-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1176,7 +1176,7 @@
       "fixture_id": "keepassxc-password-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1185,7 +1185,7 @@
       "fixture_id": "keepassxc-password-keyfile",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1275,7 +1275,7 @@
       "fixture_id": "keepassxc-keyfile-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1284,7 +1284,7 @@
       "fixture_id": "keepassxc-password-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1293,7 +1293,7 @@
       "fixture_id": "keepassxc-password-keyfile",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1302,7 +1302,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1311,7 +1311,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1320,7 +1320,7 @@
       "fixture_id": "keepassxc-attachments",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1329,7 +1329,7 @@
       "fixture_id": "keepassxc-history-recycle-deleted",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1338,7 +1338,7 @@
       "fixture_id": "keepassxc-password-basic",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1347,7 +1347,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1356,7 +1356,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {
@@ -1365,7 +1365,7 @@
       "fixture_id": "keepassxc-richcontent",
       "lane": "keepass_optional",
       "notes": [
-        " records KeePassXC source evidence only; optional KeePass remains deferred."
+        "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred."
       ]
     },
     {

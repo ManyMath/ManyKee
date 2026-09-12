@@ -1257,7 +1257,7 @@ fn build_manifest_section(project_root: &Path) -> Result<ManifestSection, DynErr
             keepass_optional_not_observed_claims(
                 definition.fixture_id,
                 definition.feature_ids,
-                " records KeePassXC source evidence only; optional KeePass remains deferred.",
+                "The official fixture corpus records KeePassXC source evidence only; optional KeePass remains deferred.",
             )
         })
         .chain(manual_definitions.iter().flat_map(|definition| {
