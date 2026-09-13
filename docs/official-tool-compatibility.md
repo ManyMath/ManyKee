@@ -90,7 +90,7 @@ Scope boundaries:
 
 ## Fidelity and merge
 
-KDBX3 save-version, TOTP recognition, and DeletedObject export gaps are closed against the KeePassXC CLI fixture corpus. Deterministic merge-semantics coverage lives at the Rust core layer. Closed gaps are represented by supported ManyKee-write evidence and matching semantic snapshots.
+Save-version headers for databases opened from KDBX 3 files, TOTP recognition, and DeletedObject export gaps are closed against the KeePassXC CLI fixture corpus (such databases are written back as KDBX 4; KDBX 3 output stays out of scope). Deterministic merge-semantics coverage lives at the Rust core layer. Closed gaps are represented by supported ManyKee-write evidence and matching semantic snapshots.
 
 Merge semantics suite:
 
@@ -182,7 +182,7 @@ The following are out of scope and not exercised by smoke tests, the Rust gate, 
 - Search-syntax parity with KeePassXC (field-scoped queries, regex and modifier flags, full-text grammar).
 - KDBX 3.x read or write support.
 - KeePass 1 `.kdb` read or write support.
-- Public publishing to pub.dev / npm / Flutter-plugin / extension-store registries. Source, local testing, and compatibility evidence only.
+- Registry publishing as part of this gate. Package releases to pub.dev happen separately; the gate covers source, local testing, and compatibility evidence only, and never npm, Flutter-plugin, or extension-store publishing.
 
 These are load-bearing scope decisions. Do not add smoke coverage, evidence lanes, or matrix rows for them.
 
