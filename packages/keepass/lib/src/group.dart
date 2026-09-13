@@ -44,7 +44,7 @@ class Group {
     try {
       final count = bindings.kpxc_group_entries_count(_db.handle, uuidPtr);
       if (count < 0) {
-        throw KeePassError.fromLastError('Failed to get entry count');
+        throw KeePassError.fromLastError('Failed to get entry count', count);
       }
       return count;
     } finally {
@@ -57,7 +57,7 @@ class Group {
     try {
       final count = bindings.kpxc_group_groups_count(_db.handle, uuidPtr);
       if (count < 0) {
-        throw KeePassError.fromLastError('Failed to get group count');
+        throw KeePassError.fromLastError('Failed to get group count', count);
       }
       return count;
     } finally {

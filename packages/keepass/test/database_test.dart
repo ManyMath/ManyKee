@@ -81,6 +81,40 @@ void main() {
     }
   });
 
+  test('KeePassError carries the native status code, not a blanket -1', () {
+    const missingUuid = '00000000-0000-0000-0000-00000000beef';
+    final db = Database.open(fixturePath, password: 'demopass');
+    try {
+      // Status-returning call (checkResult path).
+      expect(
+        () => Group(db, missingUuid).name = 'renamed',
+        throwsA(isA<KeePassError>()
+            .having((e) => e.code, 'code', KeePassError.notFound)
+            .having((e) => e.message, 'message',
+                startsWith('Failed to set group name: Group not found'))),
+      );
+      // Count call that returns a negative status instead of a count.
+      expect(
+        () => Group(db, missingUuid).entryCount,
+        throwsA(isA<KeePassError>()
+            .having((e) => e.code, 'code', KeePassError.notFound)),
+      );
+      expect(
+        () => Group(db, missingUuid).groupCount,
+        throwsA(isA<KeePassError>()
+            .having((e) => e.code, 'code', KeePassError.notFound)),
+      );
+      // Null-pointer calls have no status to report.
+      expect(
+        () => Group(db, missingUuid).name,
+        throwsA(isA<KeePassError>()
+            .having((e) => e.code, 'code', KeePassError.unknownCode)),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   test('Database.create returns a fresh, empty, saveable database', () {
     final db = Database.create();
     try {
