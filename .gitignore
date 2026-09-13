@@ -11,3 +11,10 @@ build/
 # Web E2E tooling
 node_modules/
 .downloads/
+
+# Native libraries the Dart test suites stage next to their runner's CWD
+# (see the _stageNativeLibrary/_prepareNativeLibrary test helpers). The
+# trailing wildcard also covers the temporary copy they rename into place.
+packages/**/libkeepassxc_ffi.so*
+packages/**/libkeepassxc_ffi.dylib*
+packages/**/keepassxc_ffi.dll*
