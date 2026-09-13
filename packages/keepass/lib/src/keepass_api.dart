@@ -31,6 +31,14 @@ abstract class KeePassApi {
   });
 
   /// Open a KDBX database with password + pre-computed challenge-response.
+  ///
+  /// Only the web implementation can consume a response computed outside
+  /// the core (e.g. by WebAuthn/WebUSB in the browser). The native
+  /// implementation throws [UnsupportedError]: its FFI core performs the
+  /// challenge itself against a hardware YubiKey slot or a stored
+  /// local-challenge secret, so native callers must use
+  /// `KeePassNativeApi.openFromPathWithYubiKey` or
+  /// `KeePassNativeApi.openFromPathWithLocalChallenge` instead.
   Future<int> openDatabaseWithChallengeResponse(
     List<int> dbBytes, {
     required String password,

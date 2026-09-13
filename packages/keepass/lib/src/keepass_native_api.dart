@@ -83,27 +83,22 @@ class KeePassNativeApi implements KeePassApi {
     }
   }
 
+  /// Not supported natively: the FFI crate only exposes hardware YubiKey
+  /// slots and stored local-challenge secrets, neither of which can consume
+  /// a pre-computed response. Always throws [UnsupportedError]; use
+  /// [openFromPathWithYubiKey] or [openFromPathWithLocalChallenge] instead.
   @override
   Future<int> openDatabaseWithChallengeResponse(
     List<int> dbBytes, {
     required String password,
     required String challengeResponseHex,
   }) async {
-    final tempFile = await _writeTempFile(dbBytes);
-    try {
-      return await _openFromWorker(
-        'openFromPathWithYubiKey',
-        <String, Object?>{
-          'filePath': tempFile.path,
-          'password': password,
-          'slot': '2',
-        },
-      );
-    } finally {
-      try {
-        await tempFile.parent.delete(recursive: true);
-      } catch (_) {}
-    }
+    throw UnsupportedError(
+      'KeePassNativeApi cannot unlock with a pre-computed challenge-response: '
+      'the native core only supports hardware YubiKey slots '
+      '(openFromPathWithYubiKey) and stored local-challenge secrets '
+      '(openFromPathWithLocalChallenge).',
+    );
   }
 
   @override

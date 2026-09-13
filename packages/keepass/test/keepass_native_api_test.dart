@@ -81,6 +81,32 @@ void main() {
     }
   });
 
+  test('openDatabaseWithChallengeResponse is rejected as unsupported natively',
+      () async {
+    final api = KeePassNativeApi();
+    final bytes = await File(passwordFixturePath).readAsBytes();
+
+    try {
+      await expectLater(
+        api.openDatabaseWithChallengeResponse(
+          bytes,
+          password: 'demopass',
+          challengeResponseHex: '00',
+        ),
+        throwsA(isA<UnsupportedError>().having(
+          (error) => error.message,
+          'message',
+          allOf(
+            contains('openFromPathWithYubiKey'),
+            contains('openFromPathWithLocalChallenge'),
+          ),
+        )),
+      );
+    } finally {
+      await api.dispose();
+    }
+  });
+
   test('openFromPathWithKeyFile still works after isolate offload', () async {
     final api = KeePassNativeApi();
     final handle = await api.openFromPathWithKeyFile(
