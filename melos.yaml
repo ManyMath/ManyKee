@@ -1,6 +1,7 @@
 name: manykee
 packages:
   - packages/*
+  - packages/*/example
   - apps/*
 
 scripts:
@@ -12,11 +13,26 @@ scripts:
     run: dart analyze --fatal-infos
     exec:
       concurrency: 1
-  test:
+  test:dart:
     run: dart test
+    description: Run pure-Dart package tests (requires a built libkeepassxc_ffi)
     exec:
       concurrency: 1
       failFast: true
+    packageFilters:
+      flutter: false
+      dirExists:
+        - test
+  test:flutter:
+    run: flutter test
+    description: Run Flutter package and app unit tests
+    exec:
+      concurrency: 1
+      failFast: true
+    packageFilters:
+      flutter: true
+      dirExists:
+        - test
   build:extension:
     run: bash $MELOS_ROOT_PATH/scripts/build_extension.sh
     description: Build Chrome MV3 extension from Flutter web output
