@@ -1,5 +1,11 @@
 # Native File Bytes Unlock Spike
 
+Status: open. The native unlock path still passes the picked file's path to
+the worker (`apps/ManyKee/lib/src/unlock/unlock_page.dart`,
+`native_vault_state.dart`), and the security-scoped bookmark half of this
+plan has landed; the byte-based open steps below have not. Keep this doc
+until a decision closes it.
+
 ## Question
 
 Can ManyKee open files selected by the native file picker from in-memory bytes,
