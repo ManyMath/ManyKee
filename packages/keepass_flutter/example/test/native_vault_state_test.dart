@@ -8,6 +8,9 @@ void main() {
       () async {
     final stagedLibrary = await _stageNativeLibrary();
     final sourcePath = _firstExisting(<String>[
+      // From example/ (where `flutter test` runs), then from keepass_flutter/.
+      '../../../rust/keepass-rs/tests/resources/test_db_kdbx4_with_password_argon2id.kdbx',
+      '../../../rust/keepass-rs/tests/resources/test_db_with_password.kdbx',
       '../../rust/keepass-rs/tests/resources/test_db_kdbx4_with_password_argon2id.kdbx',
       '../../rust/keepass-rs/tests/resources/test_db_with_password.kdbx',
     ]);
@@ -60,22 +63,53 @@ void main() {
     await reopened.lock();
     reopened.dispose();
     await tempDir.delete(recursive: true);
-    if (await stagedLibrary.exists()) {
+    if (stagedLibrary != null && await stagedLibrary.exists()) {
       await stagedLibrary.delete();
     }
   });
 }
 
-Future<File> _stageNativeLibrary() async {
+/// Copies `libkeepassxc_ffi.so` into the test runner's CWD, where
+/// `native_library.dart` looks for it in debug runs; the cargo output lives
+/// too far up the tree (`<monorepo>/rust/target`) for the loader to probe it
+/// from `example/`. Returns the copy this run made and must delete, or null
+/// when one was already present.
+Future<File?> _stageNativeLibrary() async {
   final sourcePath = _firstExisting(<String>[
+    // Fresh cargo output first (from example/, then from keepass_flutter/).
+    '../../../rust/target/debug/libkeepassxc_ffi.so',
+    '../../../rust/target/release/libkeepassxc_ffi.so',
+    '../../rust/target/debug/libkeepassxc_ffi.so',
+    '../../rust/target/release/libkeepassxc_ffi.so',
+    // Last resort: a copy a sibling package's tests staged for themselves.
+    '../../keepass_cli/libkeepassxc_ffi.so',
     '../keepass_cli/libkeepassxc_ffi.so',
-    '../../packages/keepass_cli/libkeepassxc_ffi.so',
   ]);
   final staged = File('${Directory.current.path}/libkeepassxc_ffi.so');
-  if (!await staged.exists()) {
-    await File(sourcePath).copy(staged.path);
+  if (await staged.exists()) {
+    return null;
   }
+  await _copyAtomically(File(sourcePath), staged);
   return staged;
+}
+
+/// Copies [source] to a uniquely named temporary file beside [destination]
+/// and renames it into place, so a concurrent test run that loads
+/// [destination] never sees a half-written library (`dlopen` accepts one and
+/// the process then dies with SIGBUS).
+Future<void> _copyAtomically(File source, File destination) async {
+  final temp = File(
+    '${destination.path}.$pid.${DateTime.now().microsecondsSinceEpoch}.tmp',
+  );
+  try {
+    await source.copy(temp.path);
+    await temp.rename(destination.path);
+  } catch (_) {
+    if (await temp.exists()) {
+      await temp.delete();
+    }
+    rethrow;
+  }
 }
 
 String _firstExisting(List<String> candidates) {

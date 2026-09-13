@@ -11,14 +11,14 @@ const String _fixtureSubdir = 'fixtures/compat/official/keepassxc/2.7.12';
 const String _requireEnvVar = 'MANYKEE_REQUIRE_OFFICIAL_TOOLS';
 
 void main() {
-  File? stagedLibrary;
+  late _NativeLibrarySetup nativeLibrary;
 
   setUpAll(() async {
-    stagedLibrary = await _tryStageNativeLibrary();
+    nativeLibrary = await _prepareNativeLibrary();
   });
 
   tearDownAll(() async {
-    final staged = stagedLibrary;
+    final staged = nativeLibrary.staged;
     if (staged != null && await staged.exists()) {
       await staged.delete();
     }
@@ -27,25 +27,25 @@ void main() {
   test('keepassxc-password-basic.kdbx unlocks via Database.open', () async {
     await _runSmoke(
       fixtureName: 'keepassxc-password-basic.kdbx',
-      stagedLibrary: stagedLibrary,
+      nativeLibrary: nativeLibrary,
     );
   });
 
   test('keepassxc-richcontent.kdbx unlocks via Database.open', () async {
     await _runSmoke(
       fixtureName: 'keepassxc-richcontent.kdbx',
-      stagedLibrary: stagedLibrary,
+      nativeLibrary: nativeLibrary,
     );
   });
 }
 
 Future<void> _runSmoke({
   required String fixtureName,
-  required File? stagedLibrary,
+  required _NativeLibrarySetup nativeLibrary,
 }) async {
   final required = Platform.environment[_requireEnvVar] == '1';
 
-  if (stagedLibrary == null) {
+  if (!nativeLibrary.available) {
     const reason = 'skipped: libkeepassxc_ffi.so not built: run '
         '`cargo build --manifest-path rust/Cargo.toml -p keepassxc-ffi`';
     if (required) {
@@ -107,31 +107,75 @@ String? _findOfficialFixture(String name) {
   return null;
 }
 
-/// Stages `libkeepassxc_ffi.so` next to the Dart test runner's CWD so that
-/// `native_library.dart` can load it. Returns the staged file, or null if
-/// no source `.so` was found. Mirrors the pattern in
-/// `packages/keepass_flutter/test/native_vault_state_test.dart::_stageNativeLibrary`.
-Future<File?> _tryStageNativeLibrary() async {
-  final stagedPath = '${Directory.current.path}/libkeepassxc_ffi.so';
-  final staged = File(stagedPath);
-  if (await staged.exists()) {
-    return staged;
-  }
+const String _nativeLibraryFileName = 'libkeepassxc_ffi.so';
 
-  final candidates = <String>[
-    '../keepass_cli/libkeepassxc_ffi.so',
-    '../../packages/keepass_cli/libkeepassxc_ffi.so',
-    '../../rust/target/debug/libkeepassxc_ffi.so',
-    'rust/target/debug/libkeepassxc_ffi.so',
-  ];
+/// Where `cargo build -p keepassxc-ffi` drops its output, relative to this
+/// package directory (`dart test`'s CWD) and to the monorepo root.
+/// `native_library.dart` probes these same locations itself, so when one of
+/// them exists the library needs no staging at all.
+const List<String> _cargoOutputCandidates = <String>[
+  '../../rust/target/debug/$_nativeLibraryFileName',
+  '../../rust/target/release/$_nativeLibraryFileName',
+  'rust/target/debug/$_nativeLibraryFileName',
+  'rust/target/release/$_nativeLibraryFileName',
+];
 
-  for (final candidate in candidates) {
-    final source = File(candidate);
-    if (await source.exists()) {
-      await source.copy(staged.path);
-      return staged;
+/// Last-resort sources: a copy another package's test run staged into its
+/// own directory. Only consulted when no cargo output exists.
+const List<String> _siblingStagedCandidates = <String>[
+  '../keepass_cli/$_nativeLibraryFileName',
+  '../../packages/keepass_cli/$_nativeLibraryFileName',
+];
+
+/// `available` is whether `native_library.dart` can load `libkeepassxc_ffi.so`
+/// from this test's CWD. `staged` is the copy this test run placed in the
+/// CWD and must delete afterwards, or null when nothing was copied (the
+/// loader finds the cargo output directly, a copy was already present, or
+/// no source exists).
+typedef _NativeLibrarySetup = ({bool available, File? staged});
+
+/// Makes `libkeepassxc_ffi.so` loadable by `native_library.dart`, copying it
+/// next to the Dart test runner's CWD only when the loader would not find
+/// the cargo output on its own. Mirrors the helper in
+/// `packages/keepass_cli/test/official_fixture_smoke_test.dart`.
+Future<_NativeLibrarySetup> _prepareNativeLibrary() async {
+  for (final candidate in _cargoOutputCandidates) {
+    if (await File(candidate).exists()) {
+      return (available: true, staged: null);
     }
   }
 
-  return null;
+  final staged = File('${Directory.current.path}/$_nativeLibraryFileName');
+  if (await staged.exists()) {
+    return (available: true, staged: null);
+  }
+
+  for (final candidate in _siblingStagedCandidates) {
+    final source = File(candidate);
+    if (await source.exists()) {
+      await _copyAtomically(source, staged);
+      return (available: true, staged: staged);
+    }
+  }
+
+  return (available: false, staged: null);
+}
+
+/// Copies [source] to a uniquely named temporary file beside [destination]
+/// and renames it into place, so a concurrent test run that loads
+/// [destination] never sees a half-written library (`dlopen` accepts one and
+/// the process then dies with SIGBUS).
+Future<void> _copyAtomically(File source, File destination) async {
+  final temp = File(
+    '${destination.path}.$pid.${DateTime.now().microsecondsSinceEpoch}.tmp',
+  );
+  try {
+    await source.copy(temp.path);
+    await temp.rename(destination.path);
+  } catch (_) {
+    if (await temp.exists()) {
+      await temp.delete();
+    }
+    rethrow;
+  }
 }
