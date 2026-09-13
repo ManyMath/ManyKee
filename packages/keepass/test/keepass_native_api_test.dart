@@ -81,6 +81,58 @@ void main() {
     }
   });
 
+  test('calls after dispose() fail fast with StateError instead of hanging',
+      () async {
+    final api = KeePassNativeApi();
+    await api.init();
+    await api.dispose();
+
+    const timeout = Duration(seconds: 10);
+    await expectLater(
+      api.openFromPath(passwordFixturePath, password: 'demopass').timeout(
+            timeout,
+          ),
+      throwsA(isA<StateError>().having(
+        (error) => error.message,
+        'message',
+        contains('dispose'),
+      )),
+    );
+    // createDatabase reports progress first; that must not surface as
+    // "Cannot add event after closing".
+    await expectLater(
+      api.createDatabase().timeout(timeout),
+      throwsA(isA<StateError>()),
+    );
+    // Disposing again is a no-op.
+    await api.dispose();
+  });
+
+  test('a fresh instance works after another one was disposed', () async {
+    final first = KeePassNativeApi();
+    final firstHandle = await first.openFromPath(
+      passwordFixturePath,
+      password: 'demopass',
+    );
+    await first.closeDatabase(firstHandle);
+    await first.dispose();
+
+    final second = KeePassNativeApi();
+    try {
+      final handle = await second.openFromPath(
+        passwordFixturePath,
+        password: 'demopass',
+      );
+      try {
+        await _expectDatabaseHasContent(second, handle);
+      } finally {
+        await second.closeDatabase(handle);
+      }
+    } finally {
+      await second.dispose();
+    }
+  });
+
   test('openDatabaseWithChallengeResponse is rejected as unsupported natively',
       () async {
     final api = KeePassNativeApi();

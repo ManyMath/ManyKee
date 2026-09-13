@@ -17,6 +17,11 @@ class KeePassNativeApi implements KeePassApi {
       StreamController<int>.broadcast();
   Future<SendPort>? _workerPortFuture;
 
+  /// Replies the UI isolate is still waiting on. Failed en masse when the
+  /// worker exits so no caller hangs on a port nothing will ever answer.
+  final Set<Completer<Object?>> _pendingReplies = <Completer<Object?>>{};
+  bool _disposed = false;
+
   @override
   Stream<int> get progress => _progressController.stream;
 
@@ -27,11 +32,11 @@ class KeePassNativeApi implements KeePassApi {
 
   @override
   Future<int> createDatabase() async {
-    _progressController.add(-1);
+    _reportProgress(-1);
     try {
       return await _invoke('createDatabase') as int;
     } finally {
-      _progressController.add(100);
+      _reportProgress(100);
     }
   }
 
@@ -429,14 +434,31 @@ class KeePassNativeApi implements KeePassApi {
     return _castListOfMaps(result);
   }
 
+  /// Shuts the worker isolate down. The instance is unusable afterwards:
+  /// every further call throws [StateError]. Create a new [KeePassNativeApi]
+  /// to continue.
   @override
   Future<void> dispose() async {
-    if (_workerPortFuture != null) {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    final workerPortFuture = _workerPortFuture;
+    _workerPortFuture = null;
+    if (workerPortFuture != null) {
       try {
-        await _invoke('shutdown');
-      } catch (_) {}
+        await _send(await workerPortFuture, 'shutdown');
+      } catch (_) {
+        // The worker is gone (or never came up), which is all we wanted.
+      }
     }
     await _progressController.close();
+  }
+
+  void _reportProgress(int value) {
+    if (!_progressController.isClosed) {
+      _progressController.add(value);
+    }
   }
 
   Future<File> _writeTempFile(
@@ -453,12 +475,12 @@ class KeePassNativeApi implements KeePassApi {
     String method,
     Map<String, Object?> args,
   ) async {
-    _progressController.add(-1);
+    _reportProgress(-1);
     try {
       final result = await _invoke(method, args);
       return result as int;
     } finally {
-      _progressController.add(100);
+      _reportProgress(100);
     }
   }
 
@@ -466,18 +488,42 @@ class KeePassNativeApi implements KeePassApi {
     String method, [
     Map<String, Object?> args = const <String, Object?>{},
   ]) async {
-    final workerPort = await _workerPort();
+    if (_disposed) {
+      throw StateError(
+        'KeePassNativeApi.$method called after dispose(); '
+        'create a new KeePassNativeApi instead.',
+      );
+    }
+    return _send(await _workerPort(), method, args);
+  }
+
+  /// Sends one request to [workerPort] and waits for its reply. The reply
+  /// is tracked in [_pendingReplies] so a worker exit can fail it instead
+  /// of leaving the caller awaiting forever.
+  Future<dynamic> _send(
+    SendPort workerPort,
+    String method, [
+    Map<String, Object?> args = const <String, Object?>{},
+  ]) async {
     final replyPort = ReceivePort();
-    workerPort.send(<String, Object?>{
-      'method': method,
-      'args': args,
-      'replyPort': replyPort.sendPort,
-    });
+    final reply = Completer<Object?>();
+    _pendingReplies.add(reply);
+    replyPort.first.then(
+      (message) {
+        if (!reply.isCompleted) reply.complete(message);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!reply.isCompleted) reply.completeError(error, stackTrace);
+      },
+    );
 
     try {
-      final response = Map<String, Object?>.from(
-        await replyPort.first as Map,
-      );
+      workerPort.send(<String, Object?>{
+        'method': method,
+        'args': args,
+        'replyPort': replyPort.sendPort,
+      });
+      final response = Map<String, Object?>.from(await reply.future as Map);
       final ok = response['ok'] == true;
       if (!ok) {
         throw KeePassError.fromCode(
@@ -487,18 +533,105 @@ class KeePassNativeApi implements KeePassApi {
       }
       return response['result'];
     } finally {
+      _pendingReplies.remove(reply);
       replyPort.close();
     }
   }
 
   Future<SendPort> _workerPort() {
-    return _workerPortFuture ??= _spawnWorker();
+    final existing = _workerPortFuture;
+    if (existing != null) {
+      return existing;
+    }
+
+    late final Future<SendPort> spawned;
+    spawned = _spawnWorker(
+      onExit: (error) {
+        // Only forget the worker that actually exited: dispose() or a
+        // respawn may already have replaced it.
+        if (identical(_workerPortFuture, spawned)) {
+          _workerPortFuture = null;
+        }
+        _failPendingReplies(error);
+      },
+    );
+    _workerPortFuture = spawned;
+    return spawned;
   }
 
-  Future<SendPort> _spawnWorker() async {
+  void _failPendingReplies(Object error) {
+    final pending = List<Completer<Object?>>.of(_pendingReplies);
+    _pendingReplies.clear();
+    for (final reply in pending) {
+      if (!reply.isCompleted) {
+        reply.completeError(error);
+      }
+    }
+  }
+
+  /// Spawns the worker and resolves to its command port. [onExit] runs once
+  /// when the isolate terminates for any reason (shutdown, uncaught error,
+  /// crash) with the error pending callers should receive.
+  Future<SendPort> _spawnWorker({
+    required void Function(KeePassError error) onExit,
+  }) async {
     final readyPort = ReceivePort();
-    await Isolate.spawn(_nativeWorkerMain, readyPort.sendPort);
-    return await readyPort.first as SendPort;
+    final exitPort = ReceivePort();
+    final errorPort = ReceivePort();
+    void closePorts() {
+      readyPort.close();
+      exitPort.close();
+      errorPort.close();
+    }
+
+    try {
+      await Isolate.spawn<SendPort>(
+        _nativeWorkerMain,
+        readyPort.sendPort,
+        onExit: exitPort.sendPort,
+        onError: errorPort.sendPort,
+        debugName: 'KeePassNativeApi worker',
+      );
+    } catch (error) {
+      closePorts();
+      // Forget this worker so the next call retries the spawn instead of
+      // re-awaiting the same failed future.
+      onExit(KeePassError.fromCode(
+        'NATIVE_WORKER',
+        'Failed to spawn native worker isolate: $error',
+      ));
+      rethrow;
+    }
+
+    final ready = Completer<SendPort>();
+    Object? uncaughtError;
+    // Uncaught errors arrive as a two-element [error, stackTrace] list of
+    // strings, shortly before the exit notification.
+    errorPort.listen((message) {
+      if (message is List && message.isNotEmpty) {
+        uncaughtError = message.first;
+      }
+    });
+    readyPort.listen((message) {
+      if (message is SendPort && !ready.isCompleted) {
+        ready.complete(message);
+      }
+    });
+    exitPort.listen((_) {
+      closePorts();
+      final error = KeePassError.fromCode(
+        'NATIVE_WORKER',
+        uncaughtError == null
+            ? 'Native worker isolate exited before replying'
+            : 'Native worker isolate exited with uncaught error: '
+                '$uncaughtError',
+      );
+      if (!ready.isCompleted) {
+        ready.completeError(error);
+      }
+      onExit(error);
+    });
+    return ready.future;
   }
 }
 
@@ -511,18 +644,32 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
 
   try {
     await for (final rawMessage in receivePort) {
+      // A message without a reply port cannot be answered, so it is dropped
+      // rather than allowed to take the worker (and every other caller's
+      // pending reply) down with it.
       if (rawMessage is! Map) {
         continue;
       }
+      final replyPort = rawMessage['replyPort'];
+      if (replyPort is! SendPort) {
+        continue;
+      }
 
-      final message = Map<String, Object?>.from(rawMessage);
-      final replyPort = message['replyPort'] as SendPort;
-      final method = message['method'] as String;
-      final args = Map<String, Object?>.from(
-        (message['args'] as Map?) ?? const <String, Object?>{},
-      );
-
+      var shutdownRequested = false;
       try {
+        final message = Map<String, Object?>.from(rawMessage);
+        final method = message['method'];
+        if (method is! String) {
+          throw ArgumentError.value(
+            method,
+            'method',
+            'Native worker request is missing a method name',
+          );
+        }
+        final args = Map<String, Object?>.from(
+          (message['args'] as Map?) ?? const <String, Object?>{},
+        );
+
         final result = switch (method) {
           'createDatabase' => _workerCreateDatabase(databases, nextHandle++),
           'openFromPath' => _workerOpenFromPath(databases, nextHandle++, args),
@@ -561,16 +708,17 @@ Future<void> _nativeWorkerMain(SendPort readyPort) async {
         };
 
         replyPort.send(<String, Object?>{'ok': true, 'result': result});
-
-        if (method == 'shutdown') {
-          receivePort.close();
-          break;
-        }
+        shutdownRequested = method == 'shutdown';
       } on KeePassError catch (error) {
         replyPort.send(<String, Object?>{'ok': false, 'error': error.message});
       } catch (error) {
         replyPort
             .send(<String, Object?>{'ok': false, 'error': error.toString()});
+      }
+
+      if (shutdownRequested) {
+        receivePort.close();
+        break;
       }
     }
   } finally {
