@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:keepass/keepass.dart';
+import 'package:keepass/src/error.dart' show readLastNativeErrorMessage;
 
 void main() {
   // Fixture database path -- KDBX4 with password "demopass" (Argon2id)
@@ -112,6 +113,20 @@ void main() {
       );
     } finally {
       db.close();
+    }
+  });
+
+  test('listYubiKeys never reports a failed enumeration as "no keys"', () {
+    // Enumeration can only be forced to fail natively, so this pins the
+    // contract on whatever hardware is present: a returned list (empty or
+    // not) means no native error is pending; a failure must throw.
+    try {
+      final keys = Database.listYubiKeys();
+      expect(keys, isA<List<Map<String, dynamic>>>());
+      expect(readLastNativeErrorMessage(), isNull,
+          reason: 'listYubiKeys returned $keys with a native error pending');
+    } on KeePassError catch (error) {
+      expect(error.message, startsWith('Failed to enumerate YubiKeys'));
     }
   });
 

@@ -450,10 +450,16 @@ class Database implements Finalizable {
     }
   }
 
+  /// Enumerates connected YubiKeys. The native call clears the last error
+  /// first and returns a JSON array (empty when none are attached), so a
+  /// null result with an error message set means enumeration itself
+  /// failed and is thrown rather than reported as "no keys".
   static List<Map<String, dynamic>> listYubiKeys() {
     final jsonPtr = bindings.kpxc_yubikey_list();
     if (jsonPtr == nullptr) {
-      // No YubiKeys found or enumeration not supported, return empty.
+      if (readLastNativeErrorMessage() != null) {
+        throw KeePassError.fromLastError('Failed to enumerate YubiKeys');
+      }
       return [];
     }
     final jsonStr = readAndFreeString(jsonPtr);
