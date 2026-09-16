@@ -1,0 +1,7 @@
+# Uses the analyzer's default rule set, like the sibling keepass and
+# keepass_cli packages (none of them depends on flutter_lints).
+analyzer:
+  exclude:
+    # Vendored cargokit build tooling and its sample apps. They are not part
+    # of this plugin's Dart surface and do not resolve inside this package.
+    - cargokit/**
