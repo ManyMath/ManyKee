@@ -10,7 +10,8 @@ on top of a prebuilt native library (`libkeepassxc_ffi.{so,dylib,dll}`).
 
 This package neither includes a prebuilt native library nor builds one
 during `pub get`. You must build `libkeepassxc_ffi` yourself from
-the ManyKee monorepo and place it on the dynamic library search path before
+the ManyKee monorepo and place it where the package looks for it (see
+[Building the native library](#building-the-native-library)) before
 `Database.open` will succeed.
 
 If you are building a Flutter app, depend on
@@ -67,16 +68,35 @@ The resulting artifact lives at:
 - macOS:   `rust/target/release/libkeepassxc_ffi.dylib`
 - Windows: `rust/target/release/keepassxc_ffi.dll`
 
-Place it on the dynamic library search path so the Dart process can find it:
+The package does not consult the system library search path in release
+builds. It tries these locations in order, first for
+`libkeepass_flutter_native` and then for `libkeepassxc_ffi` (with the
+platform's `.so`, `.dylib` or `.dll` naming):
 
-- Next to your compiled executable (`Platform.resolvedExecutable`'s directory
-  or its `lib/` subdirectory), or
-- In the current working directory (or its `lib/` subdirectory), or
-- On `LD_LIBRARY_PATH` (Linux), `DYLD_LIBRARY_PATH` (macOS), or `PATH`
-  (Windows).
+1. `<exe dir>/<library>`, where `<exe dir>` is the directory of
+   `Platform.resolvedExecutable`.
+2. `<exe dir>/lib/<library>`.
 
-If loading fails the package throws an `ArgumentError` listing every path it
-tried.
+Debug/JIT runs only (`dart run`, `dart test`, `flutter run --debug`), never
+release/AOT builds (`dart compile exe`, `flutter build`):
+
+3. The bare file name, resolved by the platform loader's own rules. This is
+   the only step where `LD_LIBRARY_PATH` (Linux), `DYLD_LIBRARY_PATH` (macOS)
+   or `PATH` (Windows) apply.
+4. `<cwd>/<library>`, then `<cwd>/lib/<library>`.
+5. Cargo output directories: `<cwd>/rust/target/<profile>`,
+   `<cwd>/../../rust/target/<profile>` and `<cwd>/target/<profile>`, for
+   `debug` and then `release`. A local `cargo build` is therefore found when
+   running from the monorepo root, from a `packages/<name>` directory, or
+   from `rust/`.
+
+On macOS and iOS the package finally falls back to symbols already linked
+into the running process (`DynamicLibrary.process()`), which is how
+`keepass_flutter` ships the library there.
+
+A release build of a pure Dart app must therefore ship the library next to
+its executable or in that directory's `lib/` subdirectory. If loading fails
+the package throws an `ArgumentError` listing every path it tried.
 
 ### Roadmap: Dart Native Assets
 
@@ -85,7 +105,7 @@ When Dart's
 graduates from experimental, this package intends to adopt
 `hook/build.dart` so that `dart pub add keepass` will compile the Rust crate
 during `pub get` for pure Dart consumers. Until then, the manual build flow
-below is the only option for non-Flutter use.
+above is the only option for non-Flutter use.
 
 ## Reference apps
 
@@ -98,14 +118,41 @@ The ManyKee monorepo ships several examples:
 
 ## API
 
-- `Database.open`, `Database.openWithKeyFile`, `Database.openWithYubiKey`
-- `Database.save`, `Database.saveWithKeyFile`, `Database.saveBytes`
-- `Database.rootGroup`, `Database.merge`, `Database.close`
-- `Group`: `name`, `entryAt`, `groupAt`, `entries`, `groups`, counts,
-  `createEntry`, `createGroup`, `move`
-- `Entry`: `getField`, `setField`, `uuid`
+Synchronous, handle-owning classes:
+
+- `Database`
+  - Create/open: `Database.create`, `Database.open`,
+    `Database.openWithKeyFile`, `Database.openWithYubiKey`,
+    `Database.openWithKeyFileAndYubiKey`, `Database.openWithLocalChallenge`,
+    `Database.openWithKeyFileAndLocalChallenge`
+  - Save: `save`, `saveWithKeyFile`, `saveWithYubiKey`,
+    `saveWithKeyFileAndYubiKey`, `saveWithLocalChallenge`,
+    `saveWithKeyFileAndLocalChallenge`, and `saveBytes` (returns the
+    encrypted bytes for any of those key combinations)
+  - `rootGroup`, `merge`, `close`, `Database.listYubiKeys`
+- `Group`: `uuid`, `name` (get/set), `entryCount`, `groupCount`, `entryAt`,
+  `groupAt`, `entries`, `groups`, `createEntry`, `createGroup`, `move`,
+  `delete`
+- `Entry`: `uuid`, `getField`, `setField`, `title`/`userName`/`password`/
+  `url`/`notes`, `readInfo`, `readFields`, `getTotpCode`, `move`, `delete`
 - `MergeResult`: structured merge summary
-- `KeePassError`: thrown for native failures
+- `KeePassError`: thrown for native failures; `code` is the native status
+  (e.g. `KeePassError.notFound`, `KeePassError.yubiKeyError`) or
+  `KeePassError.unknownCode` when the failing call returns no status
+
+Asynchronous, integer-handle API for UI code:
+
+- `KeePassApi`: the platform-agnostic interface (`keepass_web`'s
+  `KeePassWebApi` has the same shape)
+- `KeePassNativeApi`: the `dart:ffi` implementation. Every native call runs
+  on a dedicated worker isolate, so KDF work never blocks the caller. Beyond
+  `KeePassApi` it adds path-based openers (`openFromPath`,
+  `openFromPathWithKeyFile`, `openFromPathWithYubiKey`,
+  `openFromPathWithKeyFileAndYubiKey`, `openFromPathWithLocalChallenge`,
+  `openFromPathWithKeyFileAndLocalChallenge`) and `listYubiKeys`. Its
+  `openDatabaseWithChallengeResponse` throws `UnsupportedError`; use the
+  YubiKey or local-challenge openers instead. After `dispose()` every call
+  throws `StateError`.
 
 ## License
 
