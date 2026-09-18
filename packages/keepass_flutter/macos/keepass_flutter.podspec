@@ -2,7 +2,7 @@ Pod::Spec.new do |s|
   s.name             = 'keepass_flutter'
   s.version          = '0.1.0'
   s.summary          = 'Flutter plugin for KeePass KDBX support'
-  s.homepage         = 'https://github.com/AnyManyKey/manykee'
+  s.homepage         = 'https://github.com/ManyMath/ManyKee/tree/main/packages/keepass_flutter'
   s.license          = { :type => 'MIT' }
   s.author           = { 'ManyKee' => 'dev@manykee.com' }
   s.source           = { :path => '.' }
