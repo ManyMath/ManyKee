@@ -13,6 +13,7 @@ use crate::{
     db::{Attachment, Database, DatabaseFormatError, DatabaseOpenError, Value},
     format::{
         hmac_block_stream,
+        io::read_le_u32_exact,
         kdbx4::{
             KDBX4OuterHeader, HEADER_COMMENT, HEADER_COMPRESSION_ID, HEADER_ENCRYPTION_IV, HEADER_END,
             HEADER_KDF_PARAMS, HEADER_MASTER_SEED, HEADER_OUTER_ENCRYPTION_ID, HEADER_PUBLIC_CUSTOM_DATA,
@@ -228,7 +229,13 @@ fn parse_outer_header(data: &[u8]) -> Result<(KDBX4OuterHeader, usize), Kdbx4Out
             }
 
             HEADER_COMPRESSION_ID => {
-                compression_config = Some(CompressionConfig::try_from(LittleEndian::read_u32(entry_buffer))?);
+                let compression_id =
+                    read_le_u32_exact(entry_buffer).ok_or(Kdbx4OuterHeaderError::InvalidEntryLength {
+                        entry_type: *entry_type,
+                        expected: 4,
+                        actual: entry_buffer.len(),
+                    })?;
+                compression_config = Some(CompressionConfig::try_from(compression_id)?);
             }
 
             HEADER_MASTER_SEED => master_seed = Some(entry_buffer.to_vec()),
@@ -306,6 +313,13 @@ pub enum Kdbx4OuterHeaderError {
     #[error("Invalid outer header entry: {0}")]
     InvalidEntry(u8),
 
+    #[error("Outer header entry {entry_type} has length {actual}, expected {expected}")]
+    InvalidEntryLength {
+        entry_type: u8,
+        expected: usize,
+        actual: usize,
+    },
+
     #[error("Outer header incomplete - missing {0}")]
     Incomplete(&'static str),
 }
@@ -337,7 +351,13 @@ fn parse_inner_header(
             INNER_HEADER_END => break,
 
             INNER_HEADER_RANDOM_STREAM_ID => {
-                inner_random_stream = Some(InnerCipherConfig::try_from(LittleEndian::read_u32(entry_buffer))?);
+                let stream_id =
+                    read_le_u32_exact(entry_buffer).ok_or(Kdbx4InnerHeaderError::InvalidEntryLength {
+                        entry_type,
+                        expected: 4,
+                        actual: entry_buffer.len(),
+                    })?;
+                inner_random_stream = Some(InnerCipherConfig::try_from(stream_id)?);
             }
 
             INNER_HEADER_RANDOM_STREAM_KEY => {
@@ -383,6 +403,13 @@ pub enum Kdbx4InnerHeaderError {
     #[error("Invalid inner header entry: {0}")]
     InvalidEntry(u8),
 
+    #[error("Inner header entry {entry_type} has length {actual}, expected {expected}")]
+    InvalidEntryLength {
+        entry_type: u8,
+        expected: usize,
+        actual: usize,
+    },
+
     #[error("Inner header incomplete - missing {0}")]
     Incomplete(&'static str),
 
@@ -422,6 +449,31 @@ mod inner_header_negative {
             Err(Kdbx4InnerHeaderError::UnexpectedEof) => {}
             Err(other) => panic!("expected UnexpectedEof, got {:?}", other),
             Ok(_) => panic!("3-byte buffer must not parse as a valid inner header"),
+        }
+    }
+
+    #[test]
+    fn short_random_stream_id_entry_is_an_error_not_a_panic() {
+        // The stream ID is a u32, but the entry length is read from the
+        // (decrypted, still untrusted) payload. Declaring 1..=3 bytes used to
+        // make `LittleEndian::read_u32` panic.
+        for len in 1..4u32 {
+            let mut buf: Vec<u8> = Vec::new();
+            buf.push(INNER_HEADER_RANDOM_STREAM_ID);
+            buf.extend_from_slice(&len.to_le_bytes());
+            buf.extend(std::iter::repeat(0x02).take(len as usize));
+            buf.push(INNER_HEADER_END);
+            buf.extend_from_slice(&0u32.to_le_bytes());
+
+            match parse_inner_header(&buf) {
+                Err(Kdbx4InnerHeaderError::InvalidEntryLength {
+                    entry_type: INNER_HEADER_RANDOM_STREAM_ID,
+                    expected: 4,
+                    actual,
+                }) => assert_eq!(actual, len as usize),
+                Err(other) => panic!("expected InvalidEntryLength, got {:?}", other),
+                Ok(_) => panic!("{}-byte stream id entry must not parse", len),
+            }
         }
     }
 

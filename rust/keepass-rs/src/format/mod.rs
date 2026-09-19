@@ -11,7 +11,6 @@ pub(crate) mod sha256_block_stream;
 pub(crate) mod variant_dictionary;
 pub(crate) mod xml_db;
 
-#[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
 mod io;
 
 #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]

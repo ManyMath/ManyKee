@@ -481,4 +481,99 @@ mod file_read_tests {
 
         Ok(())
     }
+
+    /// Size of the KDBX signature + version header that precedes the outer
+    /// header entries in both KDBX3 and KDBX4 files.
+    const VERSION_HEADER_SIZE: usize = 12;
+
+    /// Returns the offset of the type byte of the first outer header entry
+    /// with type `entry_type`. `len_width` is the width of the entry length
+    /// field: 2 bytes for KDBX3, 4 bytes for KDBX4.
+    fn find_outer_header_entry(data: &[u8], len_width: usize, entry_type: u8) -> usize {
+        let mut pos = VERSION_HEADER_SIZE;
+        loop {
+            let ty = data[pos];
+            let len_bytes = &data[pos + 1..pos + 1 + len_width];
+            let len = len_bytes
+                .iter()
+                .rev()
+                .fold(0usize, |acc, b| (acc << 8) | *b as usize);
+            if ty == entry_type {
+                return pos;
+            }
+            assert_ne!(ty, 0, "outer header entry type {} not found", entry_type);
+            pos += 1 + len_width + len;
+        }
+    }
+
+    /// Rewrites the length field of the outer header entry at `entry_pos` to
+    /// `new_len` so that a fixed-width field is shorter than its type.
+    fn shrink_outer_header_entry(data: &[u8], len_width: usize, entry_pos: usize, new_len: usize) -> Vec<u8> {
+        let mut mutated = data.to_vec();
+        for (i, byte) in mutated[entry_pos + 1..entry_pos + 1 + len_width]
+            .iter_mut()
+            .enumerate()
+        {
+            *byte = ((new_len >> (8 * i)) & 0xff) as u8;
+        }
+        mutated
+    }
+
+    fn assert_short_outer_header_field_is_an_error(
+        fixture: &str,
+        len_width: usize,
+        entry_type: u8,
+        field_width: usize,
+    ) {
+        use std::io::Read;
+        let mut data = Vec::new();
+        File::open(Path::new(fixture))
+            .unwrap()
+            .read_to_end(&mut data)
+            .unwrap();
+
+        let entry_pos = find_outer_header_entry(&data, len_width, entry_type);
+
+        for new_len in 1..field_width {
+            let mutated = shrink_outer_header_entry(&data, len_width, entry_pos, new_len);
+            // Must return an error rather than panic inside `byteorder`.
+            // Header parsing happens before the key is verified, so this is
+            // reachable without knowing the password.
+            let res = Database::parse(&mutated, DatabaseKey::new().with_password("demopass"));
+            assert!(
+                res.is_err(),
+                "{}: entry type {} with a {}-byte buffer must not parse",
+                fixture,
+                entry_type,
+                new_len
+            );
+        }
+    }
+
+    const KDBX3_FIXTURE: &str = "tests/resources/test_db_with_password.kdbx";
+    const KDBX4_FIXTURE: &str = "tests/resources/test_db_few_rounds.kdbx";
+
+    #[test]
+    fn kdbx3_short_compression_flags_field_is_an_error() {
+        // 3 = COMPRESSIONFLAGS, stored as a u32.
+        assert_short_outer_header_field_is_an_error(KDBX3_FIXTURE, 2, 3, 4);
+    }
+
+    #[test]
+    fn kdbx3_short_transform_rounds_field_is_an_error() {
+        // 6 = TRANSFORMROUNDS, stored as a u64.
+        assert_short_outer_header_field_is_an_error(KDBX3_FIXTURE, 2, 6, 8);
+    }
+
+    #[test]
+    fn kdbx3_short_inner_random_stream_id_field_is_an_error() {
+        // 10 = INNERRANDOMSTREAMID, stored as a u32.
+        assert_short_outer_header_field_is_an_error(KDBX3_FIXTURE, 2, 10, 4);
+    }
+
+    #[test]
+    fn kdbx4_short_compression_flags_field_is_an_error() {
+        // 3 = COMPRESSIONFLAGS, stored as a u32.
+        assert_short_outer_header_field_is_an_error(KDBX4_FIXTURE, 4, 3, 4);
+    }
 }

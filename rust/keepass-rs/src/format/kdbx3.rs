@@ -5,7 +5,10 @@ use crate::{
     config::{CompressionConfig, DatabaseConfig, InnerCipherConfig, KdfConfig, OuterCipherConfig},
     crypt::{calculate_sha256, ciphers::Cipher},
     db::{Database, DatabaseFormatError, DatabaseOpenError},
-    format::DatabaseVersion,
+    format::{
+        io::{read_le_u32_exact, read_le_u64_exact},
+        DatabaseVersion,
+    },
     key::{DatabaseKey, DatabaseKeyError},
 };
 
@@ -109,7 +112,13 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
 
             // COMPRESSIONFLAGS - first byte determines compression of payload
             HEADER_COMPRESSION_ID => {
-                compression = Some(CompressionConfig::try_from(LittleEndian::read_u32(entry_buffer))?);
+                let compression_id =
+                    read_le_u32_exact(entry_buffer).ok_or(Kdbx3OuterHeaderError::InvalidEntryLength {
+                        entry_type,
+                        expected: 4,
+                        actual: entry_buffer.len(),
+                    })?;
+                compression = Some(CompressionConfig::try_from(compression_id)?);
             }
 
             // MASTERSEED - Master seed for deriving the master key
@@ -119,7 +128,15 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
             HEADER_TRANSFORM_SEED => transform_seed = Some(entry_buffer.to_vec()),
 
             // TRANSFORMROUNDS - Number of rounds used in derivation of transformed key
-            HEADER_TRANSFORM_ROUNDS => transform_rounds = Some(LittleEndian::read_u64(entry_buffer)),
+            HEADER_TRANSFORM_ROUNDS => {
+                transform_rounds = Some(read_le_u64_exact(entry_buffer).ok_or(
+                    Kdbx3OuterHeaderError::InvalidEntryLength {
+                        entry_type,
+                        expected: 8,
+                        actual: entry_buffer.len(),
+                    },
+                )?)
+            }
 
             // ENCRYPTIONIV - Initialization Vector for decrypting the payload
             HEADER_ENCRYPTION_IV => outer_iv = Some(entry_buffer.to_vec()),
@@ -135,7 +152,13 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
             // INNERRANDOMSTREAMID - specifies which cipher suite
             // to use for decrypting the inner protected values
             HEADER_INNER_RANDOM_STREAM_ID => {
-                inner_cipher = Some(InnerCipherConfig::try_from(LittleEndian::read_u32(entry_buffer))?);
+                let stream_id =
+                    read_le_u32_exact(entry_buffer).ok_or(Kdbx3OuterHeaderError::InvalidEntryLength {
+                        entry_type,
+                        expected: 4,
+                        actual: entry_buffer.len(),
+                    })?;
+                inner_cipher = Some(InnerCipherConfig::try_from(stream_id)?);
             }
 
             _ => {
@@ -201,6 +224,13 @@ pub enum Kdbx3OuterHeaderError {
 
     #[error("Encountered invalid outer header entry with type {0}")]
     InvalidOuterHeaderEntry(u8),
+
+    #[error("Outer header entry {entry_type} has length {actual}, expected {expected}")]
+    InvalidEntryLength {
+        entry_type: u8,
+        expected: usize,
+        actual: usize,
+    },
 
     #[error("Outer header is missing {0}")]
     IncompleteOuterHeader(&'static str),
