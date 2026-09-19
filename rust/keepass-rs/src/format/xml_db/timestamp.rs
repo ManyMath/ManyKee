@@ -79,7 +79,18 @@ impl<'de> Deserialize<'de> for Timestamp {
                         v.len()
                     ))
                 })?;
-                let ndt = get_epoch_baseline() + chrono::Duration::seconds(i64::from_le_bytes(a));
+                // `Duration::seconds` and `NaiveDateTime + Duration` both
+                // panic when the value is out of range, so do the arithmetic
+                // with the checked variants and report a parse error instead.
+                let seconds = i64::from_le_bytes(a);
+                let ndt = chrono::TimeDelta::try_seconds(seconds)
+                    .and_then(|delta| get_epoch_baseline().checked_add_signed(delta))
+                    .ok_or_else(|| {
+                        serde::de::Error::custom(format!(
+                            "Base64 timestamp out of range: {} seconds since 0001-01-01",
+                            seconds
+                        ))
+                    })?;
 
                 Ok(Timestamp::new_base64(ndt))
             }
@@ -198,6 +209,18 @@ mod tests {
         let ts_str = base64_engine::STANDARD.encode([1u8; 12]);
         let result: Result<Timestamp, _> = quick_xml::de::from_str(&format!("{}", ts_str));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_deserialize_timestamp_base64_out_of_range_errors() {
+        // i64::MAX / i64::MIN seconds do not fit in a chrono TimeDelta, and a
+        // value that does fit can still overflow NaiveDateTime. All of these
+        // must be reported as errors instead of panicking.
+        for seconds in [i64::MAX, i64::MIN, i64::MAX / 1_000, i64::MIN / 1_000] {
+            let ts_str = base64_engine::STANDARD.encode(seconds.to_le_bytes());
+            let result: Result<Timestamp, _> = quick_xml::de::from_str(&format!("{}", ts_str));
+            assert!(result.is_err(), "{} seconds must not deserialize", seconds);
+        }
     }
 
     #[test]
