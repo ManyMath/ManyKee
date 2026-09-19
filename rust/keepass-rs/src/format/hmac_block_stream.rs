@@ -16,6 +16,7 @@ pub(crate) fn read_hmac_block_stream(
 
     let mut pos = 0;
     let mut block_index: u64 = 0;
+    let mut terminated = false;
 
     while pos < data.len() {
         let hmac = data.get(pos..(pos + 32)).ok_or(BlockStreamError::Eof)?;
@@ -43,10 +44,18 @@ pub(crate) fn read_hmac_block_stream(
         block_index += 1;
 
         if size == 0 {
+            terminated = true;
             break;
         }
 
         out.extend_from_slice(block);
+    }
+
+    // Every block carries its own HMAC, but a stream cut exactly at a block
+    // boundary still consists of valid blocks. Only the trailing empty block
+    // (which is authenticated too) proves the writer finished.
+    if !terminated {
+        return Err(BlockStreamError::MissingTerminator);
     }
 
     Ok(out)
@@ -113,4 +122,95 @@ pub enum BlockStreamError {
 
     #[error("unexpected end of file")]
     Eof,
+
+    #[error("block stream ended without the terminating empty block")]
+    MissingTerminator,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_key() -> GenericArray<u8, U64> {
+        GenericArray::clone_from_slice(&[0x42u8; 64])
+    }
+
+    /// Encodes one block exactly as the writer does: HMAC, u32 LE size, data.
+    fn encode_block(block_index: u64, key: &GenericArray<u8, U64>, data: &[u8]) -> Vec<u8> {
+        let size_bytes = (data.len() as u32).to_le_bytes();
+        let hmac = crate::crypt::calculate_hmac(
+            &[&block_index.to_le_bytes(), &size_bytes, data],
+            &get_hmac_block_key(block_index, key),
+        )
+        .unwrap();
+
+        let mut out = hmac.to_vec();
+        out.extend_from_slice(&size_bytes);
+        out.extend_from_slice(data);
+        out
+    }
+
+    #[test]
+    fn reads_terminated_stream() {
+        let key = test_key();
+        let mut stream = encode_block(0, &key, b"first block");
+        stream.extend(encode_block(1, &key, b"second block"));
+        stream.extend(encode_block(2, &key, &[]));
+
+        assert_eq!(
+            read_hmac_block_stream(&stream, &key).unwrap(),
+            b"first blocksecond block"
+        );
+    }
+
+    #[test]
+    fn stream_truncated_at_block_boundary_is_an_error() {
+        // Drop the terminator: every remaining block still authenticates, so
+        // without tracking the terminator this looked like a complete stream.
+        let key = test_key();
+        let mut stream = encode_block(0, &key, b"first block");
+        stream.extend(encode_block(1, &key, b"second block"));
+
+        assert!(matches!(
+            read_hmac_block_stream(&stream, &key),
+            Err(BlockStreamError::MissingTerminator)
+        ));
+    }
+
+    #[test]
+    fn empty_stream_is_an_error() {
+        assert!(matches!(
+            read_hmac_block_stream(&[], &test_key()),
+            Err(BlockStreamError::MissingTerminator)
+        ));
+    }
+
+    #[test]
+    fn stream_truncated_inside_a_block_is_an_error() {
+        let key = test_key();
+        let mut stream = encode_block(0, &key, b"first block");
+        stream.extend(encode_block(1, &key, &[]));
+        stream.truncate(stream.len() - 1);
+
+        assert!(matches!(
+            read_hmac_block_stream(&stream, &key),
+            Err(BlockStreamError::Eof)
+        ));
+    }
+
+    #[cfg(feature = "save_kdbx4")]
+    #[test]
+    fn writer_output_without_terminator_is_rejected() {
+        let key = test_key();
+        let data = vec![0xA5u8; 1000];
+        let stream = write_hmac_block_stream(&data, &key);
+        assert_eq!(read_hmac_block_stream(&stream, &key).unwrap(), data);
+
+        // The terminator is the final 36-byte (HMAC + size) block.
+        let truncated = &stream[..stream.len() - 36];
+        assert!(matches!(
+            read_hmac_block_stream(truncated, &key),
+            Err(BlockStreamError::MissingTerminator)
+        ));
+    }
 }
