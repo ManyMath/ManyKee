@@ -211,7 +211,7 @@ impl KeePassFile {
 
         let mut meta: Meta = db.meta.clone().into();
         meta.custom_icons
-            .get_or_insert_default()
+            .get_or_insert_with(Default::default)
             .icons
             .extend(custom_icons.into_iter().map(|(uuid, data)| Icon {
                 uuid: UUID(uuid),
