@@ -1,43 +1,66 @@
-# keepass-rs
+# keepass-rs (ManyKee fork)
 
-[![Crates.io](https://img.shields.io/crates/v/keepass.svg)](https://crates.io/crates/keepass)
-[![Documentation](https://docs.rs/keepass/badge.svg)](https://docs.rs/keepass/)
-[![Build Status](https://github.com/sseemayer/keepass-rs/actions/workflows/merge.yml/badge.svg?branch=master)](https://github.com/sseemayer/keepass-rs/actions/workflows/merge.yml)
-[![codecov](https://codecov.io/gh/sseemayer/keepass-rs/branch/master/graph/badge.svg)](https://codecov.io/gh/sseemayer/keepass-rs)
-[![dependency status](https://deps.rs/repo/github/sseemayer/keepass-rs/status.svg)](https://deps.rs/repo/github/sseemayer/keepass-rs)
-[![License file](https://img.shields.io/github/license/sseemayer/keepass-rs)](https://github.com/sseemayer/keepass-rs/blob/master/LICENSE)
+Rust KeePass database file parser for KDB, KDBX3 and KDBX4, with support for
+writing KDBX4 and KDBX3.
 
-Rust KeePass database file parser for KDB, KDBX3 and KDBX4, with experimental support for KDBX4 writing.
+This is ManyKee's vendored fork of
+[sseemayer/keepass-rs](https://github.com/sseemayer/keepass-rs). It lives in
+the ManyKee Cargo workspace (`rust/`) and is not published to crates.io; the
+`keepassxc`, `keepassxc-ffi` and `keepassxc-wasm` crates use it through a path
+dependency. Changes made here are not necessarily present upstream, and
+upstream releases are not picked up automatically.
 
 ## Usage
 
-Examples are available in the [`examples`](./examples) directory of this repository.
+Depend on it by path from another crate in the workspace, enabling the
+features you need:
+
+```ignore
+[dependencies]
+keepass = { path = "../keepass-rs", features = ["save_kdbx4"] }
+```
+
+Commonly used features:
+
+- `save_kdbx4` / `save_kdbx3`: write databases in that format
+- `totp`: TOTP code generation for entries
+- `challenge_response`: YubiKey HMAC-SHA1 challenge-response keys
+- `serialization`: `serde` serialization of the database model
+- `utilities`: the command line tools described below
+
+Examples are available in the [`examples`](./examples) directory.
 
 ### Use developer tools
 
 This crate contains several command line tools that can be enabled with the `utilities` feature flag.
 See the `[[bin]]` sections in [Cargo.toml](Cargo.toml) for a complete list.
 
-An example command line for running the `kp-dump-xml` command would be:
+An example command line for running the `kp-dump-xml` command, from the
+`rust/` workspace directory:
 
 ```bash
-cargo run --release --features "utilities" --bin kp-dump-xml -- path/to/database.kdbx
+cargo run --release -p keepass --features "utilities" --bin kp-dump-xml -- path/to/database.kdbx out.xml
 ```
 
+### Testing
 
-## Installation
-Add the following to the `dependencies` section of your `Cargo.toml`:
+From the `rust/` workspace directory:
 
-```ignore
-[dependencies]
-keepass = "*" # TODO replace with current version
+```bash
+cargo test -p keepass --all-features
 ```
+
+`tests/keepassxc_interop_tests.rs` checks that databases written by this crate
+are readable by `keepassxc-cli`. Those tests pass without doing anything when
+`keepassxc-cli` is not on `PATH`.
 
 ### Performance Notes
 
-For the best performance, this crate requires specific cargo configuration to enable CPU-specific optimizations, especially for AES key derivation.
-
-Please see the recommended settings in the [.cargo/config.toml](https://github.com/sseemayer/keepass-rs/blob/master/.cargo/config.toml) file in this repository.
+AES key derivation is much faster with CPU-specific optimizations. The
+recommended settings are in [`.cargo/config.toml`](.cargo/config.toml). Cargo
+only reads that file when it is invoked from inside `keepass-rs/`, so builds
+started from the workspace root need equivalent flags of their own.
 
 ## License
-MIT
+
+MIT, as upstream. See [LICENSE](./LICENSE).
