@@ -136,13 +136,19 @@ pub(crate) struct Salsa20Cipher {
     cipher: salsa20::Salsa20,
 }
 
-impl Salsa20Cipher {
-    pub(crate) fn new(key: &[u8]) -> Result<Self, CryptographyError> {
-        let iv = [0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A];
+/// Fixed IV of the Salsa20 inner random stream (KeePass `CryptoRandomStream`).
+const SALSA20_INNER_STREAM_IV: [u8; 8] = [0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A];
 
-        Ok(Salsa20Cipher {
-            cipher: Salsa20::new_from_slices(key, &iv)?,
-        })
+impl Salsa20Cipher {
+    /// Create as an inner cipher from the protected stream key, which may be
+    /// any length. As in KeePass and KeePassXC, the Salsa20 key is the
+    /// SHA-256 of the stream key, for both KDBX3 and KDBX4.
+    pub(crate) fn new(key: &[u8]) -> Result<Self, CryptographyError> {
+        let mut key = crate::crypt::calculate_sha256(&[key]);
+        let cipher = Salsa20::new_from_slices(&key, &SALSA20_INNER_STREAM_IV);
+        key.as_mut_slice().zeroize();
+
+        Ok(Salsa20Cipher { cipher: cipher? })
     }
 }
 
@@ -177,7 +183,9 @@ pub(crate) struct ChaCha20Cipher {
 }
 
 impl ChaCha20Cipher {
-    /// Create as an inner cipher by splitting up a SHA512 hash
+    /// Create as an inner cipher from the protected stream key: as in KeePass
+    /// and KeePassXC, the key and nonce are the first 32 and next 12 bytes of
+    /// the SHA-512 of the stream key, for both KDBX3 and KDBX4.
     pub(crate) fn new(key: &[u8]) -> Result<Self, CryptographyError> {
         let iv = crate::crypt::calculate_sha512(&[key]);
 
@@ -247,18 +255,105 @@ impl Cipher for PlainCipher {
     }
 }
 
+/// Inner random stream derivations as specified by KeePass
+/// (`CryptoRandomStream`) and KeePassXC (`KeePass2RandomStream::init`),
+/// written out independently of the cipher wrappers above.
+#[cfg(test)]
+pub(crate) mod reference {
+    use super::{Cipher, SALSA20_INNER_STREAM_IV};
+    use salsa20::cipher::{KeyIvInit, StreamCipher};
+
+    /// Salsa20 keyed with SHA-256(stream key) and the fixed IV.
+    pub(crate) fn salsa20_keystream(stream_key: &[u8], len: usize) -> Vec<u8> {
+        let key = crate::crypt::calculate_sha256(&[stream_key]);
+        let mut cipher = salsa20::Salsa20::new_from_slices(&key, &SALSA20_INNER_STREAM_IV).unwrap();
+        let mut keystream = vec![0u8; len];
+        cipher.apply_keystream(&mut keystream);
+        keystream
+    }
+
+    /// ChaCha20 with key and nonce split from SHA-512(stream key).
+    pub(crate) fn chacha20_keystream(stream_key: &[u8], len: usize) -> Vec<u8> {
+        let hash = crate::crypt::calculate_sha512(&[stream_key]);
+        let mut cipher = chacha20::ChaCha20::new_from_slices(&hash[0..32], &hash[32..44]).unwrap();
+        let mut keystream = vec![0u8; len];
+        cipher.apply_keystream(&mut keystream);
+        keystream
+    }
+
+    /// The next `len` keystream bytes of `cipher`.
+    pub(crate) fn keystream(cipher: &mut dyn Cipher, len: usize) -> Vec<u8> {
+        cipher.decrypt(&vec![0u8; len]).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Salsa20Cipher;
+    use super::reference::{
+        chacha20_keystream as reference_chacha20_keystream, keystream,
+        salsa20_keystream as reference_salsa20_keystream,
+    };
+    use super::{Salsa20Cipher, SALSA20_INNER_STREAM_IV};
+    use salsa20::cipher::{KeyIvInit, StreamCipher};
 
     #[test]
-    fn salsa20_cipher_new_rejects_short_key_instead_of_panicking() {
-        assert!(Salsa20Cipher::new(&[0u8; 16]).is_err());
+    fn salsa20_inner_stream_key_is_sha256_of_stream_key() {
+        let stream_key: Vec<u8> = (0u8..32).collect();
+        let mut cipher = Salsa20Cipher::new(&stream_key).unwrap();
+        assert_eq!(
+            keystream(&mut cipher, 100),
+            reference_salsa20_keystream(&stream_key, 100)
+        );
+
+        // Using the stream key directly as the Salsa20 key is what this
+        // crate used to do for KDBX4; make sure that is not what happens.
+        let mut raw = salsa20::Salsa20::new_from_slices(&stream_key, &SALSA20_INNER_STREAM_IV).unwrap();
+        let mut raw_keystream = vec![0u8; 100];
+        raw.apply_keystream(&mut raw_keystream);
+        assert_ne!(reference_salsa20_keystream(&stream_key, 100), raw_keystream);
     }
 
     #[test]
-    fn salsa20_cipher_new_accepts_32_byte_key() {
-        assert!(Salsa20Cipher::new(&[0u8; 32]).is_ok());
+    fn salsa20_cipher_new_accepts_any_stream_key_length() {
+        // KeePass hashes the stream key, so its length is not constrained.
+        for len in [0usize, 16, 32, 64] {
+            let stream_key = vec![0x5Au8; len];
+            let mut cipher = Salsa20Cipher::new(&stream_key).unwrap();
+            assert_eq!(
+                keystream(&mut cipher, 64),
+                reference_salsa20_keystream(&stream_key, 64)
+            );
+        }
+    }
+
+    #[test]
+    fn chacha20_inner_stream_key_is_split_from_sha512_of_stream_key() {
+        let stream_key: Vec<u8> = (0u8..64).collect();
+        let mut cipher = super::ChaCha20Cipher::new(&stream_key).unwrap();
+        assert_eq!(
+            keystream(&mut cipher, 100),
+            reference_chacha20_keystream(&stream_key, 100)
+        );
+    }
+
+    #[test]
+    fn inner_cipher_config_uses_reference_derivation() {
+        // `InnerCipherConfig::get_cipher` is what the KDBX3 and KDBX4
+        // readers and writers call with the protected stream key.
+        use crate::config::InnerCipherConfig;
+
+        let stream_key = [0xC3u8; 32];
+        let mut salsa20 = InnerCipherConfig::Salsa20.get_cipher(&stream_key).unwrap();
+        assert_eq!(
+            keystream(&mut *salsa20, 64),
+            reference_salsa20_keystream(&stream_key, 64)
+        );
+
+        let mut chacha20 = InnerCipherConfig::ChaCha20.get_cipher(&stream_key).unwrap();
+        assert_eq!(
+            keystream(&mut *chacha20, 64),
+            reference_chacha20_keystream(&stream_key, 64)
+        );
     }
 
     #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]

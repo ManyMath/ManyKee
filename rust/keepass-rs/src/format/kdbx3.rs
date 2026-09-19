@@ -263,11 +263,10 @@ pub(crate) fn decrypt_kdbx3(
     let header = parse_outer_header(data)
         .map_err(|e| DatabaseOpenError::Format(DatabaseFormatError::Kdbx3(Kdbx3OpenError::OuterHeader(e))))?;
 
-    // Derive stream key for decrypting inner protected values and set up decryption context
-    let stream_key =
-        zeroize::Zeroizing::new(calculate_sha256(&[header.protected_stream_key.as_ref()]).to_vec());
-
-    let inner_decryptor = header.inner_cipher.get_cipher(&stream_key)?;
+    // Set up decryption of inner protected values. The inner cipher derives
+    // its own key from the protected stream key (SHA-256 for Salsa20,
+    // SHA-512 for ChaCha20), exactly as for KDBX4, so pass it unhashed.
+    let inner_decryptor = header.inner_cipher.get_cipher(&header.protected_stream_key)?;
 
     let config = DatabaseConfig {
         version,
@@ -492,9 +491,9 @@ pub fn dump_kdbx3(
 
     let master_key = zeroize::Zeroizing::new(calculate_sha256(&[&master_seed, &transformed_key]).to_vec());
 
-    // Initialize inner encryptor from the protected stream key
-    let stream_key = zeroize::Zeroizing::new(calculate_sha256(&[protected_stream_key.as_ref()]).to_vec());
-    let mut inner_cipher = db.config.inner_cipher_config.get_cipher(&stream_key)?;
+    // Initialize inner encryptor from the protected stream key; the inner
+    // cipher hashes it itself (see `decrypt_kdbx3`).
+    let mut inner_cipher = db.config.inner_cipher_config.get_cipher(&protected_stream_key)?;
 
     // convert database to XML, with attachments inlined as Meta/Binaries
     let xml = crate::format::xml_db::to_xml_inline_binaries(db, &mut *inner_cipher)?;
@@ -669,6 +668,61 @@ mod kdbx3_dump_tests {
                 }
             }
         }
+    }
+
+    /// Range of the value of the first outer header entry with `entry_type`.
+    fn header_entry_value_range(data: &[u8], entry_type: u8) -> std::ops::Range<usize> {
+        let mut pos = DatabaseVersion::get_version_header_size();
+        loop {
+            let ty = data[pos];
+            let len = LittleEndian::read_u16(&data[pos + 1..pos + 3]) as usize;
+            if ty == entry_type {
+                return pos + 3..pos + 3 + len;
+            }
+            assert_ne!(ty, HEADER_END, "header entry {} not found", entry_type);
+            pos += 3 + len;
+        }
+    }
+
+    #[test]
+    fn inner_stream_is_keyed_from_the_unhashed_protected_stream_key() {
+        use crate::crypt::ciphers::reference;
+
+        // KeePass hashes the raw protected stream key inside the inner stream
+        // (CryptoRandomStream): SHA-256 for Salsa20, SHA-512 for ChaCha20.
+        // This module used to hash it with SHA-256 first, which only gave the
+        // right Salsa20 key because the Salsa20 wrapper did not hash.
+        let db = Database::new(test_config(
+            OuterCipherConfig::AES256,
+            InnerCipherConfig::Salsa20,
+            CompressionConfig::GZip,
+        ));
+        let db_key = DatabaseKey::new().with_password("testing");
+        let mut data = Vec::new();
+        dump_kdbx3(&db, &db_key, &mut data).unwrap();
+
+        let stream_key = parse_outer_header(&data).unwrap().protected_stream_key;
+
+        let (_, mut decryptor, _) = decrypt_kdbx3(&data, &db_key).unwrap();
+        assert_eq!(
+            reference::keystream(&mut *decryptor, 64),
+            reference::salsa20_keystream(&stream_key, 64)
+        );
+
+        // KeePass also accepts ChaCha20 (ID 3) as a KDBX3 inner stream and
+        // keys it from SHA-512 of the raw stream key, not SHA-512(SHA-256(k)).
+        // (KeePassXC 2.7 instead ignores the ID in KDBX3 and always uses
+        // Salsa20.) The header is outside the outer encryption and KDBX3 has
+        // no header MAC, so a written file can be switched in place.
+        let range = header_entry_value_range(&data, HEADER_INNER_RANDOM_STREAM_ID);
+        data[range].copy_from_slice(&3u32.to_le_bytes());
+
+        let (config, mut decryptor, _) = decrypt_kdbx3(&data, &db_key).unwrap();
+        assert_eq!(config.inner_cipher_config, InnerCipherConfig::ChaCha20);
+        assert_eq!(
+            reference::keystream(&mut *decryptor, 64),
+            reference::chacha20_keystream(&stream_key, 64)
+        );
     }
 
     #[test]
