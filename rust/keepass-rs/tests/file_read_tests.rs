@@ -243,6 +243,33 @@ mod file_read_tests {
     }
 
     #[test]
+    fn open_kdbx3_with_hex_keyfile() -> Result<(), DatabaseOpenError> {
+        // Created with keepassxc-cli 2.7.12 (`db-create -p --set-key-file`,
+        // which writes KDBX 3.1) using a pre-existing 64-character hex key
+        // file. KeePass and KeePassXC treat such a file as the hex encoding
+        // of a 32-byte key rather than as an arbitrary file to hash; key file
+        // handling does not depend on the KDBX version.
+        let path = Path::new("tests/resources/test_db_kdbx3_with_hex_keyfile.kdbx");
+        let kf_path = Path::new("tests/resources/test_db_kdbx3_with_hex_keyfile.key");
+        assert_eq!(kf_path.metadata()?.len(), 64);
+
+        let db = Database::open(
+            &mut File::open(path)?,
+            DatabaseKey::new()
+                .with_password("demopass")
+                .with_keyfile(&mut File::open(kf_path)?)?,
+        )?;
+
+        let entry = db
+            .root
+            .entry_by_name("Demo Entry")
+            .expect("entry added with keepassxc-cli");
+        assert_eq!(entry.get_username(), Some("someuser"));
+        assert_eq!(entry.get_password(), Some("secret"));
+        Ok(())
+    }
+
+    #[test]
     fn open_kdbx4_with_keyfile_v2() -> Result<(), DatabaseOpenError> {
         let path = Path::new("tests/resources/test_db_kdbx4_with_keyfile_v2.kdbx");
         let kf_path = Path::new("tests/resources/test_db_kdbx4_with_keyfile_v2.keyx");

@@ -121,6 +121,17 @@ pub enum ParseXmlKeyFileError {
     Xml(#[from] quick_xml::Error),
 }
 
+/// Decodes the hex key file format shared by KeePass (`KcpKeyFile.LoadHexKey32`)
+/// and KeePassXC (`FileKey::loadHex`): a file of exactly 64 bytes, all of them
+/// hex digits, holding the 32-byte key in hex. Anything else returns `None`
+/// so the caller falls back to hashing the file.
+fn decode_hex_keyfile(buffer: &[u8]) -> Option<Zeroizing<KeyElement>> {
+    if buffer.len() != 64 || !buffer.iter().all(u8::is_ascii_hexdigit) {
+        return None;
+    }
+    hex::decode(buffer).ok().map(Zeroizing::new)
+}
+
 fn parse_keyfile(buffer: &[u8]) -> Result<Zeroizing<KeyElement>, DatabaseKeyError> {
     // try to parse the buffer as XML, if successful, use that data instead of full file
     match parse_xml_keyfile(buffer) {
@@ -134,7 +145,12 @@ fn parse_keyfile(buffer: &[u8]) -> Result<Zeroizing<KeyElement>, DatabaseKeyErro
             // legacy binary key format
             Ok(Zeroizing::new(buffer.to_vec()))
         }
-        Err(_) => Ok(Zeroizing::new(calculate_sha256(&[buffer]).as_slice().to_vec())),
+        Err(_) => match decode_hex_keyfile(buffer) {
+            // legacy hex key format
+            Some(key) => Ok(key),
+            // any other file: its SHA-256 is the key
+            None => Ok(Zeroizing::new(calculate_sha256(&[buffer]).as_slice().to_vec())),
+        },
     }
 }
 
@@ -354,6 +370,48 @@ mod key_tests {
         }
         .get_key_elements()
         .is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hex_keyfile_decodes_to_the_same_key_as_the_raw_bytes() -> Result<(), DatabaseKeyError> {
+        let raw_key: Vec<u8> = (0u8..32).map(|b| b.wrapping_mul(7).wrapping_add(3)).collect();
+        let hex_key = hex::encode_upper(&raw_key);
+        assert_eq!(hex_key.len(), 64);
+
+        let from_raw = DatabaseKey::new()
+            .with_keyfile(&mut raw_key.as_slice())?
+            .get_key_elements()?;
+        let from_hex = DatabaseKey::new()
+            .with_keyfile(&mut hex_key.as_bytes())?
+            .get_key_elements()?;
+        let from_lower_hex = DatabaseKey::new()
+            .with_keyfile(&mut hex_key.to_ascii_lowercase().as_bytes())?
+            .get_key_elements()?;
+
+        assert_eq!(from_raw.len(), 1);
+        assert_eq!(from_raw[0], raw_key);
+        assert_eq!(*from_hex, *from_raw);
+        assert_eq!(*from_lower_hex, *from_raw);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_64_byte_non_hex_keyfile_is_hashed() -> Result<(), DatabaseKeyError> {
+        // 64 bytes that are not all hex digits (here: a trailing newline, as
+        // left by many editors) is an arbitrary file and gets hashed.
+        let mut contents = hex::encode(&[0xABu8; 32]);
+        contents.pop();
+        contents.push('\n');
+        assert_eq!(contents.len(), 64);
+
+        let ke = DatabaseKey::new()
+            .with_keyfile(&mut contents.as_bytes())?
+            .get_key_elements()?;
+        assert_eq!(ke.len(), 1);
+        assert_eq!(ke[0], super::calculate_sha256(&[contents.as_bytes()]).as_slice());
 
         Ok(())
     }
