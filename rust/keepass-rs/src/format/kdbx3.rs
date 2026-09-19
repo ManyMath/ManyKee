@@ -89,11 +89,15 @@ fn parse_outer_header(data: &[u8]) -> Result<KDBX3Header, Kdbx3OuterHeaderError>
             data.get((pos + 1)..(pos + 3))
                 .ok_or(Kdbx3OuterHeaderError::UnexpectedEof)?,
         ) as usize;
+        let entry_start = pos + 3;
+        let entry_end = entry_start
+            .checked_add(entry_length)
+            .ok_or(Kdbx3OuterHeaderError::UnexpectedEof)?;
         let entry_buffer = data
-            .get((pos + 3)..(pos + 3 + entry_length))
+            .get(entry_start..entry_end)
             .ok_or(Kdbx3OuterHeaderError::UnexpectedEof)?;
 
-        pos += 3 + entry_length;
+        pos = entry_end;
 
         match entry_type {
             // END - finished parsing header
@@ -349,8 +353,15 @@ pub(crate) fn decrypt_kdbx3(
             break;
         }
 
+        // `block_size` is a u32 from the decrypted payload; on 32-bit
+        // targets `pos + 40 + block_size` can overflow usize, so compute the
+        // end with checked arithmetic.
+        let block_start = pos + 40;
+        let block_end = block_start
+            .checked_add(block_size)
+            .ok_or(DatabaseOpenError::UnexpectedEof)?;
         let block_buffer_compressed = payload
-            .get((pos + 40)..(pos + 40 + block_size))
+            .get(block_start..block_end)
             .ok_or(DatabaseOpenError::UnexpectedEof)?;
 
         // Test block hash
@@ -364,7 +375,7 @@ pub(crate) fn decrypt_kdbx3(
         // Decompress block_buffer_compressed
         buf.append(&mut block_buffer_compressed.to_vec());
 
-        pos += 40 + block_size;
+        pos = block_end;
         block_index += 1;
     }
 

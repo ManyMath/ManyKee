@@ -22,9 +22,11 @@ pub(crate) fn read_hmac_block_stream(
         let hmac = data.get(pos..(pos + 32)).ok_or(BlockStreamError::Eof)?;
         let size_bytes = data.get((pos + 32)..(pos + 36)).ok_or(BlockStreamError::Eof)?;
         let size = LittleEndian::read_u32(size_bytes) as usize;
-        let block = data
-            .get((pos + 36)..(pos + 36 + size))
-            .ok_or(BlockStreamError::Eof)?;
+        // `size` is a u32 from the file; on 32-bit targets `pos + 36 + size`
+        // can overflow usize, so compute the end with checked arithmetic.
+        let block_start = pos + 36;
+        let block_end = block_start.checked_add(size).ok_or(BlockStreamError::Eof)?;
+        let block = data.get(block_start..block_end).ok_or(BlockStreamError::Eof)?;
 
         // verify block hmac
         let hmac_block_key = get_hmac_block_key(block_index, key);
@@ -40,7 +42,7 @@ pub(crate) fn read_hmac_block_stream(
             return Err(BlockStreamError::BlockHashMismatch { block_index });
         }
 
-        pos += 36 + size;
+        pos = block_end;
         block_index += 1;
 
         if size == 0 {
@@ -174,6 +176,21 @@ mod tests {
         assert!(matches!(
             read_hmac_block_stream(&stream, &key),
             Err(BlockStreamError::MissingTerminator)
+        ));
+    }
+
+    #[test]
+    fn block_size_near_usize_max_is_an_error() {
+        // A block header claiming u32::MAX bytes must be reported as EOF
+        // rather than overflow the end-of-block computation.
+        let key = test_key();
+        let mut stream = vec![0u8; 32];
+        stream.extend_from_slice(&u32::MAX.to_le_bytes());
+        stream.extend_from_slice(&[0u8; 8]);
+
+        assert!(matches!(
+            read_hmac_block_stream(&stream, &key),
+            Err(BlockStreamError::Eof)
         ));
     }
 

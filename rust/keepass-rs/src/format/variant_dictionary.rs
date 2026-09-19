@@ -53,13 +53,18 @@ impl VariantDictionary {
             ) as usize;
             pos += 4;
 
+            // Lengths are u32 values from the file; `pos + length` can
+            // overflow usize on 32-bit targets, so use checked arithmetic.
+            let key_end = pos
+                .checked_add(key_length)
+                .ok_or(VariantDictionaryError::UnexpectedEof)?;
             let key = String::from_utf8_lossy(
                 buffer
-                    .get(pos..(pos + key_length))
+                    .get(pos..key_end)
                     .ok_or(VariantDictionaryError::UnexpectedEof)?,
             )
             .to_string();
-            pos += key_length;
+            pos = key_end;
 
             let value_length = LittleEndian::read_u32(
                 buffer
@@ -68,10 +73,13 @@ impl VariantDictionary {
             ) as usize;
             pos += 4;
 
-            let value_buffer = buffer
-                .get(pos..(pos + value_length))
+            let value_end = pos
+                .checked_add(value_length)
                 .ok_or(VariantDictionaryError::UnexpectedEof)?;
-            pos += value_length;
+            let value_buffer = buffer
+                .get(pos..value_end)
+                .ok_or(VariantDictionaryError::UnexpectedEof)?;
+            pos = value_end;
 
             let expected_len = match value_type {
                 U32_TYPE_ID | I32_TYPE_ID => Some(4),

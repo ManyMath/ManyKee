@@ -211,11 +211,18 @@ fn parse_outer_header(data: &[u8]) -> Result<(KDBX4OuterHeader, usize), Kdbx4Out
 
         let entry_length: usize = LittleEndian::read_u32(entry_length) as usize;
 
+        // `entry_length` is a u32 from the file; on 32-bit targets adding it
+        // to `pos` can overflow usize, so compute the end with checked
+        // arithmetic.
+        let entry_start = pos + 5;
+        let entry_end = entry_start
+            .checked_add(entry_length)
+            .ok_or(Kdbx4OuterHeaderError::UnexpectedEof)?;
         let entry_buffer = data
-            .get((pos + 5)..(pos + 5 + entry_length))
+            .get(entry_start..entry_end)
             .ok_or(Kdbx4OuterHeaderError::UnexpectedEof)?;
 
-        pos += 5 + entry_length;
+        pos = entry_end;
 
         match *entry_type {
             HEADER_END => {
@@ -341,11 +348,15 @@ fn parse_inner_header(
 
         let entry_length: usize = LittleEndian::read_u32(entry_length) as usize;
 
+        let entry_start = pos + 5;
+        let entry_end = entry_start
+            .checked_add(entry_length)
+            .ok_or(Kdbx4InnerHeaderError::UnexpectedEof)?;
         let entry_buffer = data
-            .get((pos + 5)..(pos + 5 + entry_length))
+            .get(entry_start..entry_end)
             .ok_or(Kdbx4InnerHeaderError::UnexpectedEof)?;
 
-        pos += 5 + entry_length;
+        pos = entry_end;
 
         match entry_type {
             INNER_HEADER_END => break,
