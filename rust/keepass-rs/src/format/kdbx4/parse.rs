@@ -28,23 +28,25 @@ use crate::{
 
 use super::KDBX4InnerHeader;
 
-impl From<&[u8]> for Attachment {
-    fn from(data: &[u8]) -> Self {
-        let flags = data[0];
-        let data = data[1..].to_vec();
+/// Parses a KDBX4 inner-header binary entry: one flags byte (bit 0 set means
+/// the attachment is protected in memory) followed by the attachment data.
+fn parse_header_attachment(data: &[u8]) -> Result<Attachment, Kdbx4InnerHeaderError> {
+    let (&flags, data) = data
+        .split_first()
+        .ok_or(Kdbx4InnerHeaderError::EmptyAttachmentEntry)?;
+    let data = data.to_vec();
 
-        let protected = flags & 0x01 != 0;
+    let protected = flags & 0x01 != 0;
 
-        if protected {
-            Attachment {
-                data: Value::protected(data),
-            }
-        } else {
-            Attachment {
-                data: Value::unprotected(data),
-            }
+    Ok(if protected {
+        Attachment {
+            data: Value::protected(data),
         }
-    }
+    } else {
+        Attachment {
+            data: Value::unprotected(data),
+        }
+    })
 }
 
 /// Open, decrypt and parse a KeePass database from a source and key elements
@@ -376,13 +378,7 @@ fn parse_inner_header(
             }
 
             INNER_HEADER_BINARY_ATTACHMENTS => {
-                // `Attachment::from` indexes the first byte as the flags
-                // byte; a crafted zero-length entry would otherwise panic.
-                if entry_buffer.is_empty() {
-                    return Err(Kdbx4InnerHeaderError::EmptyAttachmentEntry);
-                }
-                let header_attachment = Attachment::from(entry_buffer);
-                header_attachments.push(header_attachment);
+                header_attachments.push(parse_header_attachment(entry_buffer)?);
             }
 
             _ => {
@@ -506,6 +502,26 @@ mod inner_header_negative {
     }
 
     #[test]
+    fn parse_header_attachment_reads_flags_byte() {
+        let protected = parse_header_attachment(&[0x01, 0xAA, 0xBB]).unwrap();
+        assert!(protected.is_protected());
+        assert_eq!(protected.get(), &[0xAA, 0xBB]);
+
+        let unprotected = parse_header_attachment(&[0x00, 0xCC]).unwrap();
+        assert!(!unprotected.is_protected());
+        assert_eq!(unprotected.get(), &[0xCC]);
+
+        // A flags byte with no data is a valid, empty attachment.
+        let empty = parse_header_attachment(&[0x00]).unwrap();
+        assert!(empty.get().is_empty());
+
+        assert!(matches!(
+            parse_header_attachment(&[]),
+            Err(Kdbx4InnerHeaderError::EmptyAttachmentEntry)
+        ));
+    }
+
+    #[test]
     fn zero_length_attachment_entry_does_not_panic() {
         let mut buf: Vec<u8> = Vec::new();
         buf.push(INNER_HEADER_RANDOM_STREAM_ID);
@@ -513,7 +529,7 @@ mod inner_header_negative {
         buf.extend_from_slice(&0x02u32.to_le_bytes());
 
         // A binary-attachment entry with a declared length of 0 has no
-        // flags byte for `Attachment::from` to read.
+        // flags byte for `parse_header_attachment` to read.
         buf.push(INNER_HEADER_BINARY_ATTACHMENTS);
         buf.extend_from_slice(&0u32.to_le_bytes());
 
