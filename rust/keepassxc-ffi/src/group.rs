@@ -2,7 +2,7 @@
 
 use std::ffi::{c_char, c_int, CString};
 
-use keepassxc::{delete_group, move_group, Group, GroupExt};
+use keepassxc::{delete_group, move_group, rename_group, Group, GroupExt};
 
 use crate::database::KpxcDatabase;
 use crate::error::{
@@ -70,15 +70,9 @@ pub extern "C" fn kpxc_group_set_name(
         };
 
         let db = unsafe { &mut *db };
-        match db.0.root.find_group_by_uuid_mut(uuid) {
-            Some(group) => {
-                group.name = name_str.to_string();
-                KPXC_OK
-            }
-            None => {
-                set_last_error(&format!("Group not found: {}", uuid));
-                KPXC_ERR_NOT_FOUND
-            }
+        match rename_group(&mut db.0.root, uuid, name_str) {
+            Ok(()) => KPXC_OK,
+            Err(e) => set_error_from_kpxc(&e),
         }
     })
 }
@@ -291,6 +285,34 @@ mod tests {
     use keepassxc::{Database, DatabaseConfig};
 
     use crate::database::KpxcDatabase;
+
+    #[test]
+    fn group_set_name_bumps_last_modification() {
+        let mut db = Database::new(DatabaseConfig::default());
+        let mut group = Group::new("Old");
+        let stale = keepassxc::Times::epoch();
+        group.times.last_modification = Some(stale);
+        let group_uuid = group.uuid;
+        db.root.groups.push(group);
+
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));
+        let uuid_c = CString::new(group_uuid.to_string()).unwrap();
+        let name_c = CString::new("New").unwrap();
+
+        let result = kpxc_group_set_name(db_ptr, uuid_c.as_ptr(), name_c.as_ptr());
+        assert_eq!(result, KPXC_OK);
+
+        let db = unsafe { &*db_ptr };
+        let group = db.0.root.find_group_by_uuid(group_uuid).unwrap();
+        assert_eq!(group.name, "New");
+        assert!(group.times.last_modification.unwrap() > stale);
+
+        let missing = CString::new(Uuid::new_v4().to_string()).unwrap();
+        let result = kpxc_group_set_name(db_ptr, missing.as_ptr(), name_c.as_ptr());
+        assert_eq!(result, KPXC_ERR_NOT_FOUND);
+
+        crate::database::kpxc_database_free(db_ptr);
+    }
 
     #[test]
     fn group_move_updates_tree() {
