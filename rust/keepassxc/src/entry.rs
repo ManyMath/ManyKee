@@ -199,7 +199,7 @@ fn encode_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn find_entry_parent_uuid(group: &Group, entry_uuid: Uuid) -> Option<Uuid> {
+pub(crate) fn find_entry_parent_uuid(group: &Group, entry_uuid: Uuid) -> Option<Uuid> {
     if group.entries.iter().any(|entry| entry.uuid == entry_uuid) {
         return Some(group.uuid);
     }

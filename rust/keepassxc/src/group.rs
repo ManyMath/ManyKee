@@ -126,7 +126,7 @@ fn invalid_move(message: &str) -> KeePassXcError {
     KeePassXcError::Io(Error::other(message))
 }
 
-fn find_group_parent_uuid(group: &Group, target_uuid: Uuid) -> Option<Uuid> {
+pub(crate) fn find_group_parent_uuid(group: &Group, target_uuid: Uuid) -> Option<Uuid> {
     if group.groups.iter().any(|child| child.uuid == target_uuid) {
         return Some(group.uuid);
     }

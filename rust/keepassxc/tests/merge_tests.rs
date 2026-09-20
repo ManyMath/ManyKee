@@ -556,6 +556,9 @@ fn test_merge_soft_delete_preserved_across_merge() {
     let mut db_a = clone_db(&base);
     let db_b = clone_db(&base);
 
+    // Second-granularity timestamps: make the recycle strictly newer than the
+    // round-tripped location_changed so the move is visible to the merge.
+    thread::sleep(Duration::from_secs(1));
     keepassxc::delete_entry(&mut db_a, entry_uuid, true).expect("soft delete failed");
     let bin_uuid = db_a
         .meta
@@ -574,14 +577,15 @@ fn test_merge_soft_delete_preserved_across_merge() {
         "Soft-deleted entry must be in the recycle bin"
     );
     assert!(
-        db_a.deleted_objects.contains_key(&entry_uuid),
-        "Soft delete must record the entry in deleted_objects"
+        !db_a.deleted_objects.contains_key(&entry_uuid),
+        "Recycling must not tombstone the entry: KeePassXC only writes a \
+         DeletedObject when the object is destroyed"
     );
 
     merge(&mut db_a, &db_b).expect("merge failed");
 
     // After merging a source that still has the entry in root, the destination's
-    // recycle-bin placement and deleted_objects tombstone must survive.
+    // recycle-bin placement must survive.
     let bin_after = db_a
         .root
         .groups
@@ -597,9 +601,97 @@ fn test_merge_soft_delete_preserved_across_merge() {
         "Soft-deleted entry must not be resurrected at the root after merge"
     );
     assert!(
-        db_a.deleted_objects.contains_key(&entry_uuid),
-        "deleted_objects tombstone must survive merge"
+        !db_a.deleted_objects.contains_key(&entry_uuid),
+        "merge must not invent a tombstone for a recycled entry"
     );
+}
+
+/// Entry soft-deleted on A, unchanged on B: merging A into B must land the
+/// entry in B's recycle bin, not delete it (a tombstone newer than the entry's
+/// LastModificationTime would be treated as "delete everywhere").
+#[test]
+fn test_merge_soft_delete_relocates_into_destination_recycle_bin() {
+    let mut base = Database::new(DatabaseConfig::default());
+    base.root.name = "Root".to_string();
+    base.meta.recyclebin_enabled = Some(true);
+
+    let mut entry = Entry::new();
+    entry.set_unprotected(fields::TITLE, "Recycled on A");
+    let entry_uuid = entry.uuid;
+    base.root.entries.push(entry);
+    let base = round_trip(&base);
+
+    let mut db_a = clone_db(&base);
+    let mut db_b = clone_db(&base);
+
+    thread::sleep(Duration::from_secs(1));
+    keepassxc::delete_entry(&mut db_a, entry_uuid, true).expect("soft delete failed");
+    let bin_uuid = db_a.meta.recyclebin_uuid.expect("bin created");
+    let db_a = round_trip(&db_a);
+
+    merge(&mut db_b, &db_a).expect("merge failed");
+
+    assert!(
+        db_b.root.find_entry_by_uuid(entry_uuid).is_some(),
+        "entry must survive the merge"
+    );
+    assert!(
+        !db_b.root.entries.iter().any(|e| e.uuid == entry_uuid),
+        "entry must have left B's root"
+    );
+    let bin_in_b = db_b
+        .root
+        .groups
+        .iter()
+        .find(|g| g.uuid == bin_uuid)
+        .expect("A's recycle bin must have been created in B");
+    assert!(
+        bin_in_b.entries.iter().any(|e| e.uuid == entry_uuid),
+        "entry must be in B's recycle bin after merging A"
+    );
+    assert!(
+        !db_b.deleted_objects.contains_key(&entry_uuid),
+        "a recycled entry must not be tombstoned on the merge target"
+    );
+    assert_eq!(db_b.meta.recyclebin_uuid, Some(bin_uuid));
+}
+
+/// Entry recycled and then restored on A: merging A into B must keep the
+/// entry on B. Before the fix the recycle left a tombstone behind, and the
+/// merge deleted the restored entry from B.
+#[test]
+fn test_merge_recycle_then_restore_keeps_entry() {
+    let mut base = Database::new(DatabaseConfig::default());
+    base.root.name = "Root".to_string();
+    base.meta.recyclebin_enabled = Some(true);
+
+    let mut entry = Entry::new();
+    entry.set_unprotected(fields::TITLE, "Recycled then restored");
+    let entry_uuid = entry.uuid;
+    base.root.entries.push(entry);
+    let base = round_trip(&base);
+    let root_uuid = base.root.uuid;
+
+    let mut db_a = clone_db(&base);
+    let mut db_b = clone_db(&base);
+
+    thread::sleep(Duration::from_secs(1));
+    keepassxc::delete_entry(&mut db_a, entry_uuid, true).expect("soft delete failed");
+    keepassxc::move_entry(&mut db_a.root, entry_uuid, root_uuid).expect("restore failed");
+    assert!(db_a.root.entries.iter().any(|e| e.uuid == entry_uuid));
+    let db_a = round_trip(&db_a);
+
+    let result = merge(&mut db_b, &db_a).expect("merge failed");
+
+    assert_eq!(
+        result.entries_deleted, 0,
+        "restored entry must not be deleted"
+    );
+    assert!(
+        db_b.root.entries.iter().any(|e| e.uuid == entry_uuid),
+        "restored entry must still exist at B's root after merging A"
+    );
+    assert!(!db_b.deleted_objects.contains_key(&entry_uuid));
 }
 
 /// Source has a newer tombstone for an entry still present in destination:

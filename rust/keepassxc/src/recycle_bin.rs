@@ -3,9 +3,9 @@
 use keepass::db::{Database, Group, Times};
 use uuid::Uuid;
 
-use crate::entry::EntryExt;
+use crate::entry::{find_entry_parent_uuid, EntryExt};
 use crate::error::KeePassXcError;
-use crate::group::GroupExt;
+use crate::group::{find_group_parent_uuid, GroupExt};
 
 /// Recursively collect all entry and subgroup UUIDs within a group.
 fn collect_all_uuids(group: &Group) -> Vec<Uuid> {
@@ -53,20 +53,31 @@ pub fn delete_entry(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), Kee
         None
     };
 
-    let entry = db
+    let parent_uuid = find_entry_parent_uuid(&db.root, uuid);
+    let mut entry = db
         .root
         .remove_entry(uuid)
         .ok_or(KeePassXcError::EntryNotFound(uuid))?;
 
     let now = Times::now();
-    db.deleted_objects.insert(uuid, Some(now));
 
-    if let Some(bin_uuid) = bin_uuid {
-        let bin = db
-            .root
-            .find_group_by_uuid_mut(bin_uuid)
-            .expect("recycle bin group must exist after get_or_create");
-        bin.add_entry(entry);
+    match bin_uuid {
+        Some(bin_uuid) => {
+            // Recycling is a move, not a deletion: KeePassXC only writes a
+            // DeletedObject once the entry is actually destroyed. A tombstone
+            // here would make every merge peer treat the (still recoverable)
+            // entry as permanently deleted.
+            entry.previous_parent_group = parent_uuid;
+            entry.times.location_changed = Some(now);
+            let bin = db
+                .root
+                .find_group_by_uuid_mut(bin_uuid)
+                .expect("recycle bin group must exist after get_or_create");
+            bin.add_entry(entry);
+        }
+        None => {
+            db.deleted_objects.insert(uuid, Some(now));
+        }
     }
 
     Ok(())
@@ -98,24 +109,30 @@ pub fn delete_group(db: &mut Database, uuid: Uuid, soft: bool) -> Result<(), Kee
         None
     };
 
-    let removed = db
+    let parent_uuid = find_group_parent_uuid(&db.root, uuid);
+    let mut removed = db
         .root
         .remove_group(uuid)
         .ok_or(KeePassXcError::GroupNotFound(uuid))?;
 
     let now = Times::now();
 
-    db.deleted_objects.insert(uuid, Some(now));
-
-    if let Some(bin_uuid) = bin_uuid {
-        let bin = db
-            .root
-            .find_group_by_uuid_mut(bin_uuid)
-            .expect("recycle bin group must exist after get_or_create");
-        bin.add_group(removed);
-    } else {
-        for descendant_uuid in collect_all_uuids(&removed) {
-            db.deleted_objects.insert(descendant_uuid, Some(now));
+    match bin_uuid {
+        Some(bin_uuid) => {
+            // See `delete_entry`: a recycled group is moved, not tombstoned.
+            removed.previous_parent_group = parent_uuid;
+            removed.times.location_changed = Some(now);
+            let bin = db
+                .root
+                .find_group_by_uuid_mut(bin_uuid)
+                .expect("recycle bin group must exist after get_or_create");
+            bin.add_group(removed);
+        }
+        None => {
+            db.deleted_objects.insert(uuid, Some(now));
+            for descendant_uuid in collect_all_uuids(&removed) {
+                db.deleted_objects.insert(descendant_uuid, Some(now));
+            }
         }
     }
 
@@ -213,9 +230,14 @@ mod tests {
         let bin = db.root.find_group_by_uuid(bin_uuid).unwrap();
         assert!(bin.entries.iter().any(|e| e.uuid == uuid));
 
-        // DeletedObject should be recorded
-        assert!(db.deleted_objects.contains_key(&uuid));
-        assert!(db.deleted_objects[&uuid].is_some());
+        // Recycling is a move, so it must NOT leave a DeletedObject behind:
+        // a tombstone would tell every merge peer to delete the entry for good.
+        assert!(!db.deleted_objects.contains_key(&uuid));
+
+        // The move itself is recorded so merges can relocate the entry.
+        let recycled = bin.entries.iter().find(|e| e.uuid == uuid).unwrap();
+        assert_eq!(recycled.previous_parent_group, Some(db.root.uuid));
+        assert!(recycled.times.location_changed.is_some());
     }
 
     #[test]
@@ -293,8 +315,12 @@ mod tests {
         let moved_group = bin.groups.iter().find(|g| g.uuid == group_uuid).unwrap();
         assert!(moved_group.entries.iter().any(|e| e.uuid == entry_uuid));
 
-        // Only the group UUID is recorded as DeletedObject (not entries within it)
-        assert!(db.deleted_objects.contains_key(&group_uuid));
+        // Neither the group nor its entries are tombstoned: the subtree is
+        // still recoverable from the recycle bin.
+        assert!(!db.deleted_objects.contains_key(&group_uuid));
+        assert!(!db.deleted_objects.contains_key(&entry_uuid));
+        assert_eq!(moved_group.previous_parent_group, Some(db.root.uuid));
+        assert!(moved_group.times.location_changed.is_some());
     }
 
     #[test]
