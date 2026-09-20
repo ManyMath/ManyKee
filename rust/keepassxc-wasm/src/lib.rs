@@ -515,45 +515,62 @@ pub fn save_db(
 #[wasm_bindgen]
 pub fn merge_databases(handle_a: u32, handle_b: u32) -> Result<String, JsValue> {
     catch_unwind_result(|| {
-        DATABASES.with(|dbs| {
-            let mut dbs = dbs.borrow_mut();
+        merge_databases_inner(handle_a, handle_b)
+            .map_err(|(code, message)| err_json(code, &message))
+    })
+}
 
-            if !dbs.contains_key(&handle_a) {
-                return Err(err_json(
-                    "INVALID_HANDLE",
-                    &format!("No database with handle {}", handle_a),
-                ));
-            }
-            if !dbs.contains_key(&handle_b) {
-                return Err(err_json(
-                    "INVALID_HANDLE",
-                    &format!("No database with handle {}", handle_b),
-                ));
-            }
+/// `merge_databases` minus the `JsValue` conversion, so the error paths can
+/// be exercised by native unit tests (constructing a `JsValue` panics
+/// outside a real wasm32 target). Errors are `(code, message)` pairs.
+fn merge_databases_inner(handle_a: u32, handle_b: u32) -> Result<String, (&'static str, String)> {
+    DATABASES.with(|dbs| {
+        let mut dbs = dbs.borrow_mut();
 
-            let db_b = dbs.remove(&handle_b).unwrap();
+        if !dbs.contains_key(&handle_a) {
+            return Err((
+                "INVALID_HANDLE",
+                format!("No database with handle {}", handle_a),
+            ));
+        }
+        if !dbs.contains_key(&handle_b) {
+            return Err((
+                "INVALID_HANDLE",
+                format!("No database with handle {}", handle_b),
+            ));
+        }
+        // Both handles name the same database: the merge below removes
+        // handle_b and then looks handle_a up again, which would panic.
+        // A self-merge is also meaningless, so reject it up front.
+        if handle_a == handle_b {
+            return Err((
+                "INVALID_ARGUMENT",
+                format!("Cannot merge database handle {} with itself", handle_a),
+            ));
+        }
 
-            // Run the merge behind its own catch_unwind so db_b is always
-            // reinserted before this function returns, even if the merge
-            // itself panics on a crafted database, otherwise db_b would
-            // silently vanish from DATABASES with no way to recover it. Any
-            // caught panic is re-raised afterward so the outer
-            // catch_unwind_result still converts it into a PANIC error.
-            let merge_outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let db_a = dbs.get_mut(&handle_a).unwrap();
-                keepassxc::merge(db_a, &db_b)
-            }));
-            dbs.insert(handle_b, db_b);
+        let db_b = dbs.remove(&handle_b).unwrap();
 
-            let merge_result = match merge_outcome {
-                Ok(result) => result,
-                Err(payload) => std::panic::resume_unwind(payload),
-            };
-            let result = merge_result.map_err(|e| err_json("MERGE_ERROR", &format!("{}", e)))?;
-            let info = MergeInfo::from(&result);
+        // Run the merge behind its own catch_unwind so db_b is always
+        // reinserted before this function returns, even if the merge
+        // itself panics on a crafted database, otherwise db_b would
+        // silently vanish from DATABASES with no way to recover it. Any
+        // caught panic is re-raised afterward so the outer
+        // catch_unwind_result still converts it into a PANIC error.
+        let merge_outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let db_a = dbs.get_mut(&handle_a).unwrap();
+            keepassxc::merge(db_a, &db_b)
+        }));
+        dbs.insert(handle_b, db_b);
 
-            serde_json::to_string(&info).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
-        })
+        let merge_result = match merge_outcome {
+            Ok(result) => result,
+            Err(payload) => std::panic::resume_unwind(payload),
+        };
+        let result = merge_result.map_err(|e| ("MERGE_ERROR", format!("{}", e)))?;
+        let info = MergeInfo::from(&result);
+
+        serde_json::to_string(&info).map_err(|e| ("JSON_ERROR", e.to_string()))
     })
 }
 
@@ -848,6 +865,23 @@ mod tests {
             .find_entry_by_uuid(entry_uuid.parse().unwrap())
             .unwrap();
         assert_eq!(created.get(fields::USERNAME), Some("wasm-user"));
+
+        close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn merge_databases_rejects_merging_a_handle_with_itself() {
+        let handle = open_test_handle();
+
+        // Used to remove the database under `handle` and then unwrap the
+        // same (now missing) key, panicking inside the merge closure.
+        let (code, message) = merge_databases_inner(handle, handle).unwrap_err();
+        assert_eq!(code, "INVALID_ARGUMENT");
+        assert!(message.contains("itself"), "message was: {}", message);
+
+        // The database must still be registered and usable afterwards.
+        DATABASES.with(|dbs| assert!(dbs.borrow().contains_key(&handle)));
+        assert!(list_entries(handle, "").is_ok());
 
         close_db(handle).unwrap();
     }
