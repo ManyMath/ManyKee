@@ -37,11 +37,19 @@ pub fn create_group(
 }
 
 /// Rename a group by UUID.
+///
+/// Bumps the group's last modification time so the rename wins over the
+/// older name when the database is merged (equal timestamps keep the
+/// destination's version).
 pub fn rename_group(root: &mut Group, group_uuid: Uuid, name: &str) -> Result<(), KeePassXcError> {
     let group = root
         .find_group_by_uuid_mut(group_uuid)
         .ok_or(KeePassXcError::GroupNotFound(group_uuid))?;
+    if group.name == name {
+        return Ok(());
+    }
     group.name = name.to_string();
+    group.times.last_modification = Some(Times::now());
     Ok(())
 }
 
@@ -285,6 +293,39 @@ mod tests {
         let (mut root, _, child_uuid, _) = make_group_tree();
         rename_group(&mut root, child_uuid, "Renamed").unwrap();
         assert_eq!(root.find_group_by_uuid(child_uuid).unwrap().name, "Renamed");
+    }
+
+    #[test]
+    fn rename_group_bumps_last_modification() {
+        let (mut root, _, child_uuid, _) = make_group_tree();
+        let stale = Times::epoch();
+        root.find_group_by_uuid_mut(child_uuid)
+            .unwrap()
+            .times
+            .last_modification = Some(stale);
+
+        rename_group(&mut root, child_uuid, "Renamed").unwrap();
+
+        let renamed = root.find_group_by_uuid(child_uuid).unwrap();
+        assert!(
+            renamed.times.last_modification.unwrap() > stale,
+            "a rename must advance last_modification or it loses on merge"
+        );
+    }
+
+    #[test]
+    fn rename_group_to_same_name_is_a_no_op() {
+        let (mut root, _, child_uuid, _) = make_group_tree();
+        let stale = Times::epoch();
+        root.find_group_by_uuid_mut(child_uuid)
+            .unwrap()
+            .times
+            .last_modification = Some(stale);
+
+        rename_group(&mut root, child_uuid, "Child").unwrap();
+
+        let group = root.find_group_by_uuid(child_uuid).unwrap();
+        assert_eq!(group.times.last_modification, Some(stale));
     }
 
     #[test]

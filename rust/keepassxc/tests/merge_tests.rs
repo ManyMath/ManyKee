@@ -20,6 +20,7 @@ use keepass::db::{fields, Database, Entry, Group, Times};
 use keepass::DatabaseKey;
 use keepassxc::merge::{merge, ConflictResolution, MergeWarning};
 use keepassxc::EntryExt;
+use keepassxc::GroupExt;
 use uuid::Uuid;
 
 const TEST_PASSWORD: &str = "test";
@@ -692,6 +693,30 @@ fn test_merge_recycle_then_restore_keeps_entry() {
         "restored entry must still exist at B's root after merging A"
     );
     assert!(!db_b.deleted_objects.contains_key(&entry_uuid));
+}
+
+/// Group renamed on A, untouched on B: merging A into B must carry the new
+/// name. Before the fix the rename did not advance last_modification, and
+/// the merge's equal-timestamp tiebreak kept B's stale name.
+#[test]
+fn test_merge_group_rename_propagates() {
+    let base = create_base_db();
+    let group_uuid = base.root.groups[0].uuid;
+
+    let mut db_a = clone_db(&base);
+    let mut db_b = clone_db(&base);
+
+    thread::sleep(Duration::from_secs(1));
+    keepassxc::rename_group(&mut db_a.root, group_uuid, "Renamed on A").expect("rename failed");
+    let db_a = round_trip(&db_a);
+
+    merge(&mut db_b, &db_a).expect("merge failed");
+
+    let merged = db_b
+        .root
+        .find_group_by_uuid(group_uuid)
+        .expect("group must still exist");
+    assert_eq!(merged.name, "Renamed on A");
 }
 
 /// Source has a newer tombstone for an entry still present in destination:
