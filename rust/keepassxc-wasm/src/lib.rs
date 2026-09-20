@@ -7,7 +7,7 @@ use keepass::DatabaseKey;
 use keepassxc::{
     create_group as create_group_in_db, delete_entry as delete_entry_from_db,
     delete_group as delete_group_from_db, extract_challenge as extract_core_challenge,
-    move_entry as move_entry_in_db, move_group as move_group_in_db, open_bytes,
+    move_entry as move_entry_in_db, move_group as move_group_in_db, new_database, open_bytes,
     read_entry_field as read_entry_field_value, read_entry_fields as read_entry_payload,
     read_entry_totp_at, rename_group as rename_group_in_db, save_bytes,
     serialization::{EntryFields, EntryInfo, GroupInfo, MergeInfo, TotpInfo},
@@ -141,7 +141,7 @@ pub fn version() -> String {
 #[wasm_bindgen]
 pub fn create_db() -> Result<String, JsValue> {
     catch_unwind_result(|| {
-        let db = Database::new(DatabaseConfig::default());
+        let db = new_database(DatabaseConfig::default());
         let handle = store_database(db)?;
         Ok(json!({"handle": handle}).to_string())
     })
@@ -613,6 +613,65 @@ mod tests {
             .any(|group| group["uuid"] == target_uuid.to_string()));
 
         handle
+    }
+
+    #[test]
+    fn create_db_vault_can_soft_delete() {
+        let created: serde_json::Value = serde_json::from_str(&create_db().unwrap()).unwrap();
+        let handle = created["handle"].as_u64().unwrap() as u32;
+
+        let entry: serde_json::Value =
+            serde_json::from_str(&create_entry(handle, "", "Recyclable").unwrap()).unwrap();
+        let entry_uuid = entry["uuid"].as_str().unwrap().to_string();
+
+        // delete_entry is hard-wired to a soft delete; on a fresh vault this
+        // used to fail with "Recycle bin is not enabled".
+        delete_entry(handle, &entry_uuid).unwrap();
+
+        let root_entries: Vec<serde_json::Value> =
+            serde_json::from_str(&list_entries(handle, "").unwrap()).unwrap();
+        assert!(root_entries.is_empty());
+
+        let groups: Vec<serde_json::Value> =
+            serde_json::from_str(&list_groups(handle, "").unwrap()).unwrap();
+        let bin = groups
+            .iter()
+            .find(|group| group["name"] == "Recycle Bin")
+            .expect("recycle bin group created on demand");
+        let bin_entries: Vec<serde_json::Value> =
+            serde_json::from_str(&list_entries(handle, bin["uuid"].as_str().unwrap()).unwrap())
+                .unwrap();
+        assert!(bin_entries
+            .iter()
+            .any(|entry| entry["uuid"].as_str() == Some(entry_uuid.as_str())));
+
+        close_db(handle).unwrap();
+    }
+
+    #[test]
+    fn create_db_vault_can_soft_delete_group() {
+        let created: serde_json::Value = serde_json::from_str(&create_db().unwrap()).unwrap();
+        let handle = created["handle"].as_u64().unwrap() as u32;
+
+        let group: serde_json::Value =
+            serde_json::from_str(&create_group(handle, "", "Doomed").unwrap()).unwrap();
+        let group_uuid = group["uuid"].as_str().unwrap().to_string();
+
+        delete_group(handle, &group_uuid).unwrap();
+
+        let groups: Vec<serde_json::Value> =
+            serde_json::from_str(&list_groups(handle, "").unwrap()).unwrap();
+        assert!(!groups.iter().any(|g| g["uuid"] == group_uuid.as_str()));
+        let bin = groups
+            .iter()
+            .find(|g| g["name"] == "Recycle Bin")
+            .expect("recycle bin group created on demand");
+        let bin_groups: Vec<serde_json::Value> =
+            serde_json::from_str(&list_groups(handle, bin["uuid"].as_str().unwrap()).unwrap())
+                .unwrap();
+        assert!(bin_groups.iter().any(|g| g["uuid"] == group_uuid.as_str()));
+
+        close_db(handle).unwrap();
     }
 
     #[test]
