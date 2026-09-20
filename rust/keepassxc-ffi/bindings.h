@@ -28,6 +28,8 @@
 
 #define KPXC_ERR_PANIC -10
 
+#define KPXC_ERR_RECYCLE_BIN_DISABLED -11
+
  const char *kpxc_last_error(void) ;
 
  void kpxc_string_free(char *ptr) ;

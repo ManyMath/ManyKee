@@ -490,6 +490,28 @@ mod tests {
     }
 
     #[test]
+    fn entry_soft_delete_with_disabled_bin_reports_distinct_code() {
+        let (mut db, _, _) = make_db();
+        db.meta.recyclebin_enabled = Some(false);
+        let entry_uuid = db.root.entries[0].uuid;
+        let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));
+        let entry_uuid_c = CString::new(entry_uuid.to_string()).unwrap();
+
+        let result = kpxc_entry_delete(db_ptr, entry_uuid_c.as_ptr(), 0);
+        assert_eq!(result, crate::error::KPXC_ERR_RECYCLE_BIN_DISABLED);
+
+        // The entry is untouched and a genuinely unknown UUID still maps to
+        // NOT_FOUND, so callers can tell the two apart.
+        let db = unsafe { &*db_ptr };
+        assert!(db.0.root.find_entry_by_uuid(entry_uuid).is_some());
+        let missing = CString::new(Uuid::new_v4().to_string()).unwrap();
+        let result = kpxc_entry_delete(db_ptr, missing.as_ptr(), 1);
+        assert_eq!(result, crate::error::KPXC_ERR_NOT_FOUND);
+
+        crate::database::kpxc_database_free(db_ptr);
+    }
+
+    #[test]
     fn entry_move_updates_tree() {
         let (db, _, target_uuid) = make_db();
         let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));

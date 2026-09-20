@@ -18,6 +18,7 @@ pub const KPXC_ERR_NULL_PTR: c_int = -7;
 pub const KPXC_ERR_INVALID_UTF8: c_int = -8;
 pub const KPXC_ERR_PARSE: c_int = -9;
 pub const KPXC_ERR_PANIC: c_int = -10;
+pub const KPXC_ERR_RECYCLE_BIN_DISABLED: c_int = -11;
 
 thread_local! {
  static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
@@ -42,7 +43,7 @@ pub(crate) fn set_error_from_kpxc(e: &KeePassXcError) -> c_int {
         KeePassXcError::Open(_) => KPXC_ERR_OPEN,
         KeePassXcError::Save(_) => KPXC_ERR_SAVE,
         KeePassXcError::EntryNotFound(_) | KeePassXcError::GroupNotFound(_) => KPXC_ERR_NOT_FOUND,
-        KeePassXcError::RecycleBinDisabled => KPXC_ERR_NOT_FOUND,
+        KeePassXcError::RecycleBinDisabled => KPXC_ERR_RECYCLE_BIN_DISABLED,
         KeePassXcError::Io(_) => KPXC_ERR_IO,
         KeePassXcError::Merge(_) => KPXC_ERR_MERGE,
         KeePassXcError::ChallengeResponse(_) => KPXC_ERR_YUBIKEY,
@@ -151,5 +152,16 @@ mod tests {
     fn catch_unwind_passes_through_ok_value() {
         let result = catch_unwind(KPXC_ERR_PANIC, || KPXC_OK);
         assert_eq!(result, KPXC_OK);
+    }
+
+    #[test]
+    fn recycle_bin_disabled_has_its_own_error_code() {
+        let code = set_error_from_kpxc(&KeePassXcError::RecycleBinDisabled);
+        assert_eq!(code, KPXC_ERR_RECYCLE_BIN_DISABLED);
+        assert_ne!(code, KPXC_ERR_NOT_FOUND);
+        let msg = unsafe { std::ffi::CStr::from_ptr(get_last_error()) }
+            .to_str()
+            .unwrap();
+        assert!(msg.contains("Recycle bin"), "message was: {}", msg);
     }
 }
