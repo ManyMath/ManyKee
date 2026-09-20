@@ -6,7 +6,22 @@ use std::path::Path;
 
 use uuid::Uuid;
 
-use crate::{Database, DatabaseKey, KeePassXcError};
+use crate::{Database, DatabaseConfig, DatabaseKey, KeePassXcError, Times};
+
+/// Create a new, empty database the way KeePassXC does: with the recycle
+/// bin enabled.
+///
+/// keepass-rs's `Database::new` leaves `meta.recyclebin_enabled` unset,
+/// which the recycle-bin helpers treat as disabled, so a vault built from
+/// it could never soft-delete anything until something else flipped the
+/// flag. Every surface that creates a fresh database (FFI, WASM) must go
+/// through this constructor.
+pub fn new_database(config: DatabaseConfig) -> Database {
+    let mut db = Database::new(config);
+    db.meta.recyclebin_enabled = Some(true);
+    db.meta.recyclebin_changed = Some(Times::now());
+    db
+}
 
 /// Parse a database from a byte slice.
 pub fn open_bytes(bytes: &[u8], key: DatabaseKey) -> Result<Database, KeePassXcError> {
@@ -99,4 +114,36 @@ fn replace_destination(temp_path: &Path, path: &Path) -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{delete_entry, fields, Entry, EntryExt, GroupExt};
+
+    #[test]
+    fn new_database_enables_recycle_bin() {
+        let db = new_database(DatabaseConfig::default());
+        assert_eq!(db.meta.recyclebin_enabled, Some(true));
+        assert!(db.meta.recyclebin_changed.is_some());
+        assert!(
+            db.root.groups.is_empty(),
+            "the bin itself is created lazily"
+        );
+    }
+
+    #[test]
+    fn new_database_can_soft_delete() {
+        let mut db = new_database(DatabaseConfig::default());
+        let mut entry = Entry::new();
+        entry.set_unprotected(fields::TITLE, "Recyclable");
+        let uuid = entry.uuid;
+        db.root.add_entry(entry);
+
+        delete_entry(&mut db, uuid, true).expect("soft delete on a fresh database");
+
+        let bin_uuid = db.meta.recyclebin_uuid.expect("bin created on demand");
+        let bin = db.root.find_group_by_uuid(bin_uuid).unwrap();
+        assert!(bin.entries.iter().any(|e| e.uuid == uuid));
+    }
 }

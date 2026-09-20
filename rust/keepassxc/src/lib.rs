@@ -12,7 +12,7 @@ pub mod serialization;
 #[cfg(feature = "yubikey")]
 pub mod yubikey;
 
-pub use database::{open_bytes, save_atomic, save_bytes};
+pub use database::{new_database, open_bytes, save_atomic, save_bytes};
 pub use entry::{
     move_entry, read_entry_field, read_entry_fields, read_entry_totp_at, update_entry, EntryExt,
     EntryFieldExt, EntryReadFields, EntryTotp,
