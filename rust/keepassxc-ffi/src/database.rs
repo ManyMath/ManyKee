@@ -4,7 +4,7 @@ use std::ffi::{c_char, c_int, CString};
 use std::fs::File;
 use std::path::Path;
 
-use keepassxc::{save_atomic, Database, DatabaseConfig, DatabaseKey};
+use keepassxc::{new_database, save_atomic, Database, DatabaseConfig, DatabaseKey};
 
 use crate::error::{
     check_live_db, check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
@@ -58,15 +58,15 @@ pub extern "C" fn kpxc_database_open(
 /// Mirrors the sensible-defaults `DatabaseConfig` (`keepass-rs`'s own
 /// `Default` impl: KDBX4, AES256 outer cipher, ChaCha20 inner cipher,
 /// Argon2 KDF) that `kpxc_database_save`'s own test coverage already
-/// exercises -- this just exposes the same `Database::new` construction
-/// as a public FFI entry point so a caller can create, then save, a fresh
-/// database via the existing `kpxc_database_save`/`_with_keyfile`
-/// functions rather than needing a template file to open first.
+/// exercises, with the recycle bin enabled as KeePassXC does, so a caller
+/// can create, soft-delete in, then save a fresh database via the existing
+/// `kpxc_database_save`/`_with_keyfile` functions rather than needing a
+/// template file to open first.
 #[no_mangle]
 pub extern "C" fn kpxc_database_create() -> *mut KpxcDatabase {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
-        into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())))
+        into_raw_registered(KpxcDatabase(new_database(DatabaseConfig::default())))
     })
 }
 
@@ -222,7 +222,7 @@ pub extern "C" fn kpxc_database_root_uuid(db: *mut KpxcDatabase) -> *mut c_char 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use keepassxc::DatabaseConfig;
+    use keepassxc::{DatabaseConfig, GroupExt};
 
     #[test]
     fn kpxc_database_create_returns_a_saveable_empty_database() {
@@ -244,6 +244,35 @@ mod tests {
         assert!(reopened.root.groups.is_empty());
         assert!(reopened.root.entries.is_empty());
         let _ = std::fs::remove_file(&path);
+
+        kpxc_database_free(db_ptr);
+    }
+
+    #[test]
+    fn kpxc_database_create_supports_soft_delete() {
+        let db_ptr = kpxc_database_create();
+        assert!(!db_ptr.is_null());
+
+        let root_uuid = crate::database::kpxc_database_root_uuid(db_ptr);
+        let root_uuid = unsafe { CString::from_raw(root_uuid) };
+        let entry_uuid = crate::entry::kpxc_entry_create(db_ptr, root_uuid.as_ptr());
+        assert!(!entry_uuid.is_null());
+        let entry_uuid = unsafe { CString::from_raw(entry_uuid) };
+
+        // permanent = 0 is a soft delete, which needs the recycle bin.
+        let result = crate::entry::kpxc_entry_delete(db_ptr, entry_uuid.as_ptr(), 0);
+        assert_eq!(result, KPXC_OK, "{}", unsafe {
+            std::ffi::CStr::from_ptr(crate::error::get_last_error())
+                .to_string_lossy()
+                .into_owned()
+        });
+
+        let db = unsafe { &*db_ptr };
+        let entry_uuid: uuid::Uuid = entry_uuid.to_str().unwrap().parse().unwrap();
+        let bin_uuid = db.0.meta.recyclebin_uuid.expect("recycle bin created");
+        let bin = db.0.root.find_group_by_uuid(bin_uuid).unwrap();
+        assert!(bin.entries.iter().any(|e| e.uuid == entry_uuid));
+        assert!(db.0.root.entries.is_empty());
 
         kpxc_database_free(db_ptr);
     }
