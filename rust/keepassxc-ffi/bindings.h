@@ -32,6 +32,11 @@
 
  const char *kpxc_last_error(void) ;
 
+/**
+ * Frees a string returned by this library. The bytes are overwritten with
+ * zeros before the allocation is released, since these buffers can carry
+ * plaintext secrets (e.g. a password from `kpxc_entry_get_field`).
+ */
  void kpxc_string_free(char *ptr) ;
 
  struct KpxcDatabase *kpxc_database_open(const char *path, const char *password) ;
