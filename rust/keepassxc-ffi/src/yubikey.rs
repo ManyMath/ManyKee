@@ -4,6 +4,8 @@ use std::ffi::{c_char, c_int, CString};
 use std::fs::File;
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::database::KpxcDatabase;
 use crate::error::{
     check_live_db, check_null, clear_last_error, cstr_to_str, set_error_from_kpxc, set_last_error,
@@ -338,23 +340,13 @@ pub extern "C" fn kpxc_yubikey_list() -> *mut c_char {
 
         match keepassxc::list_yubikeys() {
             Ok(yubikeys) => {
-                let entries: Vec<String> = yubikeys
-                    .iter()
-                    .map(|yk| {
-                        let name = yk
-                            .name
-                            .as_deref()
-                            .map(|n| {
-                                format!("\"{}\"", n.replace('\\', "\\\\").replace('"', "\\\""))
-                            })
-                            .unwrap_or_else(|| "null".to_string());
-                        format!(
-                            "{{\"serial_number\":{},\"name\":{}}}",
-                            yk.serial_number, name
-                        )
-                    })
-                    .collect();
-                let json = format!("[{}]", entries.join(","));
+                let json = match yubikeys_to_json(&yubikeys) {
+                    Ok(json) => json,
+                    Err(e) => {
+                        set_last_error(&format!("Failed to serialize YubiKey list: {}", e));
+                        return std::ptr::null_mut();
+                    }
+                };
 
                 match CString::new(json) {
                     Ok(cs) => cs.into_raw(),
@@ -370,4 +362,61 @@ pub extern "C" fn kpxc_yubikey_list() -> *mut c_char {
             }
         }
     })
+}
+
+#[derive(Serialize)]
+struct YubikeyInfo<'a> {
+    serial_number: u32,
+    name: Option<&'a str>,
+}
+
+/// Serialise the device list for `kpxc_yubikey_list`. The device name comes
+/// from the hardware/driver, so it goes through serde_json rather than
+/// hand-rolled escaping, which only handled `\` and `"` and produced
+/// invalid JSON for any control character.
+fn yubikeys_to_json(yubikeys: &[keepassxc::Yubikey]) -> serde_json::Result<String> {
+    let infos: Vec<YubikeyInfo<'_>> = yubikeys
+        .iter()
+        .map(|yk| YubikeyInfo {
+            serial_number: yk.serial_number,
+            name: yk.name.as_deref(),
+        })
+        .collect();
+    serde_json::to_string(&infos)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn yubikey_json_escapes_control_characters_and_quotes() {
+        let yubikeys = vec![
+            keepassxc::Yubikey {
+                serial_number: 12345,
+                name: Some("Yubi\"Key\n5 \\ NFC\u{1}".to_string()),
+            },
+            keepassxc::Yubikey {
+                serial_number: 67890,
+                name: None,
+            },
+        ];
+
+        let json = yubikeys_to_json(&yubikeys).unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json).expect("output must be valid JSON");
+
+        assert_eq!(
+            parsed,
+            serde_json::json!([
+                {"serial_number": 12345, "name": "Yubi\"Key\n5 \\ NFC\u{1}"},
+                {"serial_number": 67890, "name": null},
+            ])
+        );
+    }
+
+    #[test]
+    fn yubikey_json_empty_list() {
+        assert_eq!(yubikeys_to_json(&[]).unwrap(), "[]");
+    }
 }
