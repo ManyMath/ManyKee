@@ -1,6 +1,6 @@
 //! Database save helpers.
 
-use std::fs::{remove_file, rename, OpenOptions};
+use std::fs::{remove_file, rename, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
@@ -43,6 +43,9 @@ pub fn save_bytes(db: &Database, key: DatabaseKey) -> Result<Vec<u8>, KeePassXcE
 /// On Windows this uses `ReplaceFileW` when the destination already exists so
 /// replace-existing saves remain atomic and the original file is preserved on
 /// failure.
+///
+/// On Unix the replacement keeps the existing file's permission bits, and a
+/// database saved to a new path is created owner-only (`0600`).
 pub fn save_atomic(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), KeePassXcError> {
     let directory = path
         .parent()
@@ -55,10 +58,17 @@ pub fn save_atomic(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), K
         .unwrap_or("database.kdbx");
     let temp_path = directory.join(format!(".{file_name}.{}.tmp", Uuid::new_v4()));
 
-    let file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp_path)?;
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    restrict_new_file_mode(&mut options);
+    let file = options.open(&temp_path)?;
+    // The rename below swaps in the temp file's inode, so any permissions the
+    // destination had are lost unless they are copied over first.
+    if let Err(error) = copy_destination_permissions(path, &file) {
+        drop(file);
+        let _ = remove_file(&temp_path);
+        return Err(KeePassXcError::Io(error));
+    }
     let mut writer = BufWriter::new(file);
 
     let save_result = db.save(&mut writer, key);
@@ -78,6 +88,42 @@ pub fn save_atomic(db: &Database, path: &Path, key: DatabaseKey) -> Result<(), K
         return Err(KeePassXcError::Io(error));
     }
 
+    Ok(())
+}
+
+/// Create the temp file owner-only. Without this it gets the process umask
+/// default (typically `0644`), and a first save of a vault would leave it
+/// world-readable.
+#[cfg(unix)]
+fn restrict_new_file_mode(options: &mut OpenOptions) {
+    use std::os::unix::fs::OpenOptionsExt;
+    options.mode(0o600);
+}
+
+#[cfg(not(unix))]
+fn restrict_new_file_mode(_options: &mut OpenOptions) {}
+
+/// Give the temp file the permission bits of the file it is about to
+/// replace, so saving over a `0600` vault does not turn it into `0644` (or
+/// tighten a deliberately shared `0640` one).
+#[cfg(unix)]
+fn copy_destination_permissions(destination: &Path, temp: &File) -> std::io::Result<()> {
+    use std::fs::Permissions;
+    use std::os::unix::fs::PermissionsExt;
+
+    let Ok(metadata) = std::fs::metadata(destination) else {
+        return Ok(());
+    };
+    if !metadata.is_file() {
+        return Ok(());
+    }
+    let mode = metadata.permissions().mode() & 0o777;
+    temp.set_permissions(Permissions::from_mode(mode))
+}
+
+/// `ReplaceFileW` already keeps the replaced file's attributes and ACLs.
+#[cfg(not(unix))]
+fn copy_destination_permissions(_destination: &Path, _temp: &File) -> std::io::Result<()> {
     Ok(())
 }
 
@@ -120,6 +166,62 @@ fn replace_destination(temp_path: &Path, path: &Path) -> std::io::Result<()> {
 mod tests {
     use super::*;
     use crate::{delete_entry, fields, Entry, EntryExt, GroupExt};
+
+    #[cfg(unix)]
+    fn file_mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_atomic_preserves_existing_permissions() {
+        use std::fs::Permissions;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let db = new_database(DatabaseConfig::default());
+
+        // 0600 is the reported case (a private vault turned 0644); 0640 is
+        // neither the umask default nor the new-file mode, so it can only
+        // survive if it is actually copied.
+        for mode in [0o600, 0o640] {
+            let path = dir.path().join(format!("vault-{mode:o}.kdbx"));
+            save_atomic(&db, &path, DatabaseKey::new().with_password("test")).unwrap();
+            std::fs::set_permissions(&path, Permissions::from_mode(mode)).unwrap();
+
+            save_atomic(&db, &path, DatabaseKey::new().with_password("test")).unwrap();
+
+            assert_eq!(
+                file_mode(&path),
+                mode,
+                "saving over a {mode:o} vault must keep its permissions"
+            );
+            open_bytes(
+                &std::fs::read(&path).unwrap(),
+                DatabaseKey::new().with_password("test"),
+            )
+            .expect("replaced file must still be a valid database");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_atomic_creates_new_files_owner_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new.kdbx");
+        let db = new_database(DatabaseConfig::default());
+
+        save_atomic(&db, &path, DatabaseKey::new().with_password("test")).unwrap();
+
+        let mode = file_mode(&path);
+        assert_eq!(
+            mode & 0o077,
+            0,
+            "new vault must not be group/world accessible, got {mode:o}"
+        );
+        assert_ne!(mode & 0o600, 0, "owner must keep access, got {mode:o}");
+    }
 
     #[test]
     fn new_database_enables_recycle_bin() {
