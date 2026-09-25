@@ -11,6 +11,7 @@ totp = ["keepass/totp"]
 
 [dependencies]
 keepass = { path = "../keepass-rs", features = ["save_kdbx4", "_merge", "totp"] }
+chrono = { version = "0.4.23", default-features = false }
 thiserror = "1"
 uuid = "1"
 serde = { version = "1", features = ["derive"] }

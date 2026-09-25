@@ -767,6 +767,7 @@ dependencies = [
  "aes",
  "cbc",
  "chacha20",
+ "chrono",
  "cipher",
  "hex",
  "hmac",

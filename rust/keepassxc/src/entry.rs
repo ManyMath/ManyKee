@@ -2,7 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use keepass::db::{CustomDataValue, Entry, Group, Meta, Times, Value};
+use chrono::{NaiveDateTime, TimeDelta};
+use keepass::db::{CustomDataValue, Entry, Group, History, Meta, Times, Value};
 use uuid::Uuid;
 
 use crate::error::KeePassXcError;
@@ -173,6 +174,12 @@ pub fn move_entry(
 /// Enforces history_max_items and history_max_size from Meta.
 /// The updater closure receives a mutable reference to the entry.
 /// Returns Err(KeePassXcError::EntryNotFound) if UUID not found.
+///
+/// The snapshot keeps the entry's own timestamps, the way KeePassXC records
+/// history, and the entry's new last modification time is always strictly
+/// later than the snapshot's, so every history item has a distinct
+/// timestamp (history merges key items by that timestamp). An updater that
+/// leaves the entry unchanged records nothing and keeps the old timestamp.
 pub fn update_entry<F>(
     root: &mut Group,
     uuid: Uuid,
@@ -186,13 +193,45 @@ where
         .find_entry_by_uuid_mut(uuid)
         .ok_or(KeePassXcError::EntryNotFound(uuid))?;
 
-    entry.update_history_with_limits(meta.history_max_items, meta.history_max_size);
+    // Not keepass-rs's `update_history_with_limits`: it stamps
+    // last_modification = now *before* cloning, so each snapshot carried the
+    // time of the edit that replaced it, and several edits within one
+    // second produced identically-stamped snapshots that a merge collapses.
+    let mut snapshot = entry.clone();
+    snapshot.history = None;
 
     updater(entry);
 
-    entry.times.last_modification = Some(Times::now());
+    let history = entry.history.take();
+    let changed = *entry != snapshot;
+    entry.history = history;
+    if !changed {
+        return Ok(());
+    }
+
+    let previous_modification = snapshot.times.last_modification;
+    let history = entry.history.get_or_insert_with(History::default);
+    history.add_entry(snapshot);
+    // History::trim implements HistoryMaxItems / HistoryMaxSize, including
+    // `Some(0)` items disabling history altogether.
+    history.trim(meta.history_max_items, meta.history_max_size);
+
+    entry.times.last_modification = Some(next_modification_time(previous_modification));
 
     Ok(())
+}
+
+/// `now`, unless that would not be later than `previous` (several edits in
+/// the same second, or a clock behind the stored timestamp), in which case
+/// one second past `previous`.
+fn next_modification_time(previous: Option<NaiveDateTime>) -> NaiveDateTime {
+    let now = Times::now();
+    match previous {
+        Some(previous) if now <= previous => previous
+            .checked_add_signed(TimeDelta::seconds(1))
+            .unwrap_or(previous),
+        _ => now,
+    }
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -404,6 +443,117 @@ mod tests {
         // The snapshot should NOT have the new username
         let snapshot = &entry.history.as_ref().unwrap().get_entries()[0];
         assert!(snapshot.get(fields::USERNAME).is_none());
+    }
+
+    fn fixed_time(timestamp: i64) -> NaiveDateTime {
+        chrono::DateTime::from_timestamp(timestamp, 0)
+            .unwrap()
+            .naive_utc()
+    }
+
+    fn history_of(root: &Group, uuid: Uuid) -> &Vec<Entry> {
+        root.find_entry_by_uuid(uuid)
+            .unwrap()
+            .history
+            .as_ref()
+            .unwrap()
+            .get_entries()
+    }
+
+    #[test]
+    fn update_entry_snapshots_keep_their_own_timestamps_and_values() {
+        let mut root = Group::new("Root");
+        let mut entry = make_entry("v0");
+        let t0 = fixed_time(1_600_000_000);
+        entry.times.last_modification = Some(t0);
+        let uuid = entry.uuid;
+        root.entries.push(entry);
+        let meta = Meta::default();
+
+        update_entry(&mut root, uuid, &meta, |e| {
+            e.set_unprotected(fields::TITLE, "v1");
+        })
+        .unwrap();
+        let t1 = root
+            .find_entry_by_uuid(uuid)
+            .unwrap()
+            .times
+            .last_modification
+            .unwrap();
+
+        update_entry(&mut root, uuid, &meta, |e| {
+            e.set_unprotected(fields::TITLE, "v2");
+        })
+        .unwrap();
+        let entry = root.find_entry_by_uuid(uuid).unwrap();
+        let t2 = entry.times.last_modification.unwrap();
+        assert_eq!(entry.get(fields::TITLE), Some("v2"));
+
+        let history = history_of(&root, uuid);
+        assert_eq!(history.len(), 2);
+        // Most recent snapshot: the state the second edit replaced.
+        assert_eq!(history[0].get(fields::TITLE), Some("v1"));
+        assert_eq!(history[0].times.last_modification, Some(t1));
+        // Oldest snapshot: the original entry with its original timestamp,
+        // not the time of the edit that replaced it.
+        assert_eq!(history[1].get(fields::TITLE), Some("v0"));
+        assert_eq!(history[1].times.last_modification, Some(t0));
+        assert!(t0 < t1 && t1 < t2, "{t0} < {t1} < {t2}");
+        assert!(history.iter().all(|snapshot| snapshot.history.is_none()));
+    }
+
+    #[test]
+    fn update_entry_rapid_edits_get_distinct_timestamps() {
+        let (mut root, uuid, _, _) = make_group_tree();
+        let meta = Meta::default();
+
+        // The apps call set_field once per field, so a single save is several
+        // update_entry calls within the same second.
+        for i in 0..5 {
+            update_entry(&mut root, uuid, &meta, |e| {
+                e.set_unprotected(fields::USERNAME, format!("user {i}"));
+            })
+            .unwrap();
+        }
+
+        let entry = root.find_entry_by_uuid(uuid).unwrap();
+        let mut times = vec![entry.times.last_modification.unwrap()];
+        times.extend(
+            history_of(&root, uuid)
+                .iter()
+                .map(|snapshot| snapshot.times.last_modification.unwrap()),
+        );
+        assert_eq!(times.len(), 6);
+        // Newest first and strictly decreasing, hence pairwise distinct.
+        assert!(
+            times.windows(2).all(|pair| pair[0] > pair[1]),
+            "timestamps must be strictly decreasing: {times:?}"
+        );
+    }
+
+    #[test]
+    fn update_entry_without_changes_records_nothing() {
+        let mut root = Group::new("Root");
+        let mut entry = make_entry("Same");
+        let t0 = fixed_time(1_600_000_000);
+        entry.times.last_modification = Some(t0);
+        let uuid = entry.uuid;
+        root.entries.push(entry);
+        let meta = Meta::default();
+
+        update_entry(&mut root, uuid, &meta, |_| {}).unwrap();
+        update_entry(&mut root, uuid, &meta, |e| {
+            e.set_unprotected(fields::TITLE, "Same");
+        })
+        .unwrap();
+
+        let entry = root.find_entry_by_uuid(uuid).unwrap();
+        assert_eq!(entry.times.last_modification, Some(t0));
+        let history_len = entry
+            .history
+            .as_ref()
+            .map_or(0, |history| history.get_entries().len());
+        assert_eq!(history_len, 0);
     }
 
     #[test]

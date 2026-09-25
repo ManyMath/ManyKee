@@ -719,6 +719,62 @@ fn test_merge_group_rename_propagates() {
     assert_eq!(merged.name, "Renamed on A");
 }
 
+/// Several edits within one second on A (the apps call set_field once per
+/// field on save) must all survive a merge into B. Previously every snapshot
+/// was stamped with the time of the edit that replaced it, so they shared one
+/// timestamp and History::merge_with collapsed them into a single item.
+#[test]
+fn test_merge_keeps_history_of_rapid_edits() {
+    let base = create_base_db();
+    let entry_uuid = base.root.entries[0].uuid;
+
+    let mut db_a = clone_db(&base);
+    let mut db_b = clone_db(&base);
+
+    thread::sleep(Duration::from_secs(1));
+    let meta = db_a.meta.clone();
+    for (field, value) in [
+        (fields::USERNAME, "edited-user"),
+        (fields::URL, "https://edited.test"),
+        (fields::NOTES, "edited notes"),
+    ] {
+        keepassxc::update_entry(&mut db_a.root, entry_uuid, &meta, |entry| {
+            entry.set_unprotected(field, value);
+        })
+        .expect("update failed");
+    }
+    let db_a = round_trip(&db_a);
+    let a_history = db_a
+        .root
+        .find_entry_by_uuid(entry_uuid)
+        .unwrap()
+        .history
+        .clone()
+        .unwrap();
+    let a_snapshots = a_history.get_entries();
+    assert_eq!(a_snapshots.len(), 3);
+    assert_eq!(a_snapshots[2].get(fields::USERNAME), Some("user1"));
+
+    merge(&mut db_b, &db_a).expect("merge failed");
+
+    let merged = db_b.root.find_entry_by_uuid(entry_uuid).unwrap();
+    assert_eq!(merged.get(fields::NOTES), Some("edited notes"));
+    let history = merged.history.as_ref().unwrap().get_entries();
+    // keepass-rs's merge may additionally stash the winning entry's current
+    // state into history; what matters here is that none of A's snapshots
+    // was collapsed into another.
+    for snapshot in a_snapshots {
+        assert!(
+            history.iter().any(|item| {
+                item.times.last_modification == snapshot.times.last_modification
+                    && item.fields == snapshot.fields
+            }),
+            "snapshot {:?} from A must survive the merge",
+            snapshot.times.last_modification
+        );
+    }
+}
+
 /// Source has a newer tombstone for an entry still present in destination:
 /// merge must remove the entry and propagate the tombstone.
 #[test]
