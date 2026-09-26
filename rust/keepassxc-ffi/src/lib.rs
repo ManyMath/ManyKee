@@ -14,7 +14,7 @@ use zeroize::Zeroize;
 
 #[no_mangle]
 pub extern "C" fn kpxc_last_error() -> *const c_char {
-    error::catch_unwind(std::ptr::null(), move || error::get_last_error())
+    error::catch_unwind(std::ptr::null(), error::get_last_error)
 }
 
 /// Frees a string returned by this library. The bytes are overwritten with
