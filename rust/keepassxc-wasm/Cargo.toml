@@ -24,3 +24,7 @@ console_error_panic_hook = "0.1.7"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+[lints.rust]
+# Emitted by the #[wasm_bindgen] / #[wasm_bindgen_test] macro expansions.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasm_bindgen_unstable_test_coverage)'] }

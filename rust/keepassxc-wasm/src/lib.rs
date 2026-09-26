@@ -18,8 +18,8 @@ use wasm_bindgen::prelude::*;
 use zeroize::Zeroizing;
 
 thread_local! {
- static DATABASES: RefCell<BTreeMap<u32, Database>> = RefCell::new(BTreeMap::new());
- static NEXT_HANDLE: RefCell<u32> = RefCell::new(1);
+ static DATABASES: RefCell<BTreeMap<u32, Database>> = const { RefCell::new(BTreeMap::new()) };
+ static NEXT_HANDLE: RefCell<u32> = const { RefCell::new(1) };
 }
 
 /// Allocates the next handle from `current`, or `None` once every `u32`
@@ -258,8 +258,7 @@ pub fn list_groups(handle: u32, group_uuid: &str) -> Result<String, JsValue> {
             })?;
 
             let groups: Vec<GroupInfo> = group.groups.iter().map(GroupInfo::from).collect();
-            Ok(serde_json::to_string(&groups)
-                .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
+            serde_json::to_string(&groups).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
         })?
     })
 }
@@ -274,8 +273,7 @@ pub fn list_entries(handle: u32, group_uuid: &str) -> Result<String, JsValue> {
             })?;
 
             let entries: Vec<EntryInfo> = group.entries.iter().map(EntryInfo::from).collect();
-            Ok(serde_json::to_string(&entries)
-                .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
+            serde_json::to_string(&entries).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
         })?
     })
 }
@@ -290,8 +288,7 @@ pub fn read_entry_fields(handle: u32, entry_uuid: &str) -> Result<String, JsValu
             })?;
             let payload = read_entry_payload(entry);
             let fields = EntryFields::from(payload);
-            Ok(serde_json::to_string(&fields)
-                .map_err(|e| err_json("JSON_ERROR", &e.to_string()))?)
+            serde_json::to_string(&fields).map_err(|e| err_json("JSON_ERROR", &e.to_string()))
         })?
     })
 }

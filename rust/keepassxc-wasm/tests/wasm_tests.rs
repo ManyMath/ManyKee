@@ -1,5 +1,7 @@
 //! Browser-executed wasm-bindgen-test suite for keepassxc-wasm.
 
+#![cfg(target_arch = "wasm32")]
+
 use keepassxc::{Database, DatabaseKey};
 use keepassxc_wasm::*;
 use serde_json::{json, Value};
