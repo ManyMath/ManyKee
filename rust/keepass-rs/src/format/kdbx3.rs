@@ -347,8 +347,16 @@ pub(crate) fn decrypt_kdbx3(
                 .ok_or(DatabaseOpenError::UnexpectedEof)?,
         ) as usize;
 
-        // A block with size 0 means we have hit EOF
+        // A block with size 0 means we have hit EOF. KeePass writes an
+        // all-zero hash there and rejects anything else. Earlier versions of
+        // this crate wrote SHA-256 of the empty block instead, so accept that
+        // too rather than lock users out of files they saved with it.
         if block_size == 0 {
+            if !is_valid_terminator_hash(block_hash) {
+                return Err(DatabaseOpenError::Format(DatabaseFormatError::Kdbx3(
+                    Kdbx3OpenError::BlockHashMismatch(block_index),
+                )));
+            }
             break;
         }
 
@@ -569,6 +577,12 @@ impl KDBX3OuterHeader {
     }
 }
 
+/// Whether `hash` is an acceptable hash field for the zero-size block that
+/// ends a KDBX3 hashed block stream.
+fn is_valid_terminator_hash(hash: &[u8]) -> bool {
+    hash.iter().all(|&b| b == 0) || hash == calculate_sha256(&[&[]]).as_slice()
+}
+
 #[derive(Debug, Error)]
 pub enum Kdbx3OpenError {
     #[error(transparent)]
@@ -579,6 +593,25 @@ pub enum Kdbx3OpenError {
 
     #[error(transparent)]
     Xml(#[from] crate::format::xml_db::ParseXmlError),
+}
+
+#[cfg(test)]
+mod terminator_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_zero_and_legacy_terminator_hashes() {
+        assert!(is_valid_terminator_hash(&[0u8; 32]));
+        assert!(is_valid_terminator_hash(&calculate_sha256(&[&[]])));
+    }
+
+    #[test]
+    fn rejects_other_terminator_hashes() {
+        let mut hash = [0u8; 32];
+        hash[31] = 1;
+        assert!(!is_valid_terminator_hash(&hash));
+        assert!(!is_valid_terminator_hash(&calculate_sha256(&[b"x"])));
+    }
 }
 
 #[cfg(feature = "save_kdbx3")]

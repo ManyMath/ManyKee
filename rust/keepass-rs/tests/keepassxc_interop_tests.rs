@@ -164,3 +164,35 @@ fn kdbx3_database_resaved_as_kdbx4_is_readable_by_keepassxc() {
 
     assert_keepassxc_reads_protected_password(temp.path(), Some(keyfile));
 }
+
+#[cfg(feature = "save_kdbx3")]
+#[test]
+fn new_kdbx3_database_is_readable_by_keepassxc() {
+    // KeePassXC rejects a KDBX3 hashed block stream whose terminating block
+    // carries anything but an all-zero hash.
+    let config = DatabaseConfig {
+        version: DatabaseVersion::KDB3(1),
+        inner_cipher_config: InnerCipherConfig::Salsa20,
+        outer_cipher_config: OuterCipherConfig::AES256,
+        compression_config: CompressionConfig::GZip,
+        kdf_config: KdfConfig::Aes { rounds: 10 },
+        ..DatabaseConfig::default()
+    };
+
+    let mut db = Database::new(config);
+    let mut root = Group::new("Root");
+    let mut entry = Entry::new();
+    entry.set_unprotected("Title", ENTRY_TITLE);
+    entry.set_protected("Password", ENTRY_PASSWORD);
+    root.entries.push(entry);
+    db.root = root;
+
+    let temp = TempFile::new("kdbx3");
+    db.save(
+        &mut File::create(&temp.0).expect("create temp database"),
+        DatabaseKey::new().with_password(PASSWORD),
+    )
+    .expect("save database");
+
+    assert_keepassxc_reads_protected_password(temp.path(), None);
+}
