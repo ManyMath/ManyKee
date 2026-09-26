@@ -159,4 +159,29 @@ void main() {
       db.close();
     }
   });
+
+  test('Database.create supports soft delete into the recycle bin', () {
+    final db = Database.create();
+    try {
+      final entry = db.rootGroup.createEntry();
+      entry.setField('Title', 'Disposable');
+
+      entry.delete();
+
+      expect(
+        db.rootGroup.entries.map((e) => e.uuid),
+        isNot(contains(entry.uuid)),
+      );
+      final recycled = db.rootGroup.groups
+          .expand((group) => group.entries)
+          .map((e) => e.uuid);
+      expect(recycled, contains(entry.uuid));
+    } finally {
+      db.close();
+    }
+  });
+
+  test('KeePassError exposes the recycle-bin status code', () {
+    expect(KeePassError.recycleBinDisabled, -11);
+  });
 }

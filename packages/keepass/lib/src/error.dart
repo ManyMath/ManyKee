@@ -38,6 +38,7 @@ class KeePassError implements Exception {
   static const int invalidUtf8 = KPXC_ERR_INVALID_UTF8;
   static const int parseError = KPXC_ERR_PARSE;
   static const int panic = KPXC_ERR_PANIC;
+  static const int recycleBinDisabled = KPXC_ERR_RECYCLE_BIN_DISABLED;
 
   KeePassError(this.code, this.message);
 

@@ -34,6 +34,14 @@ class KeePassXcFfiBindings {
   late final _kpxc_last_error =
       _kpxc_last_errorPtr.asFunction<ffi.Pointer<ffi.Char> Function()>();
 
+  /// Frees a string returned by this library. The bytes are overwritten with
+  /// zeros before the allocation is released, since these buffers can carry
+  /// plaintext secrets (e.g. a password from `kpxc_entry_get_field`).
+  ///
+  /// # Safety
+  ///
+  /// `ptr` must be null or a string returned by this library that has not already
+  /// been freed. It must not be used after this call.
   void kpxc_string_free(
     ffi.Pointer<ffi.Char> ptr,
   ) {
@@ -48,6 +56,10 @@ class KeePassXcFfiBindings {
   late final _kpxc_string_free =
       _kpxc_string_freePtr.asFunction<void Function(ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `path` and `password` must each be null or point to a NUL-terminated string
+  /// that stays valid for the duration of the call.
   ffi.Pointer<KpxcDatabase> kpxc_database_open(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -70,10 +82,10 @@ class KeePassXcFfiBindings {
   /// Mirrors the sensible-defaults `DatabaseConfig` (`keepass-rs`'s own
   /// `Default` impl: KDBX4, AES256 outer cipher, ChaCha20 inner cipher,
   /// Argon2 KDF) that `kpxc_database_save`'s own test coverage already
-  /// exercises -- this just exposes the same `Database::new` construction
-  /// as a public FFI entry point so a caller can create, then save, a fresh
-  /// database via the existing `kpxc_database_save`/`_with_keyfile`
-  /// functions rather than needing a template file to open first.
+  /// exercises, with the recycle bin enabled as KeePassXC does, so a caller
+  /// can create, soft-delete in, then save a fresh database via the existing
+  /// `kpxc_database_save`/`_with_keyfile` functions rather than needing a
+  /// template file to open first.
   ffi.Pointer<KpxcDatabase> kpxc_database_create() {
     return _kpxc_database_create();
   }
@@ -84,6 +96,10 @@ class KeePassXcFfiBindings {
   late final _kpxc_database_create = _kpxc_database_createPtr
       .asFunction<ffi.Pointer<KpxcDatabase> Function()>();
 
+  /// # Safety
+  ///
+  /// `path`, `password` and `keyfile_path` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   ffi.Pointer<KpxcDatabase> kpxc_database_open_with_keyfile(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -107,6 +123,12 @@ class KeePassXcFfiBindings {
           ffi.Pointer<KpxcDatabase> Function(ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `path` and `password` must each be null or point to a NUL-terminated
+  /// string that stays valid for the duration of the call.
   int kpxc_database_save(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> path,
@@ -127,6 +149,12 @@ class KeePassXcFfiBindings {
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `path`, `password` and `keyfile_path` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   int kpxc_database_save_with_keyfile(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> path,
@@ -153,6 +181,11 @@ class KeePassXcFfiBindings {
           int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not already
+  /// been freed, and no other call may be using it. It must not be used after
+  /// this call.
   void kpxc_database_free(
     ffi.Pointer<KpxcDatabase> db,
   ) {
@@ -167,6 +200,11 @@ class KeePassXcFfiBindings {
   late final _kpxc_database_free = _kpxc_database_freePtr
       .asFunction<void Function(ffi.Pointer<KpxcDatabase>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time.
   ffi.Pointer<ffi.Char> kpxc_database_root_uuid(
     ffi.Pointer<KpxcDatabase> db,
   ) {
@@ -182,6 +220,12 @@ class KeePassXcFfiBindings {
   late final _kpxc_database_root_uuid = _kpxc_database_root_uuidPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<KpxcDatabase>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `entry_uuid` and `field_name` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_entry_get_field(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
@@ -205,6 +249,13 @@ class KeePassXcFfiBindings {
           ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
   /// Return the safe list summary for one entry as JSON.
+  ///
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `entry_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_entry_get_info(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
@@ -223,6 +274,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `entry_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_entry_read_fields(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
@@ -241,6 +298,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `entry_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_entry_get_totp(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
@@ -259,6 +322,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `entry_uuid`, `field_name` and `value` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   int kpxc_entry_set_field(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
@@ -287,6 +356,12 @@ class KeePassXcFfiBindings {
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>, int)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_entry_get_uuid(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -307,6 +382,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>, int)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_entry_create(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -325,6 +406,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `entry_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   int kpxc_entry_delete(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
@@ -344,6 +431,12 @@ class KeePassXcFfiBindings {
   late final _kpxc_entry_delete = _kpxc_entry_deletePtr.asFunction<
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>, int)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `entry_uuid` and `target_group_uuid` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   int kpxc_entry_move(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> entry_uuid,
@@ -364,6 +457,12 @@ class KeePassXcFfiBindings {
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_group_get_name(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -382,6 +481,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` and `name` must each be null or point to a NUL-terminated
+  /// string that stays valid for the duration of the call.
   int kpxc_group_set_name(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -402,6 +507,12 @@ class KeePassXcFfiBindings {
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `parent_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_group_get_uuid(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> parent_uuid,
@@ -422,6 +533,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>, int)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   int kpxc_group_entries_count(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -440,6 +557,12 @@ class KeePassXcFfiBindings {
       _kpxc_group_entries_countPtr.asFunction<
           int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   int kpxc_group_groups_count(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -457,6 +580,12 @@ class KeePassXcFfiBindings {
   late final _kpxc_group_groups_count = _kpxc_group_groups_countPtr.asFunction<
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `parent_uuid` and `name` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   ffi.Pointer<ffi.Char> kpxc_group_create(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> parent_uuid,
@@ -479,6 +608,12 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(ffi.Pointer<KpxcDatabase>,
           ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` must be null or point to a NUL-terminated string that
+  /// stays valid for the duration of the call.
   int kpxc_group_delete(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -498,6 +633,11 @@ class KeePassXcFfiBindings {
   late final _kpxc_group_delete = _kpxc_group_deletePtr.asFunction<
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>, int)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time.
   ffi.Pointer<ffi.Char> kpxc_group_root_uuid(
     ffi.Pointer<KpxcDatabase> db,
   ) {
@@ -513,6 +653,12 @@ class KeePassXcFfiBindings {
   late final _kpxc_group_root_uuid = _kpxc_group_root_uuidPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<KpxcDatabase>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `group_uuid` and `target_parent_uuid` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   int kpxc_group_move(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> group_uuid,
@@ -533,6 +679,11 @@ class KeePassXcFfiBindings {
       int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` and `other` must each be null or a handle returned by this library that
+  /// has not been passed to `kpxc_database_free`, and no other call may use them
+  /// at the same time.
   ffi.Pointer<ffi.Char> kpxc_database_merge(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<KpxcDatabase> other,
@@ -551,6 +702,10 @@ class KeePassXcFfiBindings {
       ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<KpxcDatabase>, ffi.Pointer<KpxcDatabase>)>();
 
+  /// # Safety
+  ///
+  /// `path`, `password` and `slot` must each be null or point to a NUL-terminated
+  /// string that stays valid for the duration of the call.
   ffi.Pointer<KpxcDatabase> kpxc_database_open_with_yubikey(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -577,6 +732,10 @@ class KeePassXcFfiBindings {
           ffi.Pointer<KpxcDatabase> Function(ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>, int)>();
 
+  /// # Safety
+  ///
+  /// `path`, `password` and `hex_secret` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   ffi.Pointer<KpxcDatabase> kpxc_database_open_with_local_challenge(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -599,6 +758,10 @@ class KeePassXcFfiBindings {
           ffi.Pointer<KpxcDatabase> Function(ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `path`, `password`, `keyfile_path` and `slot` must each be null or point to
+  /// a NUL-terminated string that stays valid for the duration of the call.
   ffi.Pointer<KpxcDatabase> kpxc_database_open_with_keyfile_and_yubikey(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -632,6 +795,11 @@ class KeePassXcFfiBindings {
               ffi.Pointer<ffi.Char>,
               int)>();
 
+  /// # Safety
+  ///
+  /// `path`, `password`, `keyfile_path` and `hex_secret` must each be null or
+  /// point to a NUL-terminated string that stays valid for the duration of the
+  /// call.
   ffi.Pointer<KpxcDatabase> kpxc_database_open_with_keyfile_and_local_challenge(
     ffi.Pointer<ffi.Char> path,
     ffi.Pointer<ffi.Char> password,
@@ -662,6 +830,12 @@ class KeePassXcFfiBindings {
               ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `path`, `password` and `slot` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   int kpxc_database_save_with_yubikey(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> path,
@@ -691,6 +865,13 @@ class KeePassXcFfiBindings {
           int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>, int)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `path`, `password`, `keyfile_path` and `slot` must each be null or
+  /// point to a NUL-terminated string that stays valid for the duration of the
+  /// call.
   int kpxc_database_save_with_keyfile_and_yubikey(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> path,
@@ -728,6 +909,12 @@ class KeePassXcFfiBindings {
               ffi.Pointer<ffi.Char>,
               int)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `path`, `password` and `hex_secret` must each be null or point to a
+  /// NUL-terminated string that stays valid for the duration of the call.
   int kpxc_database_save_with_local_challenge(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> path,
@@ -752,6 +939,13 @@ class KeePassXcFfiBindings {
           int Function(ffi.Pointer<KpxcDatabase>, ffi.Pointer<ffi.Char>,
               ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
 
+  /// # Safety
+  ///
+  /// `db` must be null or a handle returned by this library that has not been
+  /// passed to `kpxc_database_free`, and no other call may use it at the same
+  /// time. `path`, `password`, `keyfile_path` and `hex_secret` must each be null
+  /// or point to a NUL-terminated string that stays valid for the duration of the
+  /// call.
   int kpxc_database_save_with_keyfile_and_local_challenge(
     ffi.Pointer<KpxcDatabase> db,
     ffi.Pointer<ffi.Char> path,
@@ -820,3 +1014,5 @@ const int KPXC_ERR_INVALID_UTF8 = -8;
 const int KPXC_ERR_PARSE = -9;
 
 const int KPXC_ERR_PANIC = -10;
+
+const int KPXC_ERR_RECYCLE_BIN_DISABLED = -11;
