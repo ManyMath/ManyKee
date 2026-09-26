@@ -561,7 +561,7 @@ fn entry_path(parent_group_path: &str, entry: &Entry) -> String {
 
 fn sorted_strings(values: &[String]) -> Vec<String> {
     let mut values = values.to_vec();
-    values.sort_by(|left, right| left.cmp(right));
+    values.sort();
     values
 }
 

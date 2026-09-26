@@ -526,12 +526,11 @@ fn manual_pending_fixtures_are_not_false_support_claims() -> Result<(), Box<dyn 
         let keepassxc_claims: Vec<_> = evidence
             .iter()
             .flat_map(|record| {
-                record.claims.iter().filter_map(move |claim| {
+                record.claims.iter().filter(move |claim| {
                     let claim_fixture_id =
                         claim.fixture_id.as_deref().unwrap_or(&record.fixture_id);
                     let claim_lane = claim.lane.unwrap_or(record.lane);
-                    (claim_fixture_id == fixture_id && claim_lane == EvidenceLane::KeepassXc)
-                        .then_some(claim)
+                    claim_fixture_id == fixture_id && claim_lane == EvidenceLane::KeepassXc
                 })
             })
             .collect();

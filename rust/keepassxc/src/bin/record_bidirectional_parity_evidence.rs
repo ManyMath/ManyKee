@@ -202,8 +202,7 @@ fn selected_fixture_ids(cli: &Cli) -> Vec<&str> {
 }
 
 fn include_starter(cli: &Cli) -> bool {
-    cli.include_starter_richcontent
-        || (cli.fixture_ids.is_empty() && !cli.include_starter_richcontent)
+    cli.include_starter_richcontent || cli.fixture_ids.is_empty()
 }
 
 fn generate_official_fixture_artifacts(
@@ -539,9 +538,7 @@ fn check_artifacts(project_root: &Path, artifacts: &[GeneratedArtifact]) -> Resu
             )
         })?;
         if actual != artifact.contents {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
+            return Err(io::Error::other(format!(
                     "{} is stale; run `cargo run --manifest-path rust/Cargo.toml -p keepassxc --bin record_bidirectional_parity_evidence -- --write`",
                     artifact.relative_path
                 ),

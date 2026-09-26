@@ -176,10 +176,9 @@ fn write_official_artifacts(project_root: &Path, tool: &OfficialTool) -> Result<
                 write_history_recycle_fixture(project_root, tool, &definition)?
             }
             fixture_id => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("missing writer for official fixture {fixture_id}"),
-                )
+                return Err(io::Error::other(format!(
+                    "missing writer for official fixture {fixture_id}"
+                ))
                 .into());
             }
         }
@@ -465,13 +464,10 @@ fn assert_attachment_export_hashes(
         let source_hash = artifact_sha256(&project_root.join(source.relative_path))?;
         let exported_hash = artifact_sha256(&exported_path)?;
         if source_hash != exported_hash {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "attachment-export hash mismatch for {}: source_sha256={} exported_sha256={}",
-                    source.attachment_name, source_hash, exported_hash
-                ),
-            )
+            return Err(io::Error::other(format!(
+                "attachment-export hash mismatch for {}: source_sha256={} exported_sha256={}",
+                source.attachment_name, source_hash, exported_hash
+            ))
             .into());
         }
     }
@@ -498,10 +494,9 @@ fn discover_recycle_entry_path(
         .find(|line| line.ends_with(entry_name) && line.contains("Recycle"))
         .map(str::to_string)
         .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("could not find {entry_name} under recycle group after rm"),
-            )
+            io::Error::other(format!(
+                "could not find {entry_name} under recycle group after rm"
+            ))
             .into()
         })
 }
@@ -523,10 +518,9 @@ fn assert_history_recycle_export(
         "Recycle Bin",
     ] {
         if !output.stdout.contains(expected) {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("history/recycle export missing expected value {expected}"),
-            )
+            return Err(io::Error::other(format!(
+                "history/recycle export missing expected value {expected}"
+            ))
             .into());
         }
     }
@@ -580,10 +574,9 @@ fn assert_richcontent_export(
         "JBSWY3DPEHPK3PXP",
     ] {
         if !output.stdout.contains(expected) {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("rich-content XML export missing expected value {expected}"),
-            )
+            return Err(io::Error::other(format!(
+                "rich-content XML export missing expected value {expected}"
+            ))
             .into());
         }
     }
@@ -1182,9 +1175,7 @@ fn check_manifest_section_artifact(
     let path = project_root.join(MANIFEST_PATH);
     let manifest = load_manifest(&path)?;
     check_manifest_section(&manifest, section).map_err(|source| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!(
+        io::Error::other(format!(
                 "{MANIFEST_PATH} official section is stale; run `cargo run --manifest-path rust/Cargo.toml -p keepassxc --bin record_official_fixture_evidence -- --write`: {source}"
             ),
         )
@@ -1211,9 +1202,7 @@ fn check_artifact(project_root: &Path, artifact: &GeneratedArtifact) -> Result<(
     })?;
 
     if actual != artifact.contents {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
+        return Err(io::Error::other(format!(
                 "{} is stale; run `cargo run --manifest-path rust/Cargo.toml -p keepassxc --bin record_official_fixture_evidence -- --write`",
                 artifact.relative_path
             ),
@@ -2146,13 +2135,10 @@ fn run_checked_os(
 ) -> Result<RedactedOutput, DynError> {
     let output = run_keepassxc_with_stdin_lines(tool, args, stdin_lines, redactions)?;
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "keepassxc-cli failed with status {}\nstdout:\n{}\nstderr:\n{}",
-                output.status, output.stdout, output.stderr
-            ),
-        )
+        return Err(io::Error::other(format!(
+            "keepassxc-cli failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            output.status, output.stdout, output.stderr
+        ))
         .into());
     }
     Ok(output)
@@ -2221,15 +2207,12 @@ fn discover_required_keepassxc() -> Result<OfficialTool, DynError> {
         });
     }
 
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        format!(
-            "keepassxc-cli at {} reported version {}; expected version {}",
-            attempted_path.display(),
-            discovered_version,
-            REQUIRED_KEEPASSXC_VERSION
-        ),
-    )
+    Err(io::Error::other(format!(
+        "keepassxc-cli at {} reported version {}; expected version {}",
+        attempted_path.display(),
+        discovered_version,
+        REQUIRED_KEEPASSXC_VERSION
+    ))
     .into())
 }
 
@@ -2275,13 +2258,10 @@ fn assert_no_secret_args(args: &[OsString], secrets: &[&str]) -> Result<(), DynE
             .filter(|secret| !secret.is_empty())
             .any(|secret| rendered.contains(secret))
         {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "refusing to spawn official tool with fixture secret in argv: {}",
-                    redact_text(rendered.as_ref(), secrets)
-                ),
-            )
+            return Err(io::Error::other(format!(
+                "refusing to spawn official tool with fixture secret in argv: {}",
+                redact_text(rendered.as_ref(), secrets)
+            ))
             .into());
         }
     }

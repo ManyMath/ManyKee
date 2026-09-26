@@ -286,7 +286,7 @@ fn fixture_kdbx4_aes_kdf_aes_cipher() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1, "Expected at least 1 entry");
+    assert!(!db.root.entries.is_empty(), "Expected at least 1 entry");
     Ok(())
 }
 
@@ -299,7 +299,7 @@ fn fixture_kdbx4_argon2d_aes() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1, "Expected at least 1 entry");
+    assert!(!db.root.entries.is_empty(), "Expected at least 1 entry");
     Ok(())
 }
 
@@ -312,7 +312,7 @@ fn fixture_kdbx4_argon2id_aes() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1, "Expected at least 1 entry");
+    assert!(!db.root.entries.is_empty(), "Expected at least 1 entry");
     Ok(())
 }
 
@@ -325,7 +325,7 @@ fn fixture_kdbx4_argon2d_chacha20() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1, "Expected at least 1 entry");
+    assert!(!db.root.entries.is_empty(), "Expected at least 1 entry");
     Ok(())
 }
 
@@ -338,7 +338,7 @@ fn fixture_kdbx4_argon2d_twofish() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1, "Expected at least 1 entry");
+    assert!(!db.root.entries.is_empty(), "Expected at least 1 entry");
     Ok(())
 }
 
@@ -351,7 +351,7 @@ fn fixture_kdbx4_argon2id_chacha20() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1, "Expected at least 1 entry");
+    assert!(!db.root.entries.is_empty(), "Expected at least 1 entry");
     Ok(())
 }
 
@@ -364,7 +364,7 @@ fn fixture_kdbx4_argon2id_twofish() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1, "Expected at least 1 entry");
+    assert!(!db.root.entries.is_empty(), "Expected at least 1 entry");
     Ok(())
 }
 
@@ -416,7 +416,7 @@ fn fixture_gzip_decompression() -> Result<(), DatabaseOpenError> {
     )?;
     // If the database opened and we can see entries, GZip decompression succeeded
     assert!(
-        db.root.entries.len() >= 1,
+        !db.root.entries.is_empty(),
         "GZip decompression must yield valid XML with entries"
     );
     Ok(())

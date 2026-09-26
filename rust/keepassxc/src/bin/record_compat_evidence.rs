@@ -235,9 +235,7 @@ fn check_manifest_section_artifact(
     let path = project_root.join(MANIFEST_PATH);
     let manifest = load_manifest(&path)?;
     check_manifest_section(&manifest, section).map_err(|source| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!(
+        io::Error::other(format!(
                 "{MANIFEST_PATH} starter section is stale; run `cargo run --manifest-path rust/Cargo.toml -p keepassxc --bin record_compat_evidence -- --write`: {source}"
             ),
         )
@@ -264,9 +262,7 @@ fn check_artifact(project_root: &Path, artifact: &GeneratedArtifact) -> Result<(
     })?;
 
     if actual != artifact.contents {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
+        return Err(io::Error::other(format!(
                 "{} is stale; run `cargo run --manifest-path rust/Cargo.toml -p keepassxc --bin record_compat_evidence -- --write`",
                 artifact.relative_path
             ),

@@ -73,10 +73,9 @@ fn check_matrix(path: &Path, generated: &str) -> Result<(), DynError> {
     })?;
 
     if committed != generated {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("{MATRIX_PATH} is stale; run scripts/generate_compat_matrix.sh --write"),
-        )
+        return Err(io::Error::other(format!(
+            "{MATRIX_PATH} is stale; run scripts/generate_compat_matrix.sh --write"
+        ))
         .into());
     }
 

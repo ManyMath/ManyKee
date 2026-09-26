@@ -492,12 +492,11 @@ fn manual_pending_and_optional_lanes_are_not_required_parity_inputs(
     let keepass_optional_claims = evidence
         .iter()
         .flat_map(|record| {
-            record.claims.iter().filter_map(|claim| {
+            record.claims.iter().filter(|claim| {
                 let claim_fixture_id = claim.fixture_id.as_deref().unwrap_or(&record.fixture_id);
                 let claim_lane = claim.lane.unwrap_or(record.lane);
-                (claim_fixture_id.starts_with("keepassxc-")
-                    && claim_lane == EvidenceLane::KeepassOptional)
-                    .then_some(claim)
+                claim_fixture_id.starts_with("keepassxc-")
+                    && claim_lane == EvidenceLane::KeepassOptional
             })
         })
         .collect::<Vec<_>>();
@@ -550,13 +549,10 @@ fn credential_modes_build_manykee_keys() -> Result<(), Box<dyn std::error::Error
         let key = database_key(&case)?;
         let mut file = File::open(project_root().join(case.database_path))?;
         Database::open(&mut file, key).map_err(|err| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "failed to open {} with its parity credential mode: {err}",
-                    case.fixture_id
-                ),
-            )
+            std::io::Error::other(format!(
+                "failed to open {} with its parity credential mode: {err}",
+                case.fixture_id
+            ))
         })?;
     }
 
@@ -1300,15 +1296,17 @@ fn tag_snapshot(snapshot: &SemanticSnapshot) -> BTreeMap<String, Option<String>>
     tags
 }
 
-fn metadata_snapshot(
-    snapshot: &SemanticSnapshot,
-) -> (
+/// Database name, description, default username, memory protection and
+/// custom data, compared as one unit.
+type MetadataSnapshot = (
     Option<String>,
     Option<String>,
     Option<String>,
     MemoryProtectionSnapshot,
     BTreeMap<String, CustomDataSnapshot>,
-) {
+);
+
+fn metadata_snapshot(snapshot: &SemanticSnapshot) -> MetadataSnapshot {
     (
         snapshot.metadata.database_name.clone(),
         snapshot.metadata.database_description.clone(),

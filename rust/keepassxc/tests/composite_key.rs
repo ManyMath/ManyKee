@@ -26,7 +26,7 @@ fn open_with_password_only() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_password("demopass"),
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1);
+    assert!(!db.root.entries.is_empty());
     Ok(())
 }
 
@@ -40,7 +40,7 @@ fn open_with_keyfile_only() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_keyfile(&mut File::open(&kf_path)?)?,
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1);
+    assert!(!db.root.entries.is_empty());
     Ok(())
 }
 
@@ -71,7 +71,7 @@ fn keyfile_xml_v1() -> Result<(), DatabaseOpenError> {
         DatabaseKey::new().with_keyfile(&mut File::open(&kf_path)?)?,
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1);
+    assert!(!db.root.entries.is_empty());
     Ok(())
 }
 
@@ -88,7 +88,7 @@ fn keyfile_xml_v2_with_password() -> Result<(), DatabaseOpenError> {
             .with_keyfile(&mut File::open(&kf_path)?)?,
     )?;
     assert_eq!(db.root.name, "Root");
-    assert!(db.root.entries.len() >= 1);
+    assert!(!db.root.entries.is_empty());
     Ok(())
 }
 
@@ -104,7 +104,7 @@ fn keyfile_xml_v2_alt_with_tabs() -> Result<(), DatabaseOpenError> {
             .with_keyfile(&mut File::open(&kf_path)?)?,
     )?;
     assert_eq!(db.root.name, "testdb02");
-    assert!(db.root.entries.len() >= 1);
+    assert!(!db.root.entries.is_empty());
     Ok(())
 }
 

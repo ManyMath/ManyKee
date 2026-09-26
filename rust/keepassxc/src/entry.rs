@@ -571,13 +571,15 @@ mod tests {
         let uuid = entry.uuid;
         root.entries.push(entry);
 
-        let mut meta = Meta::default();
-        meta.history_max_items = Some(2);
+        let meta = Meta {
+            history_max_items: Some(2),
+            ..Meta::default()
+        };
 
         // Make 3 updates -- history should be capped at 2
         for i in 0..3 {
             update_entry(&mut root, uuid, &meta, |e| {
-                e.set_unprotected(fields::TITLE, &format!("Title {}", i));
+                e.set_unprotected(fields::TITLE, format!("Title {}", i));
             })
             .unwrap();
         }
@@ -593,12 +595,14 @@ mod tests {
         let uuid = entry.uuid;
         root.entries.push(entry);
 
-        let mut meta = Meta::default();
-        meta.history_max_items = Some(0);
+        let meta = Meta {
+            history_max_items: Some(0),
+            ..Meta::default()
+        };
 
         for i in 0..3 {
             update_entry(&mut root, uuid, &meta, |e| {
-                e.set_unprotected(fields::TITLE, &format!("Title {}", i));
+                e.set_unprotected(fields::TITLE, format!("Title {}", i));
             })
             .unwrap();
         }
@@ -621,12 +625,14 @@ mod tests {
         let uuid = entry.uuid;
         root.entries.push(entry);
 
-        let mut meta = Meta::default();
-        meta.history_max_size = Some(0);
+        let meta = Meta {
+            history_max_size: Some(0),
+            ..Meta::default()
+        };
 
         for i in 0..3 {
             update_entry(&mut root, uuid, &meta, |e| {
-                e.set_unprotected(fields::TITLE, &format!("Title {}", i));
+                e.set_unprotected(fields::TITLE, format!("Title {}", i));
             })
             .unwrap();
         }

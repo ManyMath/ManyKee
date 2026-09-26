@@ -5,11 +5,11 @@
 //! variant-level assertions in `negative_corpus.rs`. They formalize:
 //!
 //! - The open path never panics on malformed bytes (seeded deterministic
-//! truncation schedule over a known-good fixture).
+//!   truncation schedule over a known-good fixture).
 //! - `save_atomic` leaves no partial writes on success or failure.
 //! - Error `Display` and `Debug` renderings on the wrong-credential open path
-//! never embed plaintext password bytes, keyfile bytes (UTF-8 or hex), or
-//! LocalChallenge hex-secret material.
+//!   never embed plaintext password bytes, keyfile bytes (UTF-8 or hex), or
+//!   LocalChallenge hex-secret material.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
