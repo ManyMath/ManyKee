@@ -24,8 +24,12 @@ pub(crate) fn into_raw_registered(db: KpxcDatabase) -> *mut KpxcDatabase {
     ptr
 }
 
+/// # Safety
+///
+/// `path` and `password` must each be null or point to a NUL-terminated string
+/// that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_open(
+pub unsafe extern "C" fn kpxc_database_open(
     path: *const c_char,
     password: *const c_char,
 ) -> *mut KpxcDatabase {
@@ -70,8 +74,12 @@ pub extern "C" fn kpxc_database_create() -> *mut KpxcDatabase {
     })
 }
 
+/// # Safety
+///
+/// `path`, `password` and `keyfile_path` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_open_with_keyfile(
+pub unsafe extern "C" fn kpxc_database_open_with_keyfile(
     path: *const c_char,
     password: *const c_char,
     keyfile_path: *const c_char,
@@ -118,8 +126,14 @@ pub extern "C" fn kpxc_database_open_with_keyfile(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `path` and `password` must each be null or point to a NUL-terminated
+/// string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_save(
+pub unsafe extern "C" fn kpxc_database_save(
     db: *mut KpxcDatabase,
     path: *const c_char,
     password: *const c_char,
@@ -140,8 +154,14 @@ pub extern "C" fn kpxc_database_save(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `path`, `password` and `keyfile_path` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_save_with_keyfile(
+pub unsafe extern "C" fn kpxc_database_save_with_keyfile(
     db: *mut KpxcDatabase,
     path: *const c_char,
     password: *const c_char,
@@ -181,8 +201,13 @@ pub extern "C" fn kpxc_database_save_with_keyfile(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not already
+/// been freed, and no other call may be using it. It must not be used after
+/// this call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_free(db: *mut KpxcDatabase) {
+pub unsafe extern "C" fn kpxc_database_free(db: *mut KpxcDatabase) {
     crate::error::catch_unwind((), move || {
         clear_last_error();
         if db.is_null() {
@@ -202,8 +227,13 @@ pub extern "C" fn kpxc_database_free(db: *mut KpxcDatabase) {
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time.
 #[no_mangle]
-pub extern "C" fn kpxc_database_root_uuid(db: *mut KpxcDatabase) -> *mut c_char {
+pub unsafe extern "C" fn kpxc_database_root_uuid(db: *mut KpxcDatabase) -> *mut c_char {
     crate::error::catch_unwind(std::ptr::null_mut(), move || {
         clear_last_error();
         check_live_db!(db, std::ptr::null_mut());
@@ -232,7 +262,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("ffi-create-{}.kdbx", uuid::Uuid::new_v4()));
         let path_c = CString::new(path.to_string_lossy().as_ref()).unwrap();
         let password = CString::new("test").unwrap();
-        let result = kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr());
+        let result = unsafe { kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr()) };
         assert_eq!(result, KPXC_OK);
 
         let reopened = Database::open(
@@ -245,7 +275,7 @@ mod tests {
         assert!(reopened.root.entries.is_empty());
         let _ = std::fs::remove_file(&path);
 
-        kpxc_database_free(db_ptr);
+        unsafe { kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -253,14 +283,14 @@ mod tests {
         let db_ptr = kpxc_database_create();
         assert!(!db_ptr.is_null());
 
-        let root_uuid = crate::database::kpxc_database_root_uuid(db_ptr);
+        let root_uuid = unsafe { crate::database::kpxc_database_root_uuid(db_ptr) };
         let root_uuid = unsafe { CString::from_raw(root_uuid) };
-        let entry_uuid = crate::entry::kpxc_entry_create(db_ptr, root_uuid.as_ptr());
+        let entry_uuid = unsafe { crate::entry::kpxc_entry_create(db_ptr, root_uuid.as_ptr()) };
         assert!(!entry_uuid.is_null());
         let entry_uuid = unsafe { CString::from_raw(entry_uuid) };
 
         // permanent = 0 is a soft delete, which needs the recycle bin.
-        let result = crate::entry::kpxc_entry_delete(db_ptr, entry_uuid.as_ptr(), 0);
+        let result = unsafe { crate::entry::kpxc_entry_delete(db_ptr, entry_uuid.as_ptr(), 0) };
         assert_eq!(result, KPXC_OK, "{}", unsafe {
             std::ffi::CStr::from_ptr(crate::error::get_last_error())
                 .to_string_lossy()
@@ -274,7 +304,7 @@ mod tests {
         assert!(bin.entries.iter().any(|e| e.uuid == entry_uuid));
         assert!(db.0.root.entries.is_empty());
 
-        kpxc_database_free(db_ptr);
+        unsafe { kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -284,7 +314,7 @@ mod tests {
 
         let path_c = CString::new(path.to_string_lossy().as_ref()).unwrap();
         let password = CString::new("test").unwrap();
-        let result = kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr());
+        let result = unsafe { kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr()) };
         assert_eq!(result, KPXC_OK);
         assert!(path.exists());
 
@@ -296,7 +326,7 @@ mod tests {
         assert_eq!(reopened.root.name, "Root");
         let _ = std::fs::remove_file(&path);
 
-        kpxc_database_free(db_ptr);
+        unsafe { kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -304,11 +334,11 @@ mod tests {
         let db_ptr = into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())));
 
         // First free is legitimate: drops the Box and unregisters the handle.
-        kpxc_database_free(db_ptr);
+        unsafe { kpxc_database_free(db_ptr) };
         // Second free of the same (now-dangling) pointer must not touch the
         // freed memory again, it should be rejected as an invalid handle
         // instead of double-freeing.
-        kpxc_database_free(db_ptr);
+        unsafe { kpxc_database_free(db_ptr) };
 
         let err = unsafe { std::ffi::CStr::from_ptr(crate::error::get_last_error()) }
             .to_str()
@@ -319,7 +349,7 @@ mod tests {
     #[test]
     fn kpxc_database_save_rejects_freed_handle() {
         let db_ptr = into_raw_registered(KpxcDatabase(Database::new(DatabaseConfig::default())));
-        kpxc_database_free(db_ptr);
+        unsafe { kpxc_database_free(db_ptr) };
 
         let path =
             std::env::temp_dir().join(format!("ffi-save-freed-{}.kdbx", uuid::Uuid::new_v4()));
@@ -329,7 +359,7 @@ mod tests {
         // The pointer is dangling at this point; a correct implementation
         // must reject it via the handle registry before ever dereferencing
         // it, not attempt to read through it.
-        let result = kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr());
+        let result = unsafe { kpxc_database_save(db_ptr, path_c.as_ptr(), password.as_ptr()) };
         assert_eq!(result, KPXC_ERR_NULL_PTR);
         assert!(!path.exists());
     }

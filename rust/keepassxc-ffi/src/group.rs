@@ -20,8 +20,14 @@ fn parse_uuid(s: &str) -> Result<Uuid, c_int> {
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_get_name(
+pub unsafe extern "C" fn kpxc_group_get_name(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> *mut c_char {
@@ -52,8 +58,14 @@ pub extern "C" fn kpxc_group_get_name(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` and `name` must each be null or point to a NUL-terminated
+/// string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_set_name(
+pub unsafe extern "C" fn kpxc_group_set_name(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
     name: *const c_char,
@@ -77,8 +89,14 @@ pub extern "C" fn kpxc_group_set_name(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `parent_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_get_uuid(
+pub unsafe extern "C" fn kpxc_group_get_uuid(
     db: *mut KpxcDatabase,
     parent_uuid: *const c_char,
     index: usize,
@@ -118,8 +136,14 @@ pub extern "C" fn kpxc_group_get_uuid(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_entries_count(
+pub unsafe extern "C" fn kpxc_group_entries_count(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> c_int {
@@ -147,8 +171,14 @@ pub extern "C" fn kpxc_group_entries_count(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_groups_count(
+pub unsafe extern "C" fn kpxc_group_groups_count(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> c_int {
@@ -174,8 +204,14 @@ pub extern "C" fn kpxc_group_groups_count(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `parent_uuid` and `name` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_create(
+pub unsafe extern "C" fn kpxc_group_create(
     db: *mut KpxcDatabase,
     parent_uuid: *const c_char,
     name: *const c_char,
@@ -214,8 +250,14 @@ pub extern "C" fn kpxc_group_create(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_delete(
+pub unsafe extern "C" fn kpxc_group_delete(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
     permanent: c_int,
@@ -240,13 +282,24 @@ pub extern "C" fn kpxc_group_delete(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time.
 #[no_mangle]
-pub extern "C" fn kpxc_group_root_uuid(db: *mut KpxcDatabase) -> *mut c_char {
+pub unsafe extern "C" fn kpxc_group_root_uuid(db: *mut KpxcDatabase) -> *mut c_char {
     crate::database::kpxc_database_root_uuid(db)
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` and `target_parent_uuid` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_group_move(
+pub unsafe extern "C" fn kpxc_group_move(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
     target_parent_uuid: *const c_char,
@@ -299,7 +352,7 @@ mod tests {
         let uuid_c = CString::new(group_uuid.to_string()).unwrap();
         let name_c = CString::new("New").unwrap();
 
-        let result = kpxc_group_set_name(db_ptr, uuid_c.as_ptr(), name_c.as_ptr());
+        let result = unsafe { kpxc_group_set_name(db_ptr, uuid_c.as_ptr(), name_c.as_ptr()) };
         assert_eq!(result, KPXC_OK);
 
         let db = unsafe { &*db_ptr };
@@ -308,10 +361,10 @@ mod tests {
         assert!(group.times.last_modification.unwrap() > stale);
 
         let missing = CString::new(Uuid::new_v4().to_string()).unwrap();
-        let result = kpxc_group_set_name(db_ptr, missing.as_ptr(), name_c.as_ptr());
+        let result = unsafe { kpxc_group_set_name(db_ptr, missing.as_ptr(), name_c.as_ptr()) };
         assert_eq!(result, KPXC_ERR_NOT_FOUND);
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -328,7 +381,7 @@ mod tests {
         let source_uuid = CString::new(source_uuid.to_string()).unwrap();
         let target_uuid = CString::new(target_uuid.to_string()).unwrap();
 
-        let result = kpxc_group_move(db_ptr, source_uuid.as_ptr(), target_uuid.as_ptr());
+        let result = unsafe { kpxc_group_move(db_ptr, source_uuid.as_ptr(), target_uuid.as_ptr()) };
         assert_eq!(result, KPXC_OK);
 
         let db = unsafe { &*db_ptr };
@@ -339,7 +392,7 @@ mod tests {
         );
         assert_eq!(db.0.root.groups[0].groups.len(), 1);
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -355,7 +408,7 @@ mod tests {
         let child_uuid = CString::new(child_uuid.to_string()).unwrap();
         let root_target = CString::new("").unwrap();
 
-        let result = kpxc_group_move(db_ptr, child_uuid.as_ptr(), root_target.as_ptr());
+        let result = unsafe { kpxc_group_move(db_ptr, child_uuid.as_ptr(), root_target.as_ptr()) };
         assert_eq!(result, KPXC_OK);
 
         let db = unsafe { &*db_ptr };
@@ -367,6 +420,6 @@ mod tests {
             .iter()
             .any(|group| group.uuid == child_uuid.to_str().unwrap().parse::<Uuid>().unwrap()));
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 }

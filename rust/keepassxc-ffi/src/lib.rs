@@ -20,8 +20,13 @@ pub extern "C" fn kpxc_last_error() -> *const c_char {
 /// Frees a string returned by this library. The bytes are overwritten with
 /// zeros before the allocation is released, since these buffers can carry
 /// plaintext secrets (e.g. a password from `kpxc_entry_get_field`).
+///
+/// # Safety
+///
+/// `ptr` must be null or a string returned by this library that has not already
+/// been freed. It must not be used after this call.
 #[no_mangle]
-pub extern "C" fn kpxc_string_free(ptr: *mut c_char) {
+pub unsafe extern "C" fn kpxc_string_free(ptr: *mut c_char) {
     error::catch_unwind((), move || {
         if !ptr.is_null() {
             zeroize_and_free(unsafe { CString::from_raw(ptr) });
@@ -41,9 +46,9 @@ mod tests {
 
     #[test]
     fn string_free_accepts_null_and_library_strings() {
-        kpxc_string_free(std::ptr::null_mut());
+        unsafe { kpxc_string_free(std::ptr::null_mut()) };
         let secret = CString::new("hunter2").unwrap().into_raw();
-        kpxc_string_free(secret);
+        unsafe { kpxc_string_free(secret) };
     }
 
     #[test]

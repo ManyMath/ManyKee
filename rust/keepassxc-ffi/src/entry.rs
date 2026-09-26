@@ -23,8 +23,14 @@ fn parse_uuid(s: &str) -> Result<Uuid, c_int> {
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `entry_uuid` and `field_name` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_get_field(
+pub unsafe extern "C" fn kpxc_entry_get_field(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
     field_name: *const c_char,
@@ -71,8 +77,15 @@ pub extern "C" fn kpxc_entry_get_field(
 use keepassxc::serialization::{EntryFields, EntryInfo, TotpInfo};
 
 /// Return the safe list summary for one entry as JSON.
+///
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `entry_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_get_info(
+pub unsafe extern "C" fn kpxc_entry_get_info(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
 ) -> *mut c_char {
@@ -111,8 +124,14 @@ pub extern "C" fn kpxc_entry_get_info(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `entry_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_read_fields(
+pub unsafe extern "C" fn kpxc_entry_read_fields(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
 ) -> *mut c_char {
@@ -154,8 +173,14 @@ pub extern "C" fn kpxc_entry_read_fields(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `entry_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_get_totp(
+pub unsafe extern "C" fn kpxc_entry_get_totp(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
 ) -> *mut c_char {
@@ -212,8 +237,14 @@ pub extern "C" fn kpxc_entry_get_totp(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `entry_uuid`, `field_name` and `value` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_set_field(
+pub unsafe extern "C" fn kpxc_entry_set_field(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
     field_name: *const c_char,
@@ -248,8 +279,14 @@ pub extern "C" fn kpxc_entry_set_field(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_get_uuid(
+pub unsafe extern "C" fn kpxc_entry_get_uuid(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
     index: usize,
@@ -289,8 +326,14 @@ pub extern "C" fn kpxc_entry_get_uuid(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `group_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_create(
+pub unsafe extern "C" fn kpxc_entry_create(
     db: *mut KpxcDatabase,
     group_uuid: *const c_char,
 ) -> *mut c_char {
@@ -327,8 +370,14 @@ pub extern "C" fn kpxc_entry_create(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `entry_uuid` must be null or point to a NUL-terminated string that
+/// stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_delete(
+pub unsafe extern "C" fn kpxc_entry_delete(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
     permanent: c_int,
@@ -353,8 +402,14 @@ pub extern "C" fn kpxc_entry_delete(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `entry_uuid` and `target_group_uuid` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_entry_move(
+pub unsafe extern "C" fn kpxc_entry_move(
     db: *mut KpxcDatabase,
     entry_uuid: *const c_char,
     target_group_uuid: *const c_char,
@@ -436,7 +491,7 @@ mod tests {
         let entry_uuid = unsafe { &*db_ptr }.0.root.entries[0].uuid;
         let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
 
-        let result = kpxc_entry_read_fields(db_ptr, entry_uuid.as_ptr());
+        let result = unsafe { kpxc_entry_read_fields(db_ptr, entry_uuid.as_ptr()) };
         let json = unsafe { CString::from_raw(result) }.into_string().unwrap();
         let payload: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(payload["custom_data"].get("otp").is_none());
@@ -452,18 +507,19 @@ mod tests {
         );
 
         let field_name = CString::new(fields::PASSWORD).unwrap();
-        let result = kpxc_entry_get_field(db_ptr, entry_uuid.as_ptr(), field_name.as_ptr());
+        let result =
+            unsafe { kpxc_entry_get_field(db_ptr, entry_uuid.as_ptr(), field_name.as_ptr()) };
         let value = unsafe { CString::from_raw(result) }.into_string().unwrap();
         assert_eq!(value, "hunter2");
 
-        let result = kpxc_entry_get_totp(db_ptr, entry_uuid.as_ptr());
+        let result = unsafe { kpxc_entry_get_totp(db_ptr, entry_uuid.as_ptr()) };
         let json = unsafe { CString::from_raw(result) }.into_string().unwrap();
         let totp: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(totp["code"].as_str().is_some());
         assert!(!json.contains("otpauth"));
         assert!(!json.contains("secret=ABC"));
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -472,7 +528,7 @@ mod tests {
         let entry_uuid = unsafe { &*db_ptr }.0.root.entries[0].uuid;
         let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
 
-        let result = kpxc_entry_get_info(db_ptr, entry_uuid.as_ptr());
+        let result = unsafe { kpxc_entry_get_info(db_ptr, entry_uuid.as_ptr()) };
         let json = unsafe { CString::from_raw(result) }.into_string().unwrap();
         let payload: serde_json::Value = serde_json::from_str(&json).unwrap();
 
@@ -486,7 +542,7 @@ mod tests {
         assert!(!json.contains("hunter2"));
         assert!(!json.contains("not for list summaries"));
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -497,7 +553,7 @@ mod tests {
         let db_ptr = crate::database::into_raw_registered(KpxcDatabase(db));
         let entry_uuid_c = CString::new(entry_uuid.to_string()).unwrap();
 
-        let result = kpxc_entry_delete(db_ptr, entry_uuid_c.as_ptr(), 0);
+        let result = unsafe { kpxc_entry_delete(db_ptr, entry_uuid_c.as_ptr(), 0) };
         assert_eq!(result, crate::error::KPXC_ERR_RECYCLE_BIN_DISABLED);
 
         // The entry is untouched and a genuinely unknown UUID still maps to
@@ -505,10 +561,10 @@ mod tests {
         let db = unsafe { &*db_ptr };
         assert!(db.0.root.find_entry_by_uuid(entry_uuid).is_some());
         let missing = CString::new(Uuid::new_v4().to_string()).unwrap();
-        let result = kpxc_entry_delete(db_ptr, missing.as_ptr(), 1);
+        let result = unsafe { kpxc_entry_delete(db_ptr, missing.as_ptr(), 1) };
         assert_eq!(result, crate::error::KPXC_ERR_NOT_FOUND);
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -519,14 +575,14 @@ mod tests {
 
         let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
         let target_uuid = CString::new(target_uuid.to_string()).unwrap();
-        let result = kpxc_entry_move(db_ptr, entry_uuid.as_ptr(), target_uuid.as_ptr());
+        let result = unsafe { kpxc_entry_move(db_ptr, entry_uuid.as_ptr(), target_uuid.as_ptr()) };
 
         assert_eq!(result, KPXC_OK);
         let db = unsafe { &*db_ptr };
         assert!(db.0.root.entries.is_empty());
         assert_eq!(db.0.root.groups[0].entries.len(), 1);
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 
     #[test]
@@ -539,7 +595,7 @@ mod tests {
 
         let entry_uuid = CString::new(entry_uuid.to_string()).unwrap();
         let root_target = CString::new("").unwrap();
-        let result = kpxc_entry_move(db_ptr, entry_uuid.as_ptr(), root_target.as_ptr());
+        let result = unsafe { kpxc_entry_move(db_ptr, entry_uuid.as_ptr(), root_target.as_ptr()) };
 
         assert_eq!(result, KPXC_OK);
         let db = unsafe { &*db_ptr };
@@ -556,6 +612,6 @@ mod tests {
             .entries
             .is_empty());
 
-        crate::database::kpxc_database_free(db_ptr);
+        unsafe { crate::database::kpxc_database_free(db_ptr) };
     }
 }

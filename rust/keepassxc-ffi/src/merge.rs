@@ -9,8 +9,13 @@ use crate::error::{
 
 use keepassxc::serialization::MergeInfo;
 
+/// # Safety
+///
+/// `db` and `other` must each be null or a handle returned by this library that
+/// has not been passed to `kpxc_database_free`, and no other call may use them
+/// at the same time.
 #[no_mangle]
-pub extern "C" fn kpxc_database_merge(
+pub unsafe extern "C" fn kpxc_database_merge(
     db: *mut KpxcDatabase,
     other: *mut KpxcDatabase,
 ) -> *mut c_char {

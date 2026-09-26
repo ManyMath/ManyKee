@@ -12,8 +12,12 @@ use crate::error::{
     KPXC_ERR_IO, KPXC_ERR_NULL_PTR, KPXC_ERR_PANIC, KPXC_OK,
 };
 
+/// # Safety
+///
+/// `path`, `password` and `slot` must each be null or point to a NUL-terminated
+/// string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_open_with_yubikey(
+pub unsafe extern "C" fn kpxc_database_open_with_yubikey(
     path: *const c_char,
     password: *const c_char,
     slot: *const c_char,
@@ -45,8 +49,12 @@ pub extern "C" fn kpxc_database_open_with_yubikey(
     })
 }
 
+/// # Safety
+///
+/// `path`, `password` and `hex_secret` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_open_with_local_challenge(
+pub unsafe extern "C" fn kpxc_database_open_with_local_challenge(
     path: *const c_char,
     password: *const c_char,
     hex_secret: *const c_char,
@@ -75,8 +83,12 @@ pub extern "C" fn kpxc_database_open_with_local_challenge(
     })
 }
 
+/// # Safety
+///
+/// `path`, `password`, `keyfile_path` and `slot` must each be null or point to
+/// a NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_open_with_keyfile_and_yubikey(
+pub unsafe extern "C" fn kpxc_database_open_with_keyfile_and_yubikey(
     path: *const c_char,
     password: *const c_char,
     keyfile_path: *const c_char,
@@ -123,8 +135,13 @@ pub extern "C" fn kpxc_database_open_with_keyfile_and_yubikey(
     })
 }
 
+/// # Safety
+///
+/// `path`, `password`, `keyfile_path` and `hex_secret` must each be null or
+/// point to a NUL-terminated string that stays valid for the duration of the
+/// call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_open_with_keyfile_and_local_challenge(
+pub unsafe extern "C" fn kpxc_database_open_with_keyfile_and_local_challenge(
     path: *const c_char,
     password: *const c_char,
     keyfile_path: *const c_char,
@@ -167,8 +184,14 @@ pub extern "C" fn kpxc_database_open_with_keyfile_and_local_challenge(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `path`, `password` and `slot` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_save_with_yubikey(
+pub unsafe extern "C" fn kpxc_database_save_with_yubikey(
     db: *mut KpxcDatabase,
     path: *const c_char,
     password: *const c_char,
@@ -206,8 +229,15 @@ pub extern "C" fn kpxc_database_save_with_yubikey(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `path`, `password`, `keyfile_path` and `slot` must each be null or
+/// point to a NUL-terminated string that stays valid for the duration of the
+/// call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_save_with_keyfile_and_yubikey(
+pub unsafe extern "C" fn kpxc_database_save_with_keyfile_and_yubikey(
     db: *mut KpxcDatabase,
     path: *const c_char,
     password: *const c_char,
@@ -260,8 +290,14 @@ pub extern "C" fn kpxc_database_save_with_keyfile_and_yubikey(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `path`, `password` and `hex_secret` must each be null or point to a
+/// NUL-terminated string that stays valid for the duration of the call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_save_with_local_challenge(
+pub unsafe extern "C" fn kpxc_database_save_with_local_challenge(
     db: *mut KpxcDatabase,
     path: *const c_char,
     password: *const c_char,
@@ -288,8 +324,15 @@ pub extern "C" fn kpxc_database_save_with_local_challenge(
     })
 }
 
+/// # Safety
+///
+/// `db` must be null or a handle returned by this library that has not been
+/// passed to `kpxc_database_free`, and no other call may use it at the same
+/// time. `path`, `password`, `keyfile_path` and `hex_secret` must each be null
+/// or point to a NUL-terminated string that stays valid for the duration of the
+/// call.
 #[no_mangle]
-pub extern "C" fn kpxc_database_save_with_keyfile_and_local_challenge(
+pub unsafe extern "C" fn kpxc_database_save_with_keyfile_and_local_challenge(
     db: *mut KpxcDatabase,
     path: *const c_char,
     password: *const c_char,
