@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:keepass_ui/keepass_ui.dart';
 
+import 'atomic_file_write.dart';
+
 class LocalFileStorageProvider implements StorageProvider {
   LocalFileStorageProvider({String? initialPath}) : _currentPath = initialPath;
 
@@ -68,7 +70,7 @@ class LocalFileStorageProvider implements StorageProvider {
     }
 
     try {
-      await File(path).writeAsBytes(bytes, flush: true);
+      await writeFileAtomically(path, bytes);
     } on FileSystemException catch (error) {
       throw _mapFileError(error);
     }
