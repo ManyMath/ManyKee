@@ -50,6 +50,7 @@ abstract class MergeService {
   Future<void> openB({required String filePath, required String password});
   bool get bothOpen;
   MergeResult preview();
+  bool isSourcePath(String path);
   MergeServiceResult saveMergedCopy({
     required String outputPath,
     required String outputPassword,
@@ -78,6 +79,9 @@ class _WebMergeService implements MergeService {
 
   @override
   MergeResult preview() => _unsupported();
+
+  @override
+  bool isSourcePath(String path) => false;
 
   @override
   MergeServiceResult saveMergedCopy({

@@ -47,18 +47,25 @@ enum _MergeStep { openA, openB, confirm, done }
 ///     picks, since `saveDatabase`/in-place editing isn't implemented yet
 ///     (see `ManyKeeVaultState`).
 class MergeDatabasesPage extends HookConsumerWidget {
-  const MergeDatabasesPage({super.key, required this.currentFilePath});
+  const MergeDatabasesPage({
+    super.key,
+    required this.currentFilePath,
+    this.createService = createMergeService,
+  });
 
   final String currentFilePath;
 
+  /// Builds the [MergeService] this page drives; defaults to the platform
+  /// adapter. Overridable so widget tests can substitute a fake.
+  final MergeService Function() createService;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final service = useMemoized(createMergeService);
+    final service = useMemoized(createService);
     useEffect(() => service.dispose, <Object?>[service]);
 
     final step = useState(_MergeStep.openA);
     final mergeResult = useState<MergeServiceResult?>(null);
-    final errorMessage = useState<String?>(null);
 
     return MScaffold(
       header: MAppHeader(
@@ -86,7 +93,10 @@ class MergeDatabasesPage extends HookConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: switch (step.value) {
+                  // Keyed so step B starts with fresh hook state instead
+                  // of inheriting A's pre-filled path and password.
                   _MergeStep.openA => _OpenSourceStep(
+                    key: const ValueKey<String>('openA'),
                     label: 'A (your open vault)',
                     description:
                         'This is the vault you currently have open, at '
@@ -95,20 +105,15 @@ class MergeDatabasesPage extends HookConsumerWidget {
                         'anything else happens.',
                     fixedFilePath: currentFilePath,
                     onOpened: (filePath, password) async {
-                      errorMessage.value = null;
-                      try {
-                        await service.openA(
-                          filePath: filePath,
-                          password: password,
-                        );
-                        step.value = _MergeStep.openB;
-                      } catch (e) {
-                        errorMessage.value = _friendlyMessage(e, filePath);
-                        rethrow;
-                      }
+                      await service.openA(
+                        filePath: filePath,
+                        password: password,
+                      );
+                      step.value = _MergeStep.openB;
                     },
                   ),
                   _MergeStep.openB => _OpenSourceStep(
+                    key: const ValueKey<String>('openB'),
                     label: 'B',
                     description:
                         'Choose the other copy of this database (e.g. '
@@ -119,17 +124,11 @@ class MergeDatabasesPage extends HookConsumerWidget {
                         'same original database, not two unrelated '
                         'databases.',
                     onOpened: (filePath, password) async {
-                      errorMessage.value = null;
-                      try {
-                        await service.openB(
-                          filePath: filePath,
-                          password: password,
-                        );
-                        step.value = _MergeStep.confirm;
-                      } catch (e) {
-                        errorMessage.value = _friendlyMessage(e, filePath);
-                        rethrow;
-                      }
+                      await service.openB(
+                        filePath: filePath,
+                        password: password,
+                      );
+                      step.value = _MergeStep.confirm;
                     },
                   ),
                   _MergeStep.confirm => _ConfirmStep(
@@ -156,12 +155,17 @@ String _friendlyMessage(Object error, String filePath) {
   return mapped.message;
 }
 
+const String _sourceOverwriteMessage =
+    'Choose a new file for the merged copy. It cannot overwrite database A '
+    '(your open vault) or database B.';
+
 /// Step 1 or 2: pick a file, optionally a key file, enter the password, and
 /// attempt to open it. Only calls [onOpened], which advances the wizard,
 /// after the service call inside it has succeeded; a thrown error stays on
 /// this step with a friendly message.
 class _OpenSourceStep extends HookWidget {
   const _OpenSourceStep({
+    super.key,
     required this.label,
     required this.description,
     required this.onOpened,
@@ -210,7 +214,7 @@ class _OpenSourceStep extends HookWidget {
       try {
         await onOpened(filePath.value!, passwordController.value);
       } catch (e) {
-        error.value = e.toString();
+        error.value = _friendlyMessage(e, filePath.value!);
       }
       opening.value = false;
     }
@@ -317,9 +321,15 @@ class _ConfirmStep extends HookWidget {
         type: FileType.custom,
         allowedExtensions: const <String>['kdbx'],
       );
-      if (path != null) {
-        outputPath.value = path.endsWith('.kdbx') ? path : '$path.kdbx';
+      if (path == null) return;
+      final candidate = path.endsWith('.kdbx') ? path : '$path.kdbx';
+      if (service.isSourcePath(candidate)) {
+        outputPath.value = null;
+        error.value = _sourceOverwriteMessage;
+        return;
       }
+      error.value = null;
+      outputPath.value = candidate;
     }
 
     Future<void> confirmAndSave() async {
@@ -332,6 +342,11 @@ class _ConfirmStep extends HookWidget {
           outputPassword: outputPasswordController.value,
         );
         onMerged(result);
+      } on ArgumentError {
+        // The destination was (or became, via symlink/rename) one of the
+        // source files; `isSourcePath` is also checked at pick time.
+        outputPath.value = null;
+        error.value = _sourceOverwriteMessage;
       } catch (e) {
         error.value = e.toString();
       }

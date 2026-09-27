@@ -1,6 +1,9 @@
 import 'dart:io';
 
 import 'package:keepass/keepass.dart';
+
+import 'same_file.dart';
+
 export 'package:keepass/keepass.dart' show MergeResult;
 
 MergeService createMergeService() => _NativeMergeService();
@@ -43,9 +46,15 @@ abstract class MergeService {
   /// disk yet. Requires [bothOpen].
   MergeResult preview();
 
+  /// Whether [path] refers to source database A's or B's file on disk. The
+  /// merged result must always go to a *new* file: writing it over either
+  /// source would destroy the only copy of that side's data.
+  bool isSourcePath(String path);
+
   /// Merges B into A (if not already merged via [preview]) and saves the
   /// result to a new file at [outputPath] using [outputPassword]. Requires
-  /// [bothOpen].
+  /// [bothOpen]. Throws [ArgumentError] if [outputPath] is one of the
+  /// source files (see [isSourcePath]).
   MergeServiceResult saveMergedCopy({
     required String outputPath,
     required String outputPassword,
@@ -59,6 +68,8 @@ abstract class MergeService {
 class _NativeMergeService implements MergeService {
   Database? _dbA;
   Database? _dbB;
+  String? _pathA;
+  String? _pathB;
   MergeResult? _cachedResult;
 
   @override
@@ -76,7 +87,10 @@ class _NativeMergeService implements MergeService {
       );
     }
     _dbA?.close();
+    _dbA = null;
+    _pathA = null;
     _dbA = Database.open(filePath, password: password);
+    _pathA = filePath;
   }
 
   @override
@@ -91,7 +105,10 @@ class _NativeMergeService implements MergeService {
       );
     }
     _dbB?.close();
+    _dbB = null;
+    _pathB = null;
     _dbB = Database.open(filePath, password: password);
+    _pathB = filePath;
   }
 
   @override
@@ -107,6 +124,14 @@ class _NativeMergeService implements MergeService {
   }
 
   @override
+  bool isSourcePath(String path) {
+    final a = _pathA;
+    final b = _pathB;
+    return (a != null && pathsReferToSameFile(path, a)) ||
+        (b != null && pathsReferToSameFile(path, b));
+  }
+
+  @override
   MergeServiceResult saveMergedCopy({
     required String outputPath,
     required String outputPassword,
@@ -115,6 +140,14 @@ class _NativeMergeService implements MergeService {
     if (a == null || _dbB == null) {
       throw StateError(
         'Both databases must be opened successfully before merging.',
+      );
+    }
+    if (isSourcePath(outputPath)) {
+      throw ArgumentError.value(
+        outputPath,
+        'outputPath',
+        'The merged copy must be saved to a new file, not over one of the '
+            'source databases.',
       );
     }
     final result = preview();
@@ -128,6 +161,8 @@ class _NativeMergeService implements MergeService {
     _dbB?.close();
     _dbA = null;
     _dbB = null;
+    _pathA = null;
+    _pathB = null;
     _cachedResult = null;
   }
 }
