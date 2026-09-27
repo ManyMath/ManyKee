@@ -81,19 +81,24 @@ class _ManyKeeAppState extends ConsumerState<ManyKeeApp>
       darkTheme: manyKeeDarkTheme,
       themeMode: mode,
       debugShowCheckedModeBanner: false,
-      home: Listener(
+      // Installed above the Navigator so activity inside dialogs and pushed
+      // pages (Settings, Merge) also resets the idle auto-lock timer.
+      builder: (context, child) => Listener(
         behavior: HitTestBehavior.translucent,
         onPointerDown: (_) => _handleActivity(),
         onPointerMove: (_) => _handleActivity(),
         onPointerSignal: (_) => _handleActivity(),
         child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
           onKeyEvent: (node, event) {
             _handleActivity();
             return KeyEventResult.ignored;
           },
-          child: vault.isLocked ? const UnlockPage() : const VaultPage(),
+          child: child ?? const SizedBox.shrink(),
         ),
       ),
+      home: vault.isLocked ? const UnlockPage() : const VaultPage(),
     );
   }
 
