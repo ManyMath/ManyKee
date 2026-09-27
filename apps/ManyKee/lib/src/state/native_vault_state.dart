@@ -80,9 +80,11 @@ class NativeVaultState extends ManyKeeVaultState {
       selectedGroupValue = null;
       selectedEntryValue = null;
       await _loadRootEntries();
-      isLockedValue = false;
-      clearDirtyFlag();
+      // Persist first: if the initial save fails the vault must never have
+      // been published as unlocked, or the UI flashes the vault page and
+      // then snaps back to the unlock form.
       await saveDatabase(password: password);
+      isLockedValue = false;
       notifyListeners();
 
       _scheduleCacheRefresh();

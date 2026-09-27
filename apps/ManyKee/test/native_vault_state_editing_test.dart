@@ -107,6 +107,38 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
+  test('createDatabaseAtPath never publishes an unlocked vault when the first '
+      'save fails', () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'manykee-create-fails',
+    );
+    addTearDown(() => tempDir.delete(recursive: true));
+    // The parent directory does not exist, so the storage provider's write
+    // fails after the database has been created in memory.
+    final target = File('${tempDir.path}/missing-dir/fresh.kdbx');
+
+    final state = NativeVaultState();
+    addTearDown(state.dispose);
+    final observedLocked = <bool>[];
+    state.addListener(() => observedLocked.add(state.isLocked));
+
+    await state.createDatabaseAtPath(
+      filePath: target.path,
+      password: 'fresh-pass',
+      filename: 'fresh.kdbx',
+    );
+
+    expect(await target.exists(), isFalse);
+    expect(state.isLocked, isTrue);
+    expect(state.errorCode, 'CREATE_DATABASE_FAILED');
+    expect(observedLocked, isNotEmpty);
+    expect(
+      observedLocked,
+      everyElement(isTrue),
+      reason: 'listeners must never see the vault unlocked before it saved',
+    );
+  });
+
   test('mutations mark dirty and save clears it after persisting to disk', () async {
     final sourcePath = _firstExisting(<String>[
       '../native/integration_test/fixtures/test_db_kdbx4_with_password_argon2id.kdbx',
