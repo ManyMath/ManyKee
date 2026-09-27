@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:keepass_flutter/keepass_flutter.dart';
 import 'package:keepass_ui/keepass_ui.dart';
 
+import 'atomic_file_write.dart';
 import 'local_file_storage_provider.dart';
 import 'manykee_vault_state.dart';
 import 'unlock_error_mapper.dart';
@@ -401,7 +402,7 @@ class NativeVaultState extends ManyKeeVaultState {
       keyFileBytes: await _loadRememberedKeyFileBytes(),
       yubiKeySlot: _lastYubiKeySlot,
     );
-    await File(filePath).writeAsBytes(bytes, flush: true);
+    await writeFileAtomically(filePath, bytes);
   }
 
   int _requireHandle() {
