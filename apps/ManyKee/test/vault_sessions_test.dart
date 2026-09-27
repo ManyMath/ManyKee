@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:manykee/src/app.dart';
@@ -173,6 +174,90 @@ void main() {
     expect(controller.isLocked, isFalse);
     expect(find.text('Unlock a database'), findsNothing);
     expect(find.text('first.kdbx'), findsOneWidget);
+  });
+
+  group('closing a dirty background session from the databases dialog', () {
+    late List<FakeVaultState> created;
+    late VaultSessionsController controller;
+    late String backgroundId;
+    late String activeId;
+
+    Future<void> pumpAndOpenClose(WidgetTester tester) async {
+      created = <FakeVaultState>[];
+      controller = VaultSessionsController(() {
+        final state = FakeVaultState();
+        created.add(state);
+        return state;
+      });
+      await controller.unlockFromPath(
+        filePath: '/tmp/first.kdbx',
+        password: 'correct',
+        filename: 'first.kdbx',
+      );
+      created.first.makeDirty();
+      backgroundId = controller.activeSessionId;
+      controller.openNewSession();
+      activeId = controller.activeSessionId;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            vaultStateProvider.overrideWith((ref) => controller),
+          ],
+          child: const ManyKeeApp(),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(MButton, 'Databases'));
+      await tester.pump();
+      expect(find.text('Databases'), findsWidgets);
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) => w is MIconButton && w.label == 'Close first.kdbx',
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Unsaved changes'), findsOneWidget);
+    }
+
+    testWidgets('does not switch sessions before the user confirms', (
+      tester,
+    ) async {
+      await pumpAndOpenClose(tester);
+      expect(controller.activeSessionId, activeId);
+
+      // The unsaved-changes dialog is the newest route, so its Cancel is
+      // the last one in the tree (the databases dialog has one too).
+      await tester.tap(find.widgetWithText(MButton, 'Cancel').last);
+      await tester.pump();
+
+      expect(controller.activeSessionId, activeId);
+      expect(controller.sessions, hasLength(2));
+      expect(created.first.isDirty, isTrue);
+    });
+
+    testWidgets('saving closes it and keeps the current session active', (
+      tester,
+    ) async {
+      await pumpAndOpenClose(tester);
+
+      await tester.tap(find.widgetWithText(MButton, 'Save'));
+      await tester.pump();
+      expect(controller.activeSessionId, activeId);
+      await tester.enterText(find.byType(EditableText).last, 'correct');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(MButton, 'Save').last);
+      await tester.pump();
+      await tester.pump();
+
+      expect(created.first.savedPasswords, <String>['correct']);
+      expect(
+        controller.sessions.map((s) => s.id),
+        isNot(contains(backgroundId)),
+      );
+      expect(controller.activeSessionId, activeId);
+    });
   });
 
   testWidgets('same entry UUID reloads when the active vault changes', (

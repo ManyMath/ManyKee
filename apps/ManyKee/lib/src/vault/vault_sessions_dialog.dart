@@ -87,18 +87,22 @@ class _VaultSessionsDialog extends StatelessWidget {
     BuildContext context,
     VaultSessionSummary session,
   ) async {
+    final previousActiveId = controller.activeSessionId;
     var discardDirty = false;
     if (session.isDirty) {
-      controller.switchToSession(session.id);
       final action = await showUnsavedChangesDialog(context);
       if (action == null || !context.mounted) return;
       switch (action) {
         case UnsavedChangesAction.save:
           final password = await showSavePasswordDialog(context);
           if (password == null || !context.mounted) return;
+          // saveDatabase writes the active session, so switch to it only
+          // now that the user has confirmed the save.
+          controller.switchToSession(session.id);
           try {
             await controller.saveDatabase(password: password);
           } catch (error) {
+            controller.switchToSession(previousActiveId);
             if (context.mounted) {
               showMToast(
                 context,
@@ -114,6 +118,10 @@ class _VaultSessionsDialog extends StatelessWidget {
       }
     }
     await controller.closeSession(session.id, discardDirty: discardDirty);
+    // Closing a background session should leave the user where they were.
+    if (previousActiveId != session.id) {
+      controller.switchToSession(previousActiveId);
+    }
     if (context.mounted) Navigator.of(context).pop();
   }
 }
