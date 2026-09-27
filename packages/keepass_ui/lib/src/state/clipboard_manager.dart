@@ -10,6 +10,10 @@ class ClipboardManager {
   static bool _clearOnNextResume = false;
   static String _lastSuccessMessage = 'Copied to clipboard (clears in 30s)';
 
+  /// The value most recently placed on the clipboard by [copyWithAutoClear],
+  /// while a clear (timer or paste-once) is still pending for it.
+  static String? _pendingValue;
+
   static void configure({
     required Duration clearDelay,
     required bool pasteOnceEnabled,
@@ -24,7 +28,8 @@ class ClipboardManager {
     }
     _clearOnNextResume = false;
     _clearTimer?.cancel();
-    await Clipboard.setData(const ClipboardData(text: ''));
+    _clearTimer = null;
+    await _clearIfStillOurs();
   }
 
   String get lastSuccessMessage => _lastSuccessMessage;
@@ -32,10 +37,13 @@ class ClipboardManager {
   Future<bool> copyWithAutoClear(String value) async {
     try {
       await Clipboard.setData(ClipboardData(text: value));
+      _pendingValue = value;
       _clearTimer?.cancel();
+      _clearTimer = null;
       if (_clearDelay > Duration.zero) {
         _clearTimer = Timer(_clearDelay, () {
-          Clipboard.setData(const ClipboardData(text: ''));
+          _clearTimer = null;
+          unawaited(_clearIfStillOurs());
         });
       }
       _clearOnNextResume = _pasteOnceEnabled;
@@ -43,6 +51,25 @@ class ClipboardManager {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Clears the clipboard only if it still holds the value we copied. Content
+  /// the user copied from elsewhere in the meantime is left alone.
+  static Future<void> _clearIfStillOurs() async {
+    final expected = _pendingValue;
+    _pendingValue = null;
+    if (expected == null) {
+      return;
+    }
+    try {
+      final current = await Clipboard.getData(Clipboard.kTextPlain);
+      if (current?.text != expected) {
+        return;
+      }
+      await Clipboard.setData(const ClipboardData(text: ''));
+    } catch (_) {
+      // Clipboard access can fail (e.g. unsupported browser); nothing to do.
     }
   }
 
@@ -65,7 +92,9 @@ class ClipboardManager {
     _clearTimer = null;
     _clearOnNextResume = false;
     if (hadPendingClear) {
-      unawaited(Clipboard.setData(const ClipboardData(text: '')));
+      unawaited(_clearIfStillOurs());
+    } else {
+      _pendingValue = null;
     }
   }
 }
