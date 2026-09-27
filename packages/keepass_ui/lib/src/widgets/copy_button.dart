@@ -44,17 +44,16 @@ class _CopyButtonState extends State<CopyButton> {
       try {
         valueToCopy = await widget.fetchValue!();
       } catch (_) {
+        if (!mounted) return;
         setState(() => _loading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Could not copy to clipboard. Your browser may not support this feature.',
-              ),
-              duration: Duration(seconds: 2),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not copy to clipboard. Your browser may not support this feature.',
             ),
-          );
-        }
+            duration: Duration(seconds: 2),
+          ),
+        );
         return;
       }
       if (!mounted) return;

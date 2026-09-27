@@ -50,7 +50,15 @@ class _PasswordFieldState extends State<PasswordField> {
       return;
     }
     _fetchAttempted = true;
-    final value = await fetch();
+    final String? value;
+    try {
+      value = await fetch();
+    } catch (_) {
+      // Allow a later reveal/copy to retry instead of being stuck with the
+      // scrubbed placeholder forever.
+      _fetchAttempted = false;
+      rethrow;
+    }
     if (mounted && value != null) {
       setState(() => _fetchedValue = value);
     }
@@ -58,7 +66,12 @@ class _PasswordFieldState extends State<PasswordField> {
 
   Future<void> _toggleReveal() async {
     if (!_revealed) {
-      await _ensureValueFetched();
+      try {
+        await _ensureValueFetched();
+      } catch (_) {
+        // Nothing useful to reveal; the user can try again.
+        return;
+      }
     }
     if (!mounted) {
       return;
