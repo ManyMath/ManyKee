@@ -6,7 +6,7 @@ import 'src/screens/settings_screen.dart';
 import 'src/screens/unlock_screen.dart';
 import 'src/screens/vault_screen.dart';
 import 'src/services/screen_protection.dart';
-import 'src/state/native_idle_timer.dart';
+import 'src/state/native_auto_lock.dart';
 import 'src/state/native_vault_state.dart';
 import 'src/state/settings_state.dart';
 
@@ -30,7 +30,7 @@ class ManyKeeNativeApp extends StatefulWidget {
 class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
     with WidgetsBindingObserver {
   final NativeVaultState _vaultState = NativeVaultState();
-  late final NativeIdleTimer _idleTimer;
+  late final NativeAutoLock _autoLock;
 
   bool _lastIsLocked = true;
 
@@ -38,7 +38,11 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _idleTimer = NativeIdleTimer(timeout: widget.settings.autoLockTimeout);
+    _autoLock = NativeAutoLock(
+      vault: _vaultState,
+      timeout: widget.settings.autoLockTimeout,
+    );
+    widget.settings.addListener(_onSettingsChanged);
     _lastIsLocked = _vaultState.isLocked;
     _vaultState.addListener(_onVaultStateChanged);
   }
@@ -46,8 +50,9 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.settings.removeListener(_onSettingsChanged);
     _vaultState.removeListener(_onVaultStateChanged);
-    _idleTimer.dispose();
+    _autoLock.dispose();
     _vaultState.dispose();
     super.dispose();
   }
@@ -70,23 +75,13 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
     }
   }
 
-  void _lockVault() {
-    if (!_vaultState.isLocked) {
-      _idleTimer.stop();
-      _vaultState.lock();
-    }
+  void _onSettingsChanged() {
+    _autoLock.updateTimeout(widget.settings.autoLockTimeout);
   }
 
-  void _onVaultUnlocked() {
-    _idleTimer.updateTimeout(widget.settings.autoLockTimeout);
-    _idleTimer.start(_lockVault);
-  }
+  void _lockVault() => _autoLock.lockNow();
 
-  void _onUserActivity() {
-    if (!_vaultState.isLocked) {
-      _idleTimer.resetTimer();
-    }
-  }
+  void _onUserActivity() => _autoLock.registerActivity();
 
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(
@@ -101,7 +96,6 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
     return ListenableBuilder(
       listenable: widget.settings,
       builder: (context, _) {
-        _idleTimer.updateTimeout(widget.settings.autoLockTimeout);
         ClipboardManager.configure(
           clearDelay: widget.settings.clipboardAutoClearDelay,
           pasteOnceEnabled: widget.settings.clipboardPasteOnce,
@@ -136,12 +130,6 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
                 if (_vaultState.isLocked) {
                   return NativeUnlockScreen(vaultState: _vaultState);
                 }
-
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!_vaultState.isLocked) {
-                    _onVaultUnlocked();
-                  }
-                });
 
                 return NativeVaultScreen(
                   vaultState: _vaultState,
