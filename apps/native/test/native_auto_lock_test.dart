@@ -10,6 +10,10 @@ class _TestVault extends FakeVaultState {
   /// Any state change that is not a lock/unlock (selection, cache refresh).
   void ping() => notifyListeners();
 
+  void makeDirty() => markDirty();
+
+  void markSaved() => clearDirtyFlag();
+
   @override
   Future<void> lock() {
     lockCalls++;
@@ -113,6 +117,60 @@ void main() {
 
       async.elapse(const Duration(minutes: 1));
       expect(vault.lockCalls, 1);
+      autoLock.dispose();
+    });
+  });
+
+  test('idle timeout never locks a vault with unsaved changes', () {
+    fakeAsync((async) {
+      final vault = lockedVault(async);
+      final autoLock = NativeAutoLock(vault: vault, timeout: timeout);
+      unlock(vault, async);
+
+      async.elapse(const Duration(seconds: 3));
+      vault.makeDirty();
+      async.elapse(const Duration(minutes: 5));
+
+      expect(vault.lockCalls, 0);
+      expect(vault.isLocked, isFalse);
+      expect(vault.isDirty, isTrue);
+      autoLock.dispose();
+    });
+  });
+
+  test('saving re-arms the idle timer with a fresh deadline', () {
+    fakeAsync((async) {
+      final vault = lockedVault(async);
+      final autoLock = NativeAutoLock(vault: vault, timeout: timeout);
+      unlock(vault, async);
+      vault.makeDirty();
+      async.elapse(const Duration(minutes: 1));
+
+      vault.markSaved();
+      async.elapse(const Duration(seconds: 4));
+      expect(vault.lockCalls, 0);
+
+      async.elapse(const Duration(seconds: 2));
+      expect(vault.lockCalls, 1);
+      autoLock.dispose();
+    });
+  });
+
+  test('lockIfClean (backgrounding) keeps a dirty vault open', () {
+    fakeAsync((async) {
+      final vault = lockedVault(async);
+      final autoLock = NativeAutoLock(vault: vault, timeout: Duration.zero);
+      unlock(vault, async);
+      vault.makeDirty();
+
+      expect(autoLock.lockIfClean(), isFalse);
+      async.flushMicrotasks();
+      expect(vault.lockCalls, 0);
+
+      vault.markSaved();
+      expect(autoLock.lockIfClean(), isTrue);
+      async.flushMicrotasks();
+      expect(vault.isLocked, isTrue);
       autoLock.dispose();
     });
   });

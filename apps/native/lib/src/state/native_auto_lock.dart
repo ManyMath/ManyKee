@@ -10,6 +10,10 @@ import 'native_idle_timer.dart';
 /// disarmed when the vault locks. Ordinary vault notifications (selection,
 /// search, cache refreshes) do not touch it; only [registerActivity]
 /// pushes the deadline back.
+///
+/// Automatic locks never discard unsaved changes: while the vault is dirty
+/// the timer stays disarmed and [lockIfClean] does nothing. Saving re-arms
+/// it with a fresh deadline.
 class NativeAutoLock {
   NativeAutoLock({required this.vault, required Duration timeout})
       : _idleTimer = NativeIdleTimer(timeout: timeout) {
@@ -35,7 +39,16 @@ class NativeAutoLock {
     if (_armed) _idleTimer.resetTimer();
   }
 
-  /// Locks the vault now (lock button, app backgrounded).
+  /// Automatic lock (idle timeout, app backgrounded): locks only when the
+  /// vault is open and has no unsaved changes. Returns whether it locked.
+  bool lockIfClean() {
+    if (vault.isLocked || vault.isDirty) return false;
+    lockNow();
+    return true;
+  }
+
+  /// Locks the vault now, discarding any unsaved changes. Callers must
+  /// have confirmed that with the user first.
   void lockNow() {
     if (vault.isLocked) return;
     _idleTimer.stop();
@@ -43,11 +56,11 @@ class NativeAutoLock {
   }
 
   void _sync() {
-    final shouldArm = !vault.isLocked;
+    final shouldArm = !vault.isLocked && !vault.isDirty;
     if (shouldArm == _armed) return;
     _armed = shouldArm;
     if (shouldArm) {
-      _idleTimer.start(lockNow);
+      _idleTimer.start(() => lockIfClean());
     } else {
       _idleTimer.stop();
     }

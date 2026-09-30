@@ -172,6 +172,55 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
     }
   }
 
+  /// Locks the vault, first asking what to do with unsaved changes.
+  Future<void> _lockVault() async {
+    void lock() {
+      final onLockPressed = widget.onLockPressed;
+      if (onLockPressed != null) {
+        onLockPressed();
+      } else {
+        widget.vaultState.lock();
+      }
+    }
+
+    if (!widget.vaultState.isDirty) {
+      lock();
+      return;
+    }
+
+    final choice = await showDialog<_UnsavedChoice>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Unsaved changes'),
+        content: const Text(
+          'Save your changes before locking, or discard them.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_UnsavedChoice.discard),
+            child: const Text('Discard'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_UnsavedChoice.save),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == _UnsavedChoice.save) {
+      await _saveVault();
+      if (!mounted || widget.vaultState.isDirty) return;
+    }
+    lock();
+  }
+
   Future<void> _createEntry() async {
     final result = await showEntryFormDialog(
       context,
@@ -301,7 +350,7 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
         IconButton(
           icon: const Icon(Icons.lock_outline),
           tooltip: 'Lock Vault',
-          onPressed: widget.onLockPressed ?? () => widget.vaultState.lock(),
+          onPressed: _lockVault,
         ),
         IconButton(
           icon: const Icon(Icons.settings),
@@ -498,7 +547,7 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
           IconButton(
             icon: const Icon(Icons.lock_outline),
             tooltip: 'Lock Vault',
-            onPressed: widget.onLockPressed ?? () => widget.vaultState.lock(),
+            onPressed: _lockVault,
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -545,3 +594,5 @@ class _NativeVaultScreenState extends State<NativeVaultScreen> {
     );
   }
 }
+
+enum _UnsavedChoice { save, discard }

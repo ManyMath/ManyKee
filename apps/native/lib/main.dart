@@ -71,7 +71,9 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
 
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      _lockVault();
+      // Never throw away unsaved edits just because the app went to the
+      // background; the vault stays open until it is saved or discarded.
+      _autoLock.lockIfClean();
     }
   }
 
@@ -79,6 +81,8 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
     _autoLock.updateTimeout(widget.settings.autoLockTimeout);
   }
 
+  /// Lock button. [NativeVaultScreen] has already asked the user about any
+  /// unsaved changes before calling this.
   void _lockVault() => _autoLock.lockNow();
 
   void _onUserActivity() => _autoLock.registerActivity();
