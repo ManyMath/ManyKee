@@ -1,5 +1,5 @@
 name: manykee_native
-description: Secondary/transitional ManyKee native host; canonical reference GUI lives in packages/keepass_flutter/example.
+description: Legacy transitional ManyKee native host; the canonical app is apps/ManyKee.
 publish_to: none
 resolution: workspace
 version: 0.1.0
