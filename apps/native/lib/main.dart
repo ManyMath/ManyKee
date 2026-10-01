@@ -9,6 +9,7 @@ import 'src/services/screen_protection.dart';
 import 'src/state/native_auto_lock.dart';
 import 'src/state/native_vault_state.dart';
 import 'src/state/settings_state.dart';
+import 'src/widgets/user_activity_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,27 +122,29 @@ class _ManyKeeNativeAppState extends State<ManyKeeNativeApp>
           darkTheme: ManyKeeTheme.dark(),
           themeMode: themeMode,
           debugShowCheckedModeBanner: false,
-          home: Listener(
-            onPointerDown: (_) => _onUserActivity(),
-            onPointerMove: (_) => _onUserActivity(),
-            child: ListenableBuilder(
-              listenable: _vaultState,
-              builder: (context, _) {
-                if (_vaultState.isLocked && _vaultState.lastFilePath != null) {
-                  return NativeLockScreen(vaultState: _vaultState);
-                }
+          // Above the Navigator, so activity in dialogs and pushed routes
+          // (entry forms, Settings) also resets the idle timer.
+          builder: (context, child) => UserActivityListener(
+            onActivity: _onUserActivity,
+            child: child ?? const SizedBox.shrink(),
+          ),
+          home: ListenableBuilder(
+            listenable: _vaultState,
+            builder: (context, _) {
+              if (_vaultState.isLocked && _vaultState.lastFilePath != null) {
+                return NativeLockScreen(vaultState: _vaultState);
+              }
 
-                if (_vaultState.isLocked) {
-                  return NativeUnlockScreen(vaultState: _vaultState);
-                }
+              if (_vaultState.isLocked) {
+                return NativeUnlockScreen(vaultState: _vaultState);
+              }
 
-                return NativeVaultScreen(
-                  vaultState: _vaultState,
-                  onLockPressed: _lockVault,
-                  onSettingsPressed: () => _openSettings(context),
-                );
-              },
-            ),
+              return NativeVaultScreen(
+                vaultState: _vaultState,
+                onLockPressed: _lockVault,
+                onSettingsPressed: () => _openSettings(context),
+              );
+            },
           ),
         );
       },
