@@ -1,5 +1,9 @@
 /// utility to purge the history of the entries in the database
-use std::fs::File;
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::Path,
+};
 
 use anyhow::Result;
 use clap::Parser;
@@ -43,9 +47,39 @@ pub fn main() -> Result<()> {
 
     purge_history(&mut db.root)?;
 
-    db.save(&mut File::options().write(true).open(&args.in_kdbx)?, key)?;
+    // Serialise fully before touching the file, then replace it atomically,
+    // so an error or a crash part-way through never damages the database.
+    let mut out = Vec::new();
+    db.save(&mut out, key)?;
+    replace_file(Path::new(&args.in_kdbx), &out)?;
 
     Ok(())
+}
+
+/// Writes `bytes` to a sibling temp file, syncs it, and renames it over
+/// `path`, keeping the original file's permissions.
+fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| anyhow::format_err!("{} is not a file path", path.display()))?;
+    let mut temp_name = std::ffi::OsString::from(".");
+    temp_name.push(file_name);
+    temp_name.push(format!(".{}.tmp", std::process::id()));
+    let temp_path = path.with_file_name(temp_name);
+
+    let result = (|| -> Result<()> {
+        let mut temp = File::options().write(true).create_new(true).open(&temp_path)?;
+        temp.set_permissions(fs::metadata(path)?.permissions())?;
+        temp.write_all(bytes)?;
+        temp.sync_all()?;
+        fs::rename(&temp_path, path)?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
 }
 
 fn purge_history_for_entry(entry: &mut keepass::db::Entry) -> Result<()> {
