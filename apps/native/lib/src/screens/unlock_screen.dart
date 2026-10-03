@@ -1,5 +1,4 @@
 import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -44,7 +43,7 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
   Future<void> _detectYubiKeys() async {
     try {
       final keys = await KeePassNativeApi().listYubiKeys();
-      developer.log('YubiKey detection: found ${keys.length} device(s): $keys',
+      developer.log('YubiKey detection: found ${keys.length} device(s)',
           name: 'ManyKee');
       if (mounted) {
         setState(() {
@@ -107,14 +106,6 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
     });
     widget.vaultState.clearError();
 
-    final unlockRequest = 'Unlock requested: filePath=$_filePath '
-        'exists=${_filePath != null ? File(_filePath!).existsSync() : false} '
-        'keyFilePath=$_keyFilePath '
-        'keyExists=${_keyFilePath != null ? File(_keyFilePath!).existsSync() : false} '
-        'useYubiKey=$_useYubiKey';
-    developer.log(unlockRequest, name: 'ManyKee');
-    debugPrint(unlockRequest);
-
     try {
       await widget.vaultState.unlockNative(
         filePath: _filePath!,
@@ -126,7 +117,6 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
     } on KeePassError catch (e, stack) {
       developer.log('Unlock failed: ${e.message}',
           name: 'ManyKee', error: e, stackTrace: stack);
-      debugPrint('Unlock KeePassError: ${e.message}');
       final message = e.message.toLowerCase();
       if (message.contains('yubikey') || message.contains('challenge')) {
         widget.vaultState.setError(
@@ -198,7 +188,6 @@ class _NativeUnlockScreenState extends State<NativeUnlockScreen> {
     } catch (e, stack) {
       developer.log('Unlock failed (unexpected): $e',
           name: 'ManyKee', error: e, stackTrace: stack);
-      debugPrint('Unlock unexpected error: $e');
       widget.vaultState.setError('UNKNOWN', e.toString());
     } finally {
       if (mounted) {
