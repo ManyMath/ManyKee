@@ -728,6 +728,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn test_db_to_xml_joins_tags_with_semicolon_and_round_trips() {
         let mut entry = crate::db::Entry::new();
         entry.tags = vec!["tag1".to_string(), "tag2".to_string()];

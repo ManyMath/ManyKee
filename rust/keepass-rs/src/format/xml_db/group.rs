@@ -220,6 +220,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn test_group_custom_icon_round_trips_through_db_to_xml_and_back() {
         let icon_uuid = Uuid::new_v4();
         let icon_bytes = vec![1, 2, 3, 4, 5];

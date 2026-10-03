@@ -2064,6 +2064,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
     fn test_history_revision_unknown_children_round_trip_through_save() {
         // Times/AutoType/CustomData/own unknown_xml on a history revision
         // were captured on parse (per `test_history_revisions_keep_distinct_unknowns`)

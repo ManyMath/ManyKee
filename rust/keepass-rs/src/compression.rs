@@ -67,11 +67,10 @@ fn decompress_with_limit(in_buffer: &[u8], limit: u64) -> Result<Vec<u8>, std::i
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[allow(unused_imports)]
     use std::io::Write as _;
 
     fn gzip(data: &[u8]) -> Vec<u8> {
-        let mut encoder = GzEncoder::new(Vec::new(), Flate2Compression::default());
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(data).unwrap();
         encoder.finish().unwrap()
     }
