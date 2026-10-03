@@ -37,6 +37,11 @@ jobs:
         run: >-
           timeout --signal=TERM --kill-after=30s 30m
           cargo test --locked --workspace
+      - name: Test keepass-rs with default and single save features
+        working-directory: ManyKee/rust
+        run: |
+          cargo test --locked -p keepass --lib
+          cargo test --locked -p keepass --lib --features save_kdbx3
       - name: Check wasm target compiles
         working-directory: ManyKee/rust
         run: cargo check --locked -p keepassxc-wasm --target wasm32-unknown-unknown
