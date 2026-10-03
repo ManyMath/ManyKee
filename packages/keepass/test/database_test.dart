@@ -49,22 +49,33 @@ void main() {
   test('saveBytes returns a re-openable database and cleans up its temp dir',
       () {
     final db = Database.open(fixturePath, password: 'demopass');
-    bool leftoverTempDir() => Directory.systemTemp
+    // Other suites (or other checkouts) may be saving at the same time, so
+    // only directories that appeared during this call count as leftovers.
+    Set<String> saveTempDirs() => Directory.systemTemp
         .listSync()
         .whereType<Directory>()
-        .any((e) => e.uri.pathSegments.reversed
-            .firstWhere((s) => s.isNotEmpty, orElse: () => '')
-            .startsWith('manykee_save_'));
+        .map((e) => e.path)
+        .where((path) =>
+            path.split(Platform.pathSeparator).last.startsWith('manykee_save_'))
+        .toSet();
     try {
+      final before = saveTempDirs();
       final bytes = db.saveBytes(password: 'demopass');
       expect(bytes, isNotEmpty);
-      expect(leftoverTempDir(), isFalse,
+      final leftovers = saveTempDirs().difference(before);
+      // A concurrent save elsewhere may still be running; ignore anything
+      // that disappears on its own within a moment.
+      if (leftovers.isNotEmpty) {
+        sleep(const Duration(milliseconds: 200));
+      }
+      expect(leftovers.where((path) => Directory(path).existsSync()), isEmpty,
           reason: 'saveBytes must delete its temp directory afterward');
 
-      final reopenPath =
-          '${Directory.systemTemp.path}/manykee_test_reopen.kdbx';
-      File(reopenPath).writeAsBytesSync(bytes);
+      final reopenDir =
+          Directory.systemTemp.createTempSync('manykee_test_reopen_');
       try {
+        final reopenPath = '${reopenDir.path}/reopen.kdbx';
+        File(reopenPath).writeAsBytesSync(bytes);
         final reopened = Database.open(reopenPath, password: 'demopass');
         try {
           expect(reopened.rootGroup.uuid, isNotEmpty);
@@ -72,10 +83,7 @@ void main() {
           reopened.close();
         }
       } finally {
-        final f = File(reopenPath);
-        if (f.existsSync()) {
-          f.deleteSync();
-        }
+        reopenDir.deleteSync(recursive: true);
       }
     } finally {
       db.close();
@@ -139,10 +147,11 @@ void main() {
       expect(root.entries, isEmpty);
 
       final bytes = db.saveBytes(password: 'a-new-password');
-      final reopenPath =
-          '${Directory.systemTemp.path}/manykee_test_created.kdbx';
-      File(reopenPath).writeAsBytesSync(bytes);
+      final reopenDir =
+          Directory.systemTemp.createTempSync('manykee_test_created_');
       try {
+        final reopenPath = '${reopenDir.path}/created.kdbx';
+        File(reopenPath).writeAsBytesSync(bytes);
         final reopened = Database.open(reopenPath, password: 'a-new-password');
         try {
           expect(reopened.rootGroup.uuid, root.uuid);
@@ -150,10 +159,7 @@ void main() {
           reopened.close();
         }
       } finally {
-        final f = File(reopenPath);
-        if (f.existsSync()) {
-          f.deleteSync();
-        }
+        reopenDir.deleteSync(recursive: true);
       }
     } finally {
       db.close();
