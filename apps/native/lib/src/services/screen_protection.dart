@@ -3,15 +3,20 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 /// Toggles platform-level screen-capture protection while the vault is
-/// unlocked, so an unlocked vault never appears in the app switcher,
-/// screenshots, or screen recordings.
+/// unlocked, keeping vault contents out of screenshots, screen recordings
+/// and the app switcher where the platform supports it.
 ///
-/// Backed by `MainActivity.kt` (Android, `FLAG_SECURE`),
-/// `AppDelegate.swift` (iOS/macOS, obscuring overlay on resign-active), and
-/// `flutter_window.cpp` (Windows, `SetWindowDisplayAffinity` with
-/// `WDA_EXCLUDEFROMCAPTURE`). A no-op on platforms without a native handler
-/// (Linux, no universal per-window capture-exclusion API across X11/Wayland
-/// compositors, and tests).
+/// Coverage differs per platform:
+///  * Android (`MainActivity.kt`, `FLAG_SECURE`): blocks screenshots,
+///    recordings and the recents thumbnail.
+///  * Windows (`flutter_window.cpp`, `SetWindowDisplayAffinity` with
+///    `WDA_EXCLUDEFROMCAPTURE`): excludes the window from capture.
+///  * iOS/macOS (`AppDelegate.swift`): only covers the window with an
+///    overlay while the app is inactive (on iOS this hides the app-switcher
+///    snapshot). Screenshots and recordings of the active app are not
+///    blocked.
+///  * Linux and tests: no-op (no universal per-window capture-exclusion API
+///    across X11/Wayland compositors).
 class ScreenProtection {
   ScreenProtection._();
 
