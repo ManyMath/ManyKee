@@ -26,6 +26,9 @@ class WebVaultState extends ManyKeeVaultState {
   Uint8List? _lastDbBytes;
   Uint8List? _lastKeyFileBytes;
   String? _lastFilePath;
+  // The wasm save path cannot write a challenge-response factor, so saving a
+  // vault unlocked with one would silently strip the YubiKey requirement.
+  bool _unlockedWithChallengeResponse = false;
   bool _disposed = false;
 
   Uint8List? get lastDbBytes => _lastDbBytes;
@@ -87,6 +90,7 @@ class WebVaultState extends ManyKeeVaultState {
     _lastKeyFileBytes = keyFileBytes == null
         ? null
         : Uint8List.fromList(keyFileBytes);
+    _unlockedWithChallengeResponse = challengeResponseHex != null;
     _lastFilePath = filename ?? filePath;
     _storageProvider.rememberName(filename ?? filePath);
     handleValue = handle;
@@ -131,6 +135,7 @@ class WebVaultState extends ManyKeeVaultState {
     _lastKeyFileBytes?.fillRange(0, _lastKeyFileBytes!.length, 0);
     _lastDbBytes = null;
     _lastKeyFileBytes = null;
+    _unlockedWithChallengeResponse = false;
     _lastFilePath = null;
     lastFilenameValue = null;
     clearError();
@@ -144,6 +149,7 @@ class WebVaultState extends ManyKeeVaultState {
     }
     _lastKeyFileBytes?.fillRange(0, _lastKeyFileBytes!.length, 0);
     _lastKeyFileBytes = null;
+    _unlockedWithChallengeResponse = false;
     resetBrowsingState();
   }
 
@@ -299,6 +305,7 @@ class WebVaultState extends ManyKeeVaultState {
     required String password,
     List<int>? keyFileBytes,
   }) async {
+    _ensureSaveKeepsAllFactors();
     if (password.isEmpty) {
       throw StateError('A master password is required to save');
     }
@@ -323,6 +330,7 @@ class WebVaultState extends ManyKeeVaultState {
     required String filePath,
     required String password,
   }) async {
+    _ensureSaveKeepsAllFactors();
     if (password.isEmpty) {
       throw StateError('A master password is required to save');
     }
@@ -333,6 +341,14 @@ class WebVaultState extends ManyKeeVaultState {
       keyFileBytes: _lastKeyFileBytes,
     );
     await _storageProvider.save(Uint8List.fromList(bytes), name: filePath);
+  }
+
+  void _ensureSaveKeepsAllFactors() {
+    if (_unlockedWithChallengeResponse) {
+      throw UnsupportedError(
+        'Saving YubiKey-protected databases is not supported on web yet.',
+      );
+    }
   }
 
   int _requireHandle() {
