@@ -22,6 +22,9 @@ self.onmessage = (e) => {
       self.postMessage({ type: 'progress', percent: 42 });
       self.postMessage({ id, result: '{}' });
       break;
+    case 'crash':
+      setTimeout(() => { throw new Error('crashed'); }, 0);
+      break;
     default:
       // Never answer: simulates a request that gets stuck.
       break;
@@ -146,6 +149,39 @@ void main() {
     final percent = await progress;
     expect(percent, isA<int>());
     expect(percent, 42);
+  });
+
+  test('a worker-level error fails every pending call', () async {
+    final bridge =
+        WorkerBridge(workerFactory: _ScriptedFactory([_readyNow]).call);
+    addTearDown(bridge.dispose);
+    await bridge.init();
+
+    final stuck = bridge.call('hang', const []);
+    final crashing = bridge.call('crash', const []);
+
+    await expectLater(
+      stuck,
+      throwsA(_isWebError('WORKER_ERROR', contains('crashed'))),
+    );
+    await expectLater(crashing, throwsA(_isWebError('WORKER_ERROR')));
+
+    // The worker itself is still alive, so new calls keep working.
+    expect(await bridge.call('echo', [2]), '[2]');
+  });
+
+  test('unsendable params fail the call instead of leaking it', () async {
+    final bridge =
+        WorkerBridge(workerFactory: _ScriptedFactory([_readyNow]).call);
+    addTearDown(bridge.dispose);
+    await bridge.init();
+
+    await expectLater(
+      // Functions cannot be structured-cloned.
+      bridge.call('echo', [() {}]),
+      throwsA(_isWebError('WORKER_ERROR', contains('echo'))),
+    );
+    expect(await bridge.call('echo', [3]), '[3]');
   });
 
   test('dispose fails pending calls and tears the bridge down', () async {

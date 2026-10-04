@@ -59,6 +59,7 @@ class WorkerBridge {
       _worker = worker;
       worker.onmessage = _onMessage.toJS;
       worker.onerror = _onError.toJS;
+      worker.onmessageerror = _onMessageError.toJS;
       await ready.future;
     } catch (e) {
       _terminateWorker();
@@ -120,11 +121,37 @@ class WorkerBridge {
   }
 
   void _onError(web.Event event) {
+    var detail = 'Worker failed';
+    if (event.isA<web.ErrorEvent>()) {
+      final message = (event as web.ErrorEvent).message;
+      if (message.isNotEmpty) detail = message;
+    }
+    _failEverything(KeePassWebError('WORKER_ERROR', detail));
+  }
+
+  void _onMessageError(web.Event event) {
+    _failEverything(
+      KeePassWebError(
+        'WORKER_ERROR',
+        'A worker message could not be deserialized',
+      ),
+    );
+  }
+
+  /// Fails the pending ready completer (if still initializing) and every
+  /// outstanding call, since a worker-level error leaves no way to tell which
+  /// request it belongs to.
+  void _failEverything(KeePassWebError error) {
     final ready = _readyCompleter;
     if (ready != null && !ready.isCompleted) {
-      ready.completeError(
-        KeePassWebError('WORKER_ERROR', 'Worker failed to load'),
-      );
+      ready.completeError(error);
+    }
+    final pending = List<Completer<String>>.from(_pending.values);
+    _pending.clear();
+    for (final completer in pending) {
+      if (!completer.isCompleted) {
+        completer.completeError(error);
+      }
     }
   }
 
@@ -143,7 +170,18 @@ class WorkerBridge {
       'method': method,
       'params': params,
     };
-    worker.postMessage(message.jsify());
+    try {
+      worker.postMessage(message.jsify());
+    } catch (e) {
+      // DataCloneError and friends: nothing was sent, so no reply will come.
+      _pending.remove(id);
+      completer.completeError(
+        KeePassWebError(
+          'WORKER_ERROR',
+          'Failed to send "$method" to worker: $e',
+        ),
+      );
+    }
     return completer.future;
   }
 
@@ -153,6 +191,7 @@ class WorkerBridge {
     if (worker == null) return;
     worker.onmessage = null;
     worker.onerror = null;
+    worker.onmessageerror = null;
     worker.terminate();
   }
 
