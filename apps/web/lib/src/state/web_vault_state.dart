@@ -8,14 +8,21 @@ import 'package:keepass_web/keepass_web.dart';
 import 'web_file_storage_provider.dart';
 
 class WebVaultState extends VaultState {
-  final KeePassWebApi _api = KeePassWebApi();
-  final WebFileStorageProvider _storageProvider = WebFileStorageProvider();
+  WebVaultState({KeePassWebApi? api, WebFileStorageProvider? storageProvider})
+      : _api = api ?? KeePassWebApi(),
+        _storageProvider = storageProvider ?? WebFileStorageProvider();
+
+  final KeePassWebApi _api;
+  final WebFileStorageProvider _storageProvider;
 
   Uint8List? _lastDbBytes;
   // Retained for the unlocked session so saveDatabase() can re-save without
   // re-prompting for the keyfile (there's no filesystem path to re-read from
   // on web, unlike NativeVaultState). Zeroized and cleared on lock().
   Uint8List? _lastKeyFileBytes;
+  // The wasm save path cannot write a challenge-response factor, so saving a
+  // vault unlocked with one would silently strip the YubiKey requirement.
+  bool _unlockedWithChallengeResponse = false;
 
   Uint8List? get lastDbBytes => _lastDbBytes;
 
@@ -54,6 +61,7 @@ class WebVaultState extends VaultState {
     lastFilenameValue = filename;
     _lastDbBytes = dbBytes;
     _lastKeyFileBytes = keyFileBytes;
+    _unlockedWithChallengeResponse = challengeResponseHex != null;
     _storageProvider.rememberName(filename);
     await loadRootGroupsUsing(_api.listGroups);
 
@@ -79,6 +87,7 @@ class WebVaultState extends VaultState {
     }
     _lastKeyFileBytes?.fillRange(0, _lastKeyFileBytes!.length, 0);
     _lastKeyFileBytes = null;
+    _unlockedWithChallengeResponse = false;
     resetBrowsingState();
   }
 
@@ -228,6 +237,11 @@ class WebVaultState extends VaultState {
     required String password,
     List<int>? keyFileBytes,
   }) async {
+    if (_unlockedWithChallengeResponse) {
+      throw UnsupportedError(
+        'Saving YubiKey-protected databases is not supported on web yet.',
+      );
+    }
     if (password.isEmpty) {
       throw StateError('A master password is required to save');
     }
