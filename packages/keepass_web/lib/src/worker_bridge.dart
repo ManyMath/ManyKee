@@ -84,7 +84,8 @@ class WorkerBridge {
     }
 
     if (type == 'progress') {
-      final percent = data['percent'] as int? ?? -1;
+      // dartify() yields doubles under dart2wasm, so avoid `as int`.
+      final percent = (data['percent'] as num?)?.toInt() ?? -1;
       if (!_progressController.isClosed) {
         _progressController.add(percent);
       }
@@ -103,7 +104,7 @@ class WorkerBridge {
       return;
     }
 
-    final id = data['id'] as int?;
+    final id = (data['id'] as num?)?.toInt();
     if (id == null) return;
 
     final completer = _pending.remove(id);

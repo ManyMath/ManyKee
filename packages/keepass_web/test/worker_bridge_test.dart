@@ -1,3 +1,5 @@
+// Run with `flutter test --platform chrome`; add `--wasm` to cover dart2wasm,
+// where dartify() turns every JS number into a double.
 @TestOn('browser')
 library;
 
@@ -157,14 +159,17 @@ void main() {
     addTearDown(bridge.dispose);
     await bridge.init();
 
-    final stuck = bridge.call('hang', const []);
-    final crashing = bridge.call('crash', const []);
-
-    await expectLater(
-      stuck,
-      throwsA(_isWebError('WORKER_ERROR', contains('crashed'))),
-    );
-    await expectLater(crashing, throwsA(_isWebError('WORKER_ERROR')));
+    // Attach both expectations before either call can fail.
+    await Future.wait([
+      expectLater(
+        bridge.call('hang', const []),
+        throwsA(_isWebError('WORKER_ERROR', contains('crashed'))),
+      ),
+      expectLater(
+        bridge.call('crash', const []),
+        throwsA(_isWebError('WORKER_ERROR')),
+      ),
+    ]);
 
     // The worker itself is still alive, so new calls keep working.
     expect(await bridge.call('echo', [2]), '[2]');
