@@ -155,13 +155,15 @@ class KeePassWebApi {
     await _bridge.call('move_group', [handle, groupUuid, targetParentUuid]);
   }
 
+  /// Re-encrypts the database with [password] and optional [keyFileBytes].
+  ///
+  /// The wasm core cannot write a challenge-response (YubiKey) factor, so a
+  /// database opened with [openDatabaseWithChallengeResponse] must not be
+  /// saved through this method: the result would silently drop that factor.
   Future<List<int>> saveDatabase(
     int handle, {
     required String password,
     List<int>? keyFileBytes,
-    String? yubiKeySlot,
-    int yubiKeySerial = 0,
-    String? localChallengeHex,
   }) async {
     final result = await _bridge.call('save_db', [
       handle,
