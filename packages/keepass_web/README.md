@@ -71,7 +71,9 @@ See [`example/`](example/) for a full Flutter Web vault browser.
 - `KeePassWebApi`: web-safe API that proxies all calls to the WASM worker.
 - `WorkerBridge`: low-level RPC over `postMessage` with progress streaming.
 - `WorkerError`: typed errors returned by the worker.
-- `WebUsbYubiKey` helpers: WebUSB challenge-response for HMAC-SHA1 unlock.
+- YubiKey helpers (`isWebUsbAvailable`, `requestYubiKey`,
+  `yubikeyChallengeResponse`): HMAC-SHA1 challenge-response unlock over
+  WebHID (`navigator.hid`, Chromium-based browsers only).
 
 Higher-level state and storage classes (`VaultState`, file pickers, etc.)
 live in [`keepass_ui`](https://github.com/ManyMath/ManyKee/tree/main/packages/keepass_ui)
