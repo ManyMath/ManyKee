@@ -540,7 +540,8 @@ class _VaultScreenState extends State<VaultScreen> {
                   entry: vaultState.selectedEntry!,
                   vaultState: vaultState,
                   clipboardManager: _clipboardManager,
-                  onUrlTap: (url) => web.window.open(url, '_blank'),
+                  onUrlTap: (url) =>
+                      web.window.open(url, '_blank', 'noopener,noreferrer'),
                   onEditEntry: _editEntry,
                   onMoveEntry: _moveEntry,
                   onDeleteEntry: _deleteEntry,
@@ -587,7 +588,8 @@ class _VaultScreenState extends State<VaultScreen> {
                 entry: vaultState.selectedEntry!,
                 vaultState: vaultState,
                 clipboardManager: _clipboardManager,
-                onUrlTap: (url) => web.window.open(url, '_blank'),
+                onUrlTap: (url) =>
+                    web.window.open(url, '_blank', 'noopener,noreferrer'),
                 onEditEntry: _editEntry,
                 onMoveEntry: _moveEntry,
                 onDeleteEntry: _deleteEntry,
