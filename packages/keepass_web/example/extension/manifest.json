@@ -9,9 +9,7 @@
   },
 
   "permissions": [
-    "storage",
-    "sidePanel",
-    "downloads"
+    "sidePanel"
   ],
 
   "action": {
@@ -24,14 +22,5 @@
 
   "side_panel": {
     "default_path": "index.html"
-  },
-
-  "web_accessible_resources": [{
-    "resources": [
-      "pkg/keepassxc_wasm_bg.wasm",
-      "pkg/keepassxc_wasm.js",
-      "keepassxc_worker.js"
-    ],
-    "matches": ["<all_urls>"]
-  }]
+  }
 }
