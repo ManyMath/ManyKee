@@ -56,7 +56,8 @@ Future<void> openVault(List<int> kdbxBytes, String password) async {
   final api = KeePassWebApi();
   await api.init();
   final handle = await api.openDatabase(kdbxBytes, password: password);
-  final groups = await api.listGroups(handle);
+  // An empty group UUID lists the groups directly under the root.
+  final groups = await api.listGroups(handle, '');
   for (final group in groups) {
     print(group['name']);
   }
@@ -70,7 +71,8 @@ See [`example/`](example/) for a full Flutter Web vault browser.
 
 - `KeePassWebApi`: web-safe API that proxies all calls to the WASM worker.
 - `WorkerBridge`: low-level RPC over `postMessage` with progress streaming.
-- `WorkerError`: typed errors returned by the worker.
+- `KeePassWebError`: typed errors (`code` and `message`) returned by the
+  worker.
 - YubiKey helpers (`isWebUsbAvailable`, `requestYubiKey`,
   `yubikeyChallengeResponse`): HMAC-SHA1 challenge-response unlock over
   WebHID (`navigator.hid`, Chromium-based browsers only).
