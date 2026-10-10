@@ -6,6 +6,12 @@ const crypto = require('crypto');
 const EXT_PATH = path.resolve(__dirname, '../../build/extension');
 const TEST_DB = path.resolve(__dirname, 'fixtures/test_with_entries.kdbx');
 const TEST_PASSWORD = 'demopass';
+// Exposes the Flutter semantics tree so tests can assert on the
+// accessibility snapshot (see example/lib/main.dart).
+const SEMANTICS_QUERY = '?e2e_semantics=1';
+// Error text the unlock screen shows when opening fails.
+const UNLOCK_ERROR =
+  /Failed to open database|Incorrect password|WASM_ERROR|WORKER_ERROR|INIT_FAILED/;
 
 const CENTER_X = 640;
 const UNLOCK = {
@@ -14,7 +20,6 @@ filePickerBtn: { x: CENTER_X, y: 450 },
  unlockBtn: { x: CENTER_X, y: 640 },
 };
 const VAULT = {
- lockBtn: { x: 1200, y: 24 },
  settingsBtn: { x: 1130, y: 24 },
  openFullPageBtn: { x: 1165, y: 24 },
  group: {
@@ -39,6 +44,79 @@ async function shot(page, x, y, w, h) {
  return page.screenshot({ clip: { x, y, width: w, height: h }, encoding: 'binary' });
 }
 
+function flattenAccessibility(node, out = []) {
+  if (!node) {
+    return out;
+  }
+  out.push(node);
+  for (const child of node.children || []) {
+    flattenAccessibility(child, out);
+  }
+  return out;
+}
+
+function matchesName(value, matcher) {
+  if (!value) {
+    return false;
+  }
+  if (matcher instanceof RegExp) {
+    return matcher.test(value);
+  }
+  return value === matcher;
+}
+
+function findAccessibilityNode(nodes, matcher, role) {
+  return nodes.find(
+    (node) => (!role || node.role === role) && matchesName(node.name, matcher),
+  );
+}
+
+async function waitForAccessibility(page, predicate, options = {}) {
+  const timeout = options.timeout ?? 15000;
+  const interval = options.interval ?? 250;
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    const snapshot = await page.accessibility.snapshot({ interestingOnly: false });
+    const nodes = flattenAccessibility(snapshot);
+    const text = JSON.stringify(snapshot);
+    if (predicate({ snapshot, nodes, text })) {
+      return { snapshot, nodes, text };
+    }
+    await sleep(interval);
+  }
+
+  throw new Error('Timed out waiting for accessibility state');
+}
+
+async function clickAccessibilityNode(page, client, matcher, options = {}) {
+  const { nodes } = await waitForAccessibility(
+    page,
+    ({ nodes: current }) => !!findAccessibilityNode(current, matcher, options.role),
+  );
+  const node = findAccessibilityNode(nodes, matcher, options.role);
+  const box = await client.send('DOM.getBoxModel', {
+    backendNodeId: node.backendNodeId,
+  });
+  const quad = box.model.content;
+  const xs = [quad[0], quad[2], quad[4], quad[6]];
+  const ys = [quad[1], quad[3], quad[5], quad[7]];
+  await page.mouse.click(
+    (Math.min(...xs) + Math.max(...xs)) / 2,
+    (Math.min(...ys) + Math.max(...ys)) / 2,
+  );
+}
+
+async function typeIntoTextbox(page, client, name, value) {
+  await clickAccessibilityNode(page, client, name, { role: 'textbox' });
+  await sleep(200);
+  await page.keyboard.down('Control');
+  await page.keyboard.press('a');
+  await page.keyboard.up('Control');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type(value, { delay: 30 });
+}
+
 async function waitForExtensionId(browser, timeoutMs = 10000) {
  const deadline = Date.now() + timeoutMs;
 
@@ -60,6 +138,7 @@ async function waitForExtensionId(browser, timeoutMs = 10000) {
 describe('ManyKee Chrome Extension', () => {
  let browser;
  let page;
+ let client;
  let extId;
  const consoleErrors = [];
  let unlockScreenHash;
@@ -81,6 +160,7 @@ describe('ManyKee Chrome Extension', () => {
  '--disable-dev-shm-usage',
  '--disable-gpu',
  '--window-size=1280,1024',
+ '--force-renderer-accessibility',
  ],
  executablePath: process.env.CHROME_PATH || undefined,
  defaultViewport: { width: 1280, height: 1024 },
@@ -89,6 +169,21 @@ describe('ManyKee Chrome Extension', () => {
  extId = await waitForExtensionId(browser);
 
  page = await browser.newPage();
+ client = await page.target().createCDPSession();
+ // Count KeePassXC workers so the re-unlock test can check the session
+ // reuses one instead of racing a fresh, uninitialized one per unlock.
+ await page.evaluateOnNewDocument(() => {
+   const NativeWorker = window.Worker;
+   window.__keepassWorkerCount = 0;
+   window.Worker = class extends NativeWorker {
+     constructor(url, options) {
+       super(url, options);
+       if (String(url).includes('keepassxc_worker')) {
+         window.__keepassWorkerCount++;
+       }
+     }
+   };
+ });
  page.on('console', (msg) => {
  if (msg.type() === 'error') consoleErrors.push(msg.text());
  });
@@ -99,7 +194,7 @@ describe('ManyKee Chrome Extension', () => {
  });
 
 it('loads extension and renders Flutter app', async () => {
- await page.goto(`chrome-extension://${extId}/index.html`);
+ await page.goto(`chrome-extension://${extId}/index.html${SEMANTICS_QUERY}`);
  await page.waitForSelector('flt-glass-pane', { timeout: 15000 });
  await sleep(5000);
 
@@ -252,26 +347,58 @@ await page.keyboard.press('Backspace');
  await sleep(500);
  });
 
- it('locks vault and returns to lock screen', async () => {
- const beforeLock = hash(await page.screenshot({ encoding: 'binary' }));
+  it('locks vault and returns to lock screen', async () => {
+    // Click the button itself: a stray click on "Open in full tab" would hide
+    // this tab, which also locks the vault (idle_timer.dart) but leaves
+    // Flutter without frames for the rest of the run.
+    await clickAccessibilityNode(page, client, 'Lock Vault', { role: 'button' });
 
- await page.mouse.click(VAULT.lockBtn.x, VAULT.lockBtn.y);
- await sleep(2000);
+    await waitForAccessibility(
+      page,
+      ({ nodes, text }) =>
+        text.includes('Vault Locked') &&
+        !!findAccessibilityNode(nodes, 'Master Password', 'textbox') &&
+        !findAccessibilityNode(nodes, 'Lock Vault', 'button'),
+    );
+    expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
+  });
 
- const afterLock = hash(await page.screenshot({ encoding: 'binary' }));
- expect(afterLock).not.toBe(beforeLock);
- });
+  it('rejects a wrong password on the lock screen', async () => {
+    await waitForAccessibility(
+      page,
+      ({ nodes, text }) =>
+        !!findAccessibilityNode(nodes, 'Master Password', 'textbox') &&
+        !!findAccessibilityNode(nodes, 'Unlock Vault', 'button') &&
+        text.includes('test_with_entries.kdbx'),
+    );
 
-it('re-unlocks from lock screen with pre-filled filename', async () => {
- await page.mouse.click(UNLOCK.passwordField.x, UNLOCK.passwordField.y);
- await sleep(500);
- await page.keyboard.type(TEST_PASSWORD, { delay: 30 });
-await page.keyboard.press('Enter');
- await sleep(12000);
+    await typeIntoTextbox(page, client, 'Master Password', 'not-the-password');
+    await page.keyboard.press('Enter');
 
- const after = hash(await page.screenshot({ encoding: 'binary' }));
- expect(after).not.toBe(unlockScreenHash);
- }, 30000);
+    const { nodes } = await waitForAccessibility(
+      page,
+      ({ text }) => UNLOCK_ERROR.test(text),
+      { timeout: 30000, interval: 500 },
+    );
+    expect(findAccessibilityNode(nodes, 'Lock Vault', 'button')).toBeUndefined();
+  }, 45000);
+
+  // Runs right after the failed attempt above: the second unlock must reuse
+  // the initialized worker rather than race a fresh one.
+  it('re-unlocks from lock screen with pre-filled filename', async () => {
+    await typeIntoTextbox(page, client, 'Master Password', TEST_PASSWORD);
+    await page.keyboard.press('Enter');
+
+    const { text } = await waitForAccessibility(
+      page,
+      ({ nodes }) =>
+        !!findAccessibilityNode(nodes, 'Lock Vault', 'button') &&
+        !!findAccessibilityNode(nodes, 'Search entries...', 'textbox'),
+      { timeout: 45000, interval: 500 },
+    );
+    expect(text).not.toMatch(UNLOCK_ERROR);
+    expect(await page.evaluate(() => window.__keepassWorkerCount)).toBe(1);
+  }, 60000);
 
  it('had no critical console errors during the flow', () => {
  const critical = consoleErrors.filter(
