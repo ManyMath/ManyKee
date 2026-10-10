@@ -23,12 +23,16 @@ echo "Building keepassxc WASM worker package..."
 (cd "$WASM_CRATE_DIR" && wasm-pack build --release --target web --out-dir ../../packages/keepass_web/web/pkg)
 
 echo "Building ManyKee web app..."
-(cd "$APP_DIR" && flutter build web "$@")
+# No service worker: it would cache main.dart.js while the worker and wasm
+# copied below bypass it, serving stale Dart against new wasm after a
+# redeploy.
+(cd "$APP_DIR" && flutter build web --pwa-strategy=none "$@")
 
 echo "Copying keepassxc worker assets into ManyKee web build..."
 mkdir -p "$BUILD_DIR/pkg"
 cp "$WASM_SOURCE_DIR/keepassxc_worker.js" "$BUILD_DIR/"
-cp "$WASM_PKG_DIR"/keepassxc_wasm*.{js,wasm,ts} "$BUILD_DIR/pkg/"
+find "$WASM_PKG_DIR" -maxdepth 1 -type f -name 'keepassxc_wasm*' \
+  -exec cp {} "$BUILD_DIR/pkg/" \;
 
 missing=0
 for file in \
