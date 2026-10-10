@@ -69,12 +69,6 @@ echo "Patching index.html..."
 # Fix base href for extension-relative paths
 sed -i 's|<base href="/">|<base href="./">|' "$EXT_OUTPUT/index.html"
 
-# Remove broken icon links from the extension shell; the extension manifest no
-# longer points at packaged icon files and the built web bundle does not ship
-# favicon/icon assets at these paths.
-sed -i '/apple-touch-icon/d' "$EXT_OUTPUT/index.html"
-sed -i '/href="favicon.png"/d' "$EXT_OUTPUT/index.html"
-
 # Inject disable_service_worker.js before flutter_bootstrap.js
 sed -i 's|<script src="flutter_bootstrap.js"|<script src="disable_service_worker.js"></script>\n  <script src="flutter_bootstrap.js"|' "$EXT_OUTPUT/index.html"
 

@@ -1,11 +1,11 @@
 {
-    "name": "keepass_web_example",
-    "short_name": "keepass_web_example",
+    "name": "ManyKee",
+    "short_name": "ManyKee",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F3F6F4",
+    "theme_color": "#2E7D32",
+    "description": "Browse KeePass vaults on your device with ManyKee.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
