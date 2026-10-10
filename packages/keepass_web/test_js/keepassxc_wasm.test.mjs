@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Provide globalThis.crypto.getRandomValues for Node.js (required by WASM module)
-import { webcrypto } from 'crypto';
+import { createHmac, webcrypto } from 'crypto';
 if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
 }
@@ -21,11 +21,27 @@ if (!globalThis.crypto) {
 const fixtureDir = resolve(__dirname, '../../../rust/keepass-rs/tests/resources');
 const TEST_DB_AES = readFileSync(resolve(fixtureDir, 'test_db_kdbx4_with_password_aes.kdbx'));
 
-// Load challenge-response test DB if available
-let TEST_DB_WITH_CR = null;
-try {
-  TEST_DB_WITH_CR = readFileSync(resolve(fixtureDir, 'test_db_with_challenge_response_key.kdbx'));
-} catch (_) { /* not available */ }
+// Challenge-response fixture and the HMAC-SHA1 secret its YubiKey slot was
+// programmed with; see open_kdbx4_with_challenge_response_key in
+// rust/keepass-rs/tests/file_read_tests.rs.
+const TEST_DB_WITH_CR = readFileSync(resolve(fixtureDir, 'test_db_with_challenge_response_key.kdbx'));
+const TEST_CR_PASSWORD = 'demopass';
+const TEST_CR_SECRET_HEX = '0102030405060708090a0b0c0d0e0f1011121314';
+
+/** Runs fn, expects it to throw, and returns the parsed {code, message}. */
+function structuredError(fn) {
+  let thrown;
+  try {
+    fn();
+  } catch (err) {
+    thrown = err;
+  }
+  if (thrown === undefined) {
+    throw new Error('expected the call to throw');
+  }
+  const raw = typeof thrown === 'string' ? thrown : thrown.message;
+  return JSON.parse(raw);
+}
 
 // WASM module reference, initialized in beforeAll
 let wasm;
@@ -161,37 +177,46 @@ describe('keepassxc-wasm JS module', () => {
     }).toThrow();
   });
 
-  // D-08: Jest tests use mock challenge-response bytes (pre-computed) for validation.
-  // This validates the JS->WASM boundary for the challenge-response path works.
-  test('open_db_with_challenge_response accepts mock pre-computed bytes', () => {
-    // Pre-computed mock challenge-response hex (40 hex chars = 20 bytes HMAC-SHA1 output)
-    const mockCRHex = 'a'.repeat(40);
-    const testDb = TEST_DB_WITH_CR || TEST_DB_AES;
+  test('open_db_with_challenge_response opens the fixture with the real response', () => {
+    const challengeHex = wasm.extract_challenge(new Uint8Array(TEST_DB_WITH_CR));
+    expect(challengeHex).toMatch(/^[0-9a-f]{64}$/);
 
-    // The function should be callable. With mock bytes it will likely fail to
-    // decrypt, but we verify the JS->WASM binding works and returns a
-    // structured error (not a crash/undefined).
+    // What the programmed YubiKey slot would answer.
+    const responseHex = createHmac('sha1', Buffer.from(TEST_CR_SECRET_HEX, 'hex'))
+      .update(Buffer.from(challengeHex, 'hex'))
+      .digest('hex');
+
+    const { handle } = JSON.parse(
+      wasm.open_db_with_challenge_response(
+        new Uint8Array(TEST_DB_WITH_CR), TEST_CR_PASSWORD, responseHex
+      )
+    );
     try {
-      const result = wasm.open_db_with_challenge_response(
-        new Uint8Array(testDb), 'demopass', mockCRHex
-      );
-      // If it succeeds unexpectedly, verify the result is valid JSON with a handle
-      const json = JSON.parse(result);
-      expect(json).toHaveProperty('handle');
-      wasm.close_db(json.handle);
-    } catch (err) {
-      // Expected: mock bytes don't match the real CR key.
-      // Verify we get an error (not a crash/undefined).
-      expect(err).toBeDefined();
+      const entries = JSON.parse(wasm.list_entries(handle, ''));
+      expect(entries).toHaveLength(2);
+    } finally {
+      wasm.close_db(handle);
     }
   });
 
+  test('open_db_with_challenge_response rejects a wrong response', () => {
+    const error = structuredError(() =>
+      wasm.open_db_with_challenge_response(
+        new Uint8Array(TEST_DB_WITH_CR), TEST_CR_PASSWORD, 'a'.repeat(40)
+      )
+    );
+    expect(error.code).toMatch(/^OPEN_ERROR$/);
+    expect(typeof error.message).toBe('string');
+  });
+
   test('open_db_with_challenge_response rejects invalid hex', () => {
-    expect(() => {
+    const error = structuredError(() =>
       wasm.open_db_with_challenge_response(
         new Uint8Array(TEST_DB_AES), 'demopass', 'not-valid-hex!'
-      );
-    }).toThrow();
+      )
+    );
+    expect(error.code).toMatch(/^PARSE_ERROR$/);
+    expect(error.message).toMatch(/Invalid hex in challenge_response/);
   });
 });
 
