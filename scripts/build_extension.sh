@@ -34,9 +34,12 @@ cd "$WASM_CRATE_DIR"
 wasm-pack build --target web --out-dir ../../packages/keepass_web/web/pkg
 
 # --- Build Flutter Web ---
-echo "Building Flutter Web (CSP mode, no CDN)..."
+echo "Building Flutter Web (CSP mode, no CDN, no service worker)..."
 cd "$APP_DIR"
-DART_DEFINES=(--csp --no-web-resources-cdn --release)
+# --pwa-strategy=none: the extension must not register Flutter's caching
+# service worker, and without it flutter_bootstrap.js carries no
+# serviceWorkerSettings to strip.
+DART_DEFINES=(--csp --no-web-resources-cdn --release --pwa-strategy=none)
 if [[ "${MANYKEE_E2E_SEMANTICS:-}" == "1" ]]; then
   echo "MANYKEE_E2E_SEMANTICS=1: enabling E2E sessionStorage test hooks in this build."
   DART_DEFINES+=(--dart-define=MANYKEE_E2E_SEMANTICS=true)
@@ -46,7 +49,8 @@ flutter build web "${DART_DEFINES[@]}"
 echo "Copying WASM worker assets into web build..."
 mkdir -p "$BUILD_DIR/web/pkg"
 cp "$WASM_SOURCE_DIR/keepassxc_worker.js" "$BUILD_DIR/web/"
-cp "$WASM_PKG_DIR"/keepassxc_wasm*.{js,wasm,ts} "$BUILD_DIR/web/pkg/"
+find "$WASM_PKG_DIR" -maxdepth 1 -type f -name 'keepassxc_wasm*' \
+  -exec cp {} "$BUILD_DIR/web/pkg/" \;
 
 # --- Create extension directory ---
 echo "Creating extension output directory..."
@@ -73,10 +77,6 @@ sed -i '/href="favicon.png"/d' "$EXT_OUTPUT/index.html"
 
 # Inject disable_service_worker.js before flutter_bootstrap.js
 sed -i 's|<script src="flutter_bootstrap.js"|<script src="disable_service_worker.js"></script>\n  <script src="flutter_bootstrap.js"|' "$EXT_OUTPUT/index.html"
-
-# --- Patch flutter_bootstrap.js ---
-echo "Patching flutter_bootstrap.js..."
-sed -i 's/,\?[[:space:]]*serviceWorkerSettings:[[:space:]]*{[^}]*}//g' "$EXT_OUTPUT/flutter_bootstrap.js"
 
 # --- Remove service worker ---
 echo "Removing Flutter service worker..."
