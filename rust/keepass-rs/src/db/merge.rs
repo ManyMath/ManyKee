@@ -592,9 +592,9 @@ impl Database {
                 }
 
                 let (merged_entry, entry_merge_log) = existing_entry.merge(other_entry)?;
-                let Some(merged_entry) = merged_entry else {
-                    continue;
-                };
+                // A same-timestamp conflict keeps the destination as it is,
+                // but is still worth reporting.
+                log.append(&entry_merge_log);
 
                 if existing_entry == merged_entry {
                     continue;
@@ -611,8 +611,6 @@ impl Database {
                     event_type: MergeEventType::EntryUpdated,
                     node_uuid: merged_entry.uuid,
                 });
-
-                log.append(&entry_merge_log);
 
                 // the entry is now merged, we can skip the rest of the loop which is for processing new entries
                 continue;
@@ -936,7 +934,11 @@ impl Group {
 }
 
 impl Entry {
-    pub(crate) fn merge(&self, other: &Entry) -> Result<(Option<Entry>, MergeLog), MergeError> {
+    /// Merges `other`, the same entry from the source database, into `self`
+    /// the way KeePass and KeePassXC do: whichever side was modified last
+    /// wins (the destination, on a tie), keeps its own fields and times, and
+    /// takes the combined history of both sides (see [`Entry::merge_history`]).
+    pub(crate) fn merge(&self, other: &Entry) -> Result<(Entry, MergeLog), MergeError> {
         let mut log = MergeLog::default();
 
         let source_last_modification = match other.times.last_modification {
@@ -960,29 +962,23 @@ impl Entry {
             }
         };
 
-        if destination_last_modification == source_last_modification {
-            if self.has_diverged_from(other) {
-                // Same timestamp but entries have diverged -- self (destination) wins.
-                // Store the losing version (other) in the winner's history.
-                log.warnings.push(format!(
- "Entry {} has same modification time on both sides but content has diverged. Destination version wins.",
- other.uuid
- ));
-                let (mut merged_entry, _history_log) = self.merge_history(other)?;
-                // Preserve location_changed from self
-                if let Some(location_changed_timestamp) = self.times.location_changed {
-                    merged_entry.times.location_changed = Some(location_changed_timestamp);
-                }
-                return Ok((Some(merged_entry), log));
-            }
-            // Same timestamp and identical content -- no merge needed (no-op)
-            return Ok((None, log));
-        }
-
-        let (mut merged_entry, entry_merge_log) = match destination_last_modification > source_last_modification
+        let (mut merged_entry, history_merge_log) = if destination_last_modification == source_last_modification
         {
-            true => self.merge_history(other)?,
-            false => other.clone().merge_history(self)?,
+            if self.has_diverged_content_from(other) {
+                // The timestamps cannot tell which version is newer, so
+                // the destination wins and, as in KeePassXC, the source's
+                // version is dropped rather than filed in history under
+                // the entry's own timestamp.
+                log.warnings.push(format!(
+                        "Entry {} has same modification time on both sides but content has diverged. Destination version wins.",
+                        other.uuid
+                    ));
+            }
+            self.merge_history(other, false)?
+        } else if destination_last_modification > source_last_modification {
+            self.merge_history(other, true)?
+        } else {
+            other.merge_history(self, true)?
         };
 
         // The location changed timestamp is handled separately when merging two databases.
@@ -990,82 +986,53 @@ impl Entry {
             merged_entry.times.location_changed = Some(location_changed_timestamp);
         }
 
-        Ok((Some(merged_entry), entry_merge_log))
+        Ok((merged_entry, log.merge_with(&history_merge_log)))
     }
 
-    pub(crate) fn merge_history(&self, other: &Entry) -> Result<(Entry, MergeLog), MergeError> {
-        let mut log = MergeLog::default();
+    /// Returns `self`, the version of the entry that won the merge, with its
+    /// history combined with `other`'s the way KeePass and KeePassXC do it:
+    ///
+    /// - history items are matched by last modification time, and `self`'s
+    ///   item is kept when both sides have one at the same time;
+    /// - with `add_other_state`, `other`'s current state is filed as a
+    ///   history item at its own last modification time, unless an item
+    ///   already exists at that time;
+    /// - `self`'s current state and times are left alone and never copied
+    ///   into the history, which only ever holds earlier versions.
+    ///
+    /// Merging the result with `other` again therefore changes nothing.
+    pub(crate) fn merge_history(
+        &self,
+        other: &Entry,
+        add_other_state: bool,
+    ) -> Result<(Entry, MergeLog), MergeError> {
+        let mut history = self.history.clone().unwrap_or_default();
+        let mut other_history = other.history.clone().unwrap_or_default();
+        if add_other_state {
+            other_history.add_entry(other.clone());
+        }
 
-        let mut source_history = match &other.history {
-            Some(h) => h.clone(),
-            None => {
-                log.warnings.push(format!(
-                    "Entry {} from source database had no history.",
-                    self.uuid
-                ));
-                History::default()
-            }
-        };
-        let mut destination_history = match &self.history {
-            Some(h) => h.clone(),
-            None => {
-                log.warnings.push(format!(
-                    "Entry {} from destination database had no history.",
-                    self.uuid
-                ));
-                History::default()
-            }
-        };
+        let log = history.merge_with(&other_history)?;
+
         let mut response = self.clone();
-
-        // `self` is whichever side of the merge is authoritative for this
-        // entry (see the caller, `Entry::merge`): its live field values
-        // become `response`. If it has changes that were never committed to
-        // its own history, that snapshot would otherwise be lost once its
-        // history is replaced by the merged one below, so stash it just
-        // like we already do for `other`. Unlike `other`'s stash (which
-        // lands in `source_history` and is merely warned about on a
-        // timestamp collision), a collision on this side would land twice
-        // in `destination_history` and hard-error in `merge_with` below, so
-        // the snapshot is committed with a timestamp guaranteed to be
-        // strictly newer than the existing top of history, rather than
-        // reusing `response`'s stale `last_modification` (which is prone to
-        // colliding with it) or the current wall-clock time alone (which,
-        // at KDBX's one-second resolution, could still collide if the last
-        // real commit happened within the same second).
-        if self.has_uncommitted_changes() {
-            log.warnings.push(format!(
-                "Entry {} from destination database has uncommitted changes.",
-                self.uuid
-            ));
-            let previous_latest = destination_history
-                .entries
-                .first()
-                .and_then(|e| e.times.last_modification);
-            let mut commit_time = Times::now();
-            if let Some(previous_latest) = previous_latest {
-                if commit_time <= previous_latest {
-                    commit_time = previous_latest + chrono::Duration::seconds(1);
-                }
-            }
-            let mut committed_snapshot = response.clone();
-            committed_snapshot.times.last_modification = Some(commit_time);
-            response.times.last_modification = Some(commit_time);
-            destination_history.add_entry(committed_snapshot);
+        if response.history.is_some() || !history.entries.is_empty() {
+            response.history = Some(history);
         }
+        Ok((response, log))
+    }
 
-        if other.has_uncommitted_changes() {
-            log.warnings.push(format!(
-                "Entry {} from source database has uncommitted changes.",
-                self.uuid
-            ));
-            source_history.add_entry(other.clone());
-        }
+    /// Whether the two versions of an entry differ in anything other than
+    /// their times and history.
+    fn has_diverged_content_from(&self, other: &Entry) -> bool {
+        let mut this = self.clone();
+        this.times = Times::default();
+        this.history = None;
 
-        let history_merge_log = destination_history.merge_with(&source_history)?;
-        response.history = Some(destination_history);
+        let mut other = other.clone();
+        other.times = Times::default();
+        other.history = None;
 
-        Ok((response, log.merge_with(&history_merge_log)))
+        this != other
     }
 
     // Convenience function used in unit tests, to make sure that:
@@ -2435,6 +2402,95 @@ mod merge_tests {
         entry.uuid = uuid;
         entry.times.last_modification = Some(modification_time);
         entry
+    }
+
+    /// Edits `entry` the way KeePass and KeePassXC do: the version being
+    /// replaced goes into history with its own times, and the entry gets a
+    /// new modification time. History never holds the current version.
+    fn keepass_edit(entry: &mut Entry, title: &str, at: chrono::NaiveDateTime) {
+        let mut previous = entry.clone();
+        previous.history = None;
+        entry
+            .history
+            .get_or_insert_with(History::default)
+            .add_entry(previous);
+        entry.set_unprotected(fields::TITLE, title);
+        entry.times.last_modification = Some(at);
+    }
+
+    fn titles_in_history(entry: &Entry) -> Vec<(Option<&str>, Option<chrono::NaiveDateTime>)> {
+        entry
+            .history
+            .as_ref()
+            .map(|history| {
+                history
+                    .entries
+                    .iter()
+                    .map(|item| (item.get_title(), item.times.last_modification))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// `create_test_database`, with entry1 as KeePass leaves an entry that
+    /// was never edited: without history (`set_field_and_commit` files the
+    /// current version in history, the way upstream keepass-rs does).
+    fn create_unedited_test_database() -> Database {
+        let mut db = create_test_database();
+        db.root.entries[0].history = None;
+        db
+    }
+
+    #[test]
+    fn test_merge_keeps_winner_times_and_files_only_earlier_versions() {
+        let mut destination_db = create_unedited_test_database();
+        let t0 = destination_db.root.entries[0].times.last_modification.unwrap();
+        let t1 = t0 + chrono::Duration::seconds(10);
+        let t2 = t0 + chrono::Duration::seconds(20);
+        let mut source_db = destination_db.clone();
+
+        keepass_edit(&mut destination_db.root.entries[0], "edited in destination", t1);
+        keepass_edit(&mut source_db.root.entries[0], "edited in source", t2);
+        let source_entry = source_db.root.entries[0].clone();
+
+        let merge_result = destination_db.merge(&source_db).unwrap();
+        assert_eq!(merge_result.warnings.len(), 0);
+        assert_eq!(merge_result.events.len(), 1);
+
+        let merged = &destination_db.root.entries[0];
+        assert_eq!(merged.get_title(), Some("edited in source"));
+        assert_eq!(merged.times, source_entry.times);
+        // The losing destination version is filed at its own time, the shared
+        // original is kept once, and the winning version is not duplicated.
+        assert_eq!(
+            titles_in_history(merged),
+            vec![
+                (Some("edited in destination"), Some(t1)),
+                (Some("entry1"), Some(t0)),
+            ]
+        );
+
+        let merged_once = destination_db.clone();
+        let merge_result = destination_db.merge(&source_db).unwrap();
+        assert_eq!(merge_result.events.len(), 0);
+        assert_eq!(destination_db, merged_once);
+    }
+
+    #[test]
+    fn test_merge_same_time_conflict_keeps_destination_unchanged_and_warns() {
+        let mut destination_db = create_unedited_test_database();
+        let t1 =
+            destination_db.root.entries[0].times.last_modification.unwrap() + chrono::Duration::seconds(10);
+        let mut source_db = destination_db.clone();
+
+        keepass_edit(&mut destination_db.root.entries[0], "edited in destination", t1);
+        keepass_edit(&mut source_db.root.entries[0], "edited in source", t1);
+        let destination_before = destination_db.clone();
+
+        let merge_result = destination_db.merge(&source_db).unwrap();
+        assert_eq!(merge_result.warnings.len(), 1);
+        assert_eq!(merge_result.events.len(), 0);
+        assert_eq!(destination_db, destination_before);
     }
 
     #[test]

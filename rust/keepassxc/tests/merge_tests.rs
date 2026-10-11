@@ -11,6 +11,7 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
+use chrono::NaiveDateTime;
 use common::official_tools::{
     discover_keepassxc, mode_from_env, run_keepassxc_with_stdin_lines, OfficialTool,
     RedactedOutput, REQUIRED_KEEPASSXC_VERSION,
@@ -179,41 +180,158 @@ fn test_merge_loser_stored_in_history() {
     );
 }
 
-/// If the winning side of a merge itself has uncommitted changes (field
-/// edits made without calling `update_history`), that state must be
-/// captured into history rather than silently dropped once the merged
-/// history replaces it.
+/// Edit an entry the way the apps do (`update_entry`, which files the old
+/// version in history) and stamp the edit with `at`, so tests can order
+/// edits on different databases without sleeping.
+fn edit_at(db: &mut Database, uuid: Uuid, field: &str, value: &str, at: NaiveDateTime) {
+    let meta = db.meta.clone();
+    keepassxc::update_entry(&mut db.root, uuid, &meta, |entry| {
+        entry.set_unprotected(field, value);
+    })
+    .expect("update failed");
+    db.root
+        .entry_by_uuid_mut(uuid)
+        .unwrap()
+        .times
+        .last_modification = Some(at);
+}
+
+/// `(UserName, LastModificationTime)` of each history item, newest first.
+fn history_summary(entry: &Entry) -> Vec<(Option<String>, Option<NaiveDateTime>)> {
+    entry
+        .history
+        .as_ref()
+        .map(|history| {
+            history
+                .get_entries()
+                .iter()
+                .map(|item| {
+                    (
+                        item.get(fields::USERNAME).map(str::to_string),
+                        item.times.last_modification,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// KeePassXC rule: the side modified last wins and keeps its own state and
+/// LastModificationTime, and its state is never copied into its history,
+/// which only holds earlier versions. The merge used to treat every such
+/// entry as having "uncommitted changes", file its current state in history
+/// and re-stamp it with the time of the merge.
 #[test]
-fn test_merge_winner_uncommitted_changes_preserved_in_history() {
+fn test_merge_winner_keeps_its_state_and_timestamp() {
     let base = create_base_db();
-    let entry1_uuid = base.root.entries[0].uuid;
+    let uuid = base.root.entries[0].uuid;
+    let base_time = base.root.entries[0].times.last_modification.unwrap();
 
     let mut db_a = clone_db(&base);
-    let db_b = clone_db(&base);
-
-    // db_a will be the merge winner: give it a committed edit so its
-    // last_modification is newer than db_b's, then make a further,
-    // uncommitted edit on top of it.
-    let entry_a = db_a.root.entry_by_uuid_mut(entry1_uuid).unwrap();
-    set_field_and_commit(entry_a, fields::TITLE, "Committed A");
-    entry_a.set_unprotected(fields::USERNAME, "UncommittedA");
-
-    merge(&mut db_a, &db_b).expect("merge failed");
-
-    let merged_entry = db_a.root.find_entry_by_uuid(entry1_uuid).unwrap();
-
-    // The live entry keeps the uncommitted edit.
-    assert_eq!(merged_entry.get(fields::USERNAME), Some("UncommittedA"));
-
-    let history = merged_entry.history.as_ref().expect("history should exist");
-    let has_uncommitted_snapshot = history.get_entries().iter().any(|e| {
-        e.get(fields::TITLE) == Some("Committed A")
-            && e.get(fields::USERNAME) == Some("UncommittedA")
-    });
-    assert!(
-        has_uncommitted_snapshot,
-        "the winner's uncommitted state should have been captured into history, not dropped"
+    edit_at(
+        &mut db_a,
+        uuid,
+        fields::USERNAME,
+        "edited on A",
+        base_time + chrono::Duration::seconds(10),
     );
+    let winner = db_a.root.find_entry_by_uuid(uuid).unwrap().clone();
+    let expected_history = vec![(Some("user1".to_string()), Some(base_time))];
+    assert_eq!(history_summary(&winner), expected_history);
+
+    // Destination wins: B's version is the base version A already has in
+    // its history, so nothing changes.
+    let result = merge(&mut db_a, &clone_db(&base)).expect("merge failed");
+    assert_eq!(result.total_changes(), 0);
+    assert_eq!(db_a.root.find_entry_by_uuid(uuid).unwrap(), &winner);
+
+    // Source wins: B takes A's version as is.
+    let mut db_b = clone_db(&base);
+    let result = merge(&mut db_b, &db_a).expect("merge failed");
+    assert_eq!(result.entries_updated, 1);
+    let merged = db_b.root.find_entry_by_uuid(uuid).unwrap();
+    assert_eq!(merged.fields, winner.fields);
+    assert_eq!(
+        merged.times.last_modification,
+        winner.times.last_modification
+    );
+    assert_eq!(history_summary(merged), expected_history);
+}
+
+/// KeePassXC rule: when both sides changed an entry, the older version is
+/// filed in history at its own LastModificationTime, history items are
+/// matched by timestamp, and the result does not depend on the direction.
+#[test]
+fn test_merge_files_losing_version_at_its_own_time() {
+    let base = create_base_db();
+    let uuid = base.root.entries[0].uuid;
+    let t0 = base.root.entries[0].times.last_modification.unwrap();
+    let t1 = t0 + chrono::Duration::seconds(10);
+    let t2 = t0 + chrono::Duration::seconds(20);
+
+    let mut db_a = clone_db(&base);
+    edit_at(&mut db_a, uuid, fields::USERNAME, "edited on A", t1);
+    let mut db_b = clone_db(&base);
+    edit_at(&mut db_b, uuid, fields::USERNAME, "edited on B", t2);
+
+    let expected_history = vec![
+        (Some("edited on A".to_string()), Some(t1)),
+        (Some("user1".to_string()), Some(t0)),
+    ];
+
+    for (mut destination, source) in [
+        (clone_db(&db_b), clone_db(&db_a)),
+        (clone_db(&db_a), clone_db(&db_b)),
+    ] {
+        merge(&mut destination, &source).expect("merge failed");
+        let merged = destination.root.find_entry_by_uuid(uuid).unwrap();
+        assert_eq!(merged.get(fields::USERNAME), Some("edited on B"));
+        assert_eq!(merged.times.last_modification, Some(t2));
+        assert_eq!(history_summary(merged), expected_history);
+    }
+}
+
+/// Merging the same pair again must change nothing: no new history items
+/// and no new timestamps. The old merge added another copy of the winning
+/// version to history on every repeat.
+#[test]
+fn test_merge_twice_changes_nothing() {
+    let base = create_base_db();
+    let uuid = base.root.entries[0].uuid;
+    let t0 = base.root.entries[0].times.last_modification.unwrap();
+
+    let mut db_a = clone_db(&base);
+    edit_at(
+        &mut db_a,
+        uuid,
+        fields::USERNAME,
+        "edited on A",
+        t0 + chrono::Duration::seconds(10),
+    );
+    let mut db_b = clone_db(&base);
+    edit_at(
+        &mut db_b,
+        uuid,
+        fields::URL,
+        "https://b.test",
+        t0 + chrono::Duration::seconds(20),
+    );
+
+    for (destination, source) in [
+        (&db_b, &db_a),
+        (&db_a, &db_b),
+        (&base, &db_a),
+        (&db_a, &base),
+    ] {
+        let mut merged = clone_db(destination);
+        merge(&mut merged, source).expect("first merge failed");
+        let merged = round_trip(&merged);
+
+        let mut merged_again = clone_db(&merged);
+        let result = merge(&mut merged_again, source).expect("second merge failed");
+        assert_eq!(result.total_changes(), 0, "{result:?}");
+        assert_eq!(merged_again.root, merged.root);
+    }
 }
 
 /// Deleted entry (in DeletedObjects) does not reappear after merge.
@@ -511,6 +629,7 @@ fn test_merge_same_timestamp_tiebreak_destination_wins() {
     entry_b.set_unprotected(fields::TITLE, "Source Title");
     entry_b.times.last_modification = Some(shared_timestamp);
 
+    let destination_before = db_a.root.find_entry_by_uuid(entry1_uuid).unwrap().clone();
     let result = merge(&mut db_a, &db_b).expect("merge failed");
 
     let merged_entry = db_a.root.find_entry_by_uuid(entry1_uuid).unwrap();
@@ -519,6 +638,10 @@ fn test_merge_same_timestamp_tiebreak_destination_wins() {
         Some("Destination Title"),
         "Destination version must win on same-timestamp tiebreak"
     );
+    // As in KeePassXC, the source's version is dropped rather than filed in
+    // history, and the destination keeps its timestamp.
+    assert_eq!(merged_entry, &destination_before);
+    assert_eq!(result.entries_updated, 0);
 
     // MergeResult must expose the conflict and its resolution.
     let tiebreak_conflict = result
@@ -759,19 +882,17 @@ fn test_merge_keeps_history_of_rapid_edits() {
 
     let merged = db_b.root.find_entry_by_uuid(entry_uuid).unwrap();
     assert_eq!(merged.get(fields::NOTES), Some("edited notes"));
+    // B's version is A's oldest snapshot, so the merged history is exactly
+    // A's: no snapshot collapsed into another, and nothing added.
     let history = merged.history.as_ref().unwrap().get_entries();
-    // keepass-rs's merge may additionally stash the winning entry's current
-    // state into history; what matters here is that none of A's snapshots
-    // was collapsed into another.
-    for snapshot in a_snapshots {
-        assert!(
-            history.iter().any(|item| {
-                item.times.last_modification == snapshot.times.last_modification
-                    && item.fields == snapshot.fields
-            }),
+    assert_eq!(history.len(), a_snapshots.len());
+    for (item, snapshot) in history.iter().zip(a_snapshots) {
+        assert_eq!(
+            item.times.last_modification, snapshot.times.last_modification,
             "snapshot {:?} from A must survive the merge",
             snapshot.times.last_modification
         );
+        assert_eq!(item.fields, snapshot.fields);
     }
 }
 
