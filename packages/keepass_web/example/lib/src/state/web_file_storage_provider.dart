@@ -12,8 +12,7 @@ import 'package:web/web.dart' as web;
 /// gate isn't usable here because the E2E suite exercises a `--release`
 /// build (matching what's shipped), so this is the only gate that
 /// can never be toggled at runtime by an untrusted URL.
-const bool _e2eSemanticsEnabled =
-    bool.fromEnvironment('MANYKEE_E2E_SEMANTICS');
+const bool _e2eSemanticsEnabled = bool.fromEnvironment('MANYKEE_E2E_SEMANTICS');
 
 class WebFileStorageProvider implements StorageProvider {
   String? _currentName;

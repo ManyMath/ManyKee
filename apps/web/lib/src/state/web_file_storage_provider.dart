@@ -118,8 +118,7 @@ class WebFileStorageProvider implements StorageProvider {
     _currentName = name;
     _lastModified = DateTime.now();
 
-    if (kDebugMode &&
-        web.window.location.search.contains('e2e_semantics=1')) {
+    if (kDebugMode && web.window.location.search.contains('e2e_semantics=1')) {
       web.window.sessionStorage.setItem(
         'manykee_last_download_name',
         name,
