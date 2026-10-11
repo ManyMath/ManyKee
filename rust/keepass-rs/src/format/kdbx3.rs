@@ -703,6 +703,29 @@ mod kdbx3_dump_tests {
         }
     }
 
+    #[test]
+    fn history_revisions_round_trip_in_order() {
+        // History is written in the reverse of its in-memory order, while
+        // protected values and inline binaries go through the inner stream
+        // cipher in document order and binaries are referenced by position.
+        let mut db = Database::new(test_config(
+            OuterCipherConfig::AES256,
+            InnerCipherConfig::Salsa20,
+            CompressionConfig::GZip,
+        ));
+        let entry = crate::db::entry_with_revisions();
+        db.root.entries.push(entry.clone());
+
+        let db_key = DatabaseKey::new().with_password("testing");
+        let mut encrypted_db = Vec::new();
+        dump_kdbx3(&db, &db_key, &mut encrypted_db).unwrap();
+        let decrypted_db = parse_kdbx3(&encrypted_db, &db_key).unwrap();
+
+        let decrypted = &decrypted_db.root.entries[0];
+        assert_eq!(decrypted.get_password(), Some("secret-4"));
+        crate::db::assert_same_revisions(decrypted, &entry);
+    }
+
     /// Range of the value of the first outer header entry with `entry_type`.
     fn header_entry_value_range(data: &[u8], entry_type: u8) -> std::ops::Range<usize> {
         let mut pos = DatabaseVersion::get_version_header_size();

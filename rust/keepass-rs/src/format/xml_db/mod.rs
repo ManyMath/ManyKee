@@ -44,7 +44,22 @@ pub fn parse_xml(
     // Attach the extracted unknown elements to the corresponding db structs.
     xml_node::attach_unknowns(&unknown_map, &mut db);
 
+    // Only after `attach_unknowns`, which finds history revisions by their
+    // position in the document.
+    normalize_history_order(&mut db.root);
+
     Ok(db)
+}
+
+fn normalize_history_order(group: &mut crate::db::Group) {
+    for entry in &mut group.entries {
+        if let Some(history) = entry.history.as_mut() {
+            history.normalize_file_order();
+        }
+    }
+    for child in &mut group.groups {
+        normalize_history_order(child);
+    }
 }
 
 #[derive(Debug, Error)]
@@ -118,7 +133,7 @@ pub fn to_xml_inline_binaries(
 /// Mirrors the attachment-collection order of `Group::db_to_xml`/
 /// `Entry::db_to_xml`: child groups (depth-first) before this group's own
 /// entries, and for each entry, its own attachments before its history
-/// entries' attachments.
+/// entries' attachments (in file order, see `History::file_order`).
 #[cfg(feature = "save_kdbx3")]
 fn collect_group_attachments_in_order(group: &crate::db::Group, out: &mut Vec<crate::db::Attachment>) {
     for g in &group.groups {
@@ -135,7 +150,7 @@ fn collect_entry_attachments_in_order(entry: &crate::db::Entry, out: &mut Vec<cr
         out.push(attachment.clone());
     }
     if let Some(history) = entry.history.as_ref() {
-        for history_entry in &history.entries {
+        for history_entry in history.file_order() {
             collect_entry_attachments_in_order(history_entry, out);
         }
     }
@@ -325,5 +340,114 @@ mod tests {
         ]));
         let serialized = quick_xml::se::to_string(&Test(uuid)).unwrap();
         assert_eq!(serialized, "<Test>AAECAwQFBgcICQoLDA0ODw==</Test>");
+    }
+
+    /// A one-entry database whose `<History>` lists the given
+    /// `(LastModificationTime, UserName)` revisions in document order. Each
+    /// revision also carries an unknown element naming itself, to check that
+    /// preserved XML stays with its revision when the history is reordered.
+    fn xml_with_history(revisions: &[(&str, &str)]) -> String {
+        let revisions: String = revisions
+            .iter()
+            .map(|(time, name)| {
+                format!(
+                    "<Entry><UUID>EBESExQVFhcYGRobHB0eHw==</UUID>\
+                     <Times><LastModificationTime>{time}</LastModificationTime></Times>\
+                     <String><Key>UserName</Key><Value>{name}</Value></String>\
+                     <RevisionUnknown>{name}</RevisionUnknown></Entry>"
+                )
+            })
+            .collect();
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<KeePassFile>
+ <Meta>
+ <Generator>Test</Generator>
+ <HistoryMaxItems>10</HistoryMaxItems>
+ <HistoryMaxSize>6291456</HistoryMaxSize>
+ </Meta>
+ <Root>
+ <Group>
+ <UUID>AAECAwQFBgcICQoLDA0ODw==</UUID>
+ <Name>Root</Name>
+ <Entry>
+ <UUID>EBESExQVFhcYGRobHB0eHw==</UUID>
+ <Times><LastModificationTime>2024-01-04T00:00:00Z</LastModificationTime></Times>
+ <String><Key>UserName</Key><Value>current</Value></String>
+ <History>{revisions}</History>
+ </Entry>
+ </Group>
+ <DeletedObjects/>
+ </Root>
+</KeePassFile>"#
+        )
+    }
+
+    fn history_user_names(db: &crate::db::Database) -> Vec<(String, String)> {
+        db.root.entries[0]
+            .history
+            .as_ref()
+            .unwrap()
+            .get_entries()
+            .iter()
+            .map(|revision| {
+                (
+                    revision.get_username().unwrap().to_string(),
+                    revision.unknown_xml[0].inner_xml.clone(),
+                )
+            })
+            .collect()
+    }
+
+    const OLDEST_FIRST: [(&str, &str); 3] = [
+        ("2024-01-01T00:00:00Z", "v1"),
+        ("2024-01-02T00:00:00Z", "v2"),
+        ("2024-01-03T00:00:00Z", "v3"),
+    ];
+
+    fn newest_first() -> Vec<(String, String)> {
+        ["v3", "v2", "v1"]
+            .iter()
+            .map(|name| (name.to_string(), name.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn history_written_oldest_first_is_read_newest_first() {
+        // KeePass and KeePassXC append to history and write it oldest-first.
+        let xml = xml_with_history(&OLDEST_FIRST);
+        let db = parse_xml(xml.as_bytes(), &[], &mut crate::crypt::ciphers::PlainCipher).unwrap();
+        assert_eq!(history_user_names(&db), newest_first());
+    }
+
+    #[test]
+    fn history_written_newest_first_by_older_versions_is_read_the_same_way() {
+        let mut revisions = OLDEST_FIRST;
+        revisions.reverse();
+        let xml = xml_with_history(&revisions);
+        let db = parse_xml(xml.as_bytes(), &[], &mut crate::crypt::ciphers::PlainCipher).unwrap();
+        assert_eq!(history_user_names(&db), newest_first());
+    }
+
+    #[cfg(any(feature = "save_kdbx4", feature = "save_kdbx3"))]
+    #[test]
+    fn history_is_written_oldest_first() {
+        let xml = xml_with_history(&OLDEST_FIRST);
+        let db = parse_xml(xml.as_bytes(), &[], &mut crate::crypt::ciphers::PlainCipher).unwrap();
+
+        let (written, _) = to_xml(&db, &mut crate::crypt::ciphers::PlainCipher).unwrap();
+        let written = String::from_utf8(written).unwrap();
+        let position = |needle: &str| written.find(needle).unwrap();
+        // Each revision's own unknown element is written back inside it.
+        let v1 = position("<RevisionUnknown>v1</RevisionUnknown>");
+        let v2 = position("<RevisionUnknown>v2</RevisionUnknown>");
+        let v3 = position("<RevisionUnknown>v3</RevisionUnknown>");
+        assert!(
+            v1 < v2 && v2 < v3,
+            "history must be written oldest-first:\n{written}"
+        );
+
+        let reparsed = parse_xml(written.as_bytes(), &[], &mut crate::crypt::ciphers::PlainCipher).unwrap();
+        assert_eq!(reparsed.root.entries[0].history, db.root.entries[0].history);
     }
 }

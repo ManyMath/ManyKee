@@ -24,6 +24,9 @@ pub use crate::db::{
 #[cfg(feature = "totp")]
 pub use crate::db::otp::{TOTPAlgorithm, TOTPError, TOTP};
 
+#[cfg(all(test, any(feature = "save_kdbx4", feature = "save_kdbx3")))]
+pub(crate) use crate::db::types::history::{assert_same_revisions, entry_with_revisions};
+
 #[cfg(test)]
 mod database_tests {
     use std::fs::File;

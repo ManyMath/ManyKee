@@ -241,8 +241,7 @@ impl Entry {
         let history = if let Some(h) = db.history.as_ref() {
             Some(History {
                 entries: h
-                    .entries
-                    .iter()
+                    .file_order()
                     .map(|e| Entry::db_to_xml(e, inner_encryptor, attachments, custom_icons))
                     .collect::<Result<_, CryptographyError>>()?,
             })

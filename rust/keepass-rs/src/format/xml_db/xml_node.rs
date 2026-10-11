@@ -1126,10 +1126,8 @@ fn inject_and_advance(
 /// share the live entry's UUID, so they can't be located by UUID lookup the
 /// way `inject_and_advance`/`inject_group_unknowns` locate everything else -
 /// instead this walks `<Entry>` occurrences inside `<History>` in document
-/// order, which lines up with `history.entries`' index since both parsing
-/// (`preprocess_xml`'s `history_revision_index`, `Entry::xml_to_db_handle`'s
-/// `h.entries.into_iter()...collect()`) and serialization
-/// (`Entry::db_to_xml`'s `h.entries.iter()`) preserve that same order.
+/// order, which is `History::file_order`, the order `Entry::db_to_xml`
+/// serializes revisions in.
 /// History revisions never have their own nested `<History>` (`he.history
 /// = None` is enforced when a revision is captured), so no depth-tracking
 /// beyond `find_own_close_tag`'s existing nested-`<Entry>`-immune scan is
@@ -1162,7 +1160,7 @@ fn inject_history_unknowns(
 
     let mut cursor = hist_start + "<History>".len();
     let mut total_inserted = 0usize;
-    for revision in &history.entries {
+    for revision in history.file_order() {
         let Some(entry_open) = xml[cursor..hist_end].find("<Entry>").map(|i| cursor + i) else {
             break;
         };
@@ -1711,12 +1709,14 @@ mod tests {
         assert_eq!(entry.unknown_xml[0].name, "LiveEntryUnknown");
         assert!(entry.unknown_xml[0].inner_xml.contains("live"));
 
+        // The file lists history oldest-first and `History` keeps it
+        // newest-first, so the document's last revision comes first.
         let history = entry.history.as_ref().expect("entry should have history");
         assert_eq!(history.entries.len(), 2);
         assert_eq!(history.entries[0].unknown_xml.len(), 1);
-        assert!(history.entries[0].unknown_xml[0].inner_xml.contains("rev0"));
+        assert!(history.entries[0].unknown_xml[0].inner_xml.contains("rev1"));
         assert_eq!(history.entries[1].unknown_xml.len(), 1);
-        assert!(history.entries[1].unknown_xml[0].inner_xml.contains("rev1"));
+        assert!(history.entries[1].unknown_xml[0].inner_xml.contains("rev0"));
     }
 
     #[test]

@@ -18,7 +18,7 @@ use keepass::{
     config::{
         CompressionConfig, DatabaseConfig, DatabaseVersion, InnerCipherConfig, KdfConfig, OuterCipherConfig,
     },
-    db::{Database, Entry, Group},
+    db::{Database, Entry, Group, History},
     DatabaseKey,
 };
 
@@ -163,6 +163,81 @@ fn kdbx3_database_resaved_as_kdbx4_is_readable_by_keepassxc() {
         .expect("save database as KDBX4");
 
     assert_keepassxc_reads_protected_password(temp.path(), Some(keyfile));
+}
+
+/// The `UserName` of each `<History>` item of the first entry with history
+/// in a `keepassxc-cli export` XML document, in document order.
+fn exported_history_user_names(xml: &str) -> Vec<String> {
+    let start = xml.find("<History>").expect("an exported entry has history");
+    let end = start + xml[start..].find("</History>").expect("history is closed");
+    xml[start..end]
+        .split("<Key>UserName</Key>")
+        .skip(1)
+        .map(|rest| {
+            let rest = rest.trim_start();
+            let value = rest.strip_prefix("<Value>").expect("UserName has a value");
+            value[..value.find("</Value>").expect("value is closed")].to_string()
+        })
+        .collect()
+}
+
+#[test]
+fn keepassxc_keeps_the_newest_history_items_of_a_database_written_by_this_crate() {
+    // KeePass and KeePassXC store history oldest-first and drop items from
+    // the front to enforce HistoryMaxItems. History written newest-first lost
+    // its newest revisions the next time KeePassXC edited the entry.
+    let mut db = Database::new(DatabaseConfig {
+        kdf_config: KdfConfig::Aes { rounds: 10 },
+        ..DatabaseConfig::default()
+    });
+    db.meta.history_max_items = Some(3);
+
+    let mut entry = Entry::new();
+    entry.set_unprotected("Title", ENTRY_TITLE);
+    let start = entry.times.last_modification.expect("new entries have a time") - chrono::Duration::days(1);
+    let mut history = History::default();
+    for n in 1..=3 {
+        let mut revision = entry.clone();
+        revision.set_unprotected("UserName", format!("v{n}"));
+        revision.times.last_modification = Some(start + chrono::Duration::hours(n));
+        history.add_entry(revision);
+    }
+    entry.set_unprotected("UserName", "v4");
+    entry.times.last_modification = Some(start + chrono::Duration::hours(4));
+    entry.history = Some(history);
+
+    let mut root = Group::new("Root");
+    root.entries.push(entry);
+    db.root = root;
+
+    let temp = TempFile::new("history-order");
+    db.save(
+        &mut File::create(&temp.0).expect("create temp database"),
+        DatabaseKey::new().with_password(PASSWORD),
+    )
+    .expect("save database");
+
+    let Some(edit) = keepassxc_cli(&["edit", "-q", "-u", "v5", temp.path(), ENTRY_TITLE]) else {
+        return;
+    };
+    assert!(
+        edit.status.success(),
+        "keepassxc-cli edit failed: {}",
+        String::from_utf8_lossy(&edit.stderr)
+    );
+    let export =
+        keepassxc_cli(&["export", "-q", "-f", "xml", temp.path()]).expect("keepassxc-cli is installed");
+    assert!(
+        export.status.success(),
+        "keepassxc-cli export failed: {}",
+        String::from_utf8_lossy(&export.stderr)
+    );
+
+    assert_eq!(
+        exported_history_user_names(&String::from_utf8_lossy(&export.stdout)),
+        ["v2", "v3", "v4"],
+        "KeePassXC should have dropped only the oldest revision"
+    );
 }
 
 #[cfg(feature = "save_kdbx3")]

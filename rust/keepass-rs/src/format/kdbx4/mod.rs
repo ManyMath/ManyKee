@@ -142,6 +142,31 @@ mod kdbx4_tests {
     }
 
     #[test]
+    fn history_revisions_round_trip_in_order() {
+        // History is written in the reverse of its in-memory order, while
+        // protected values go through a stream cipher in document order and
+        // attachments are referenced by their position in the inner header.
+        for inner_cipher_config in [InnerCipherConfig::Salsa20, InnerCipherConfig::ChaCha20] {
+            let mut db = Database::new(DatabaseConfig {
+                inner_cipher_config,
+                kdf_config: KdfConfig::Aes { rounds: 10 },
+                ..DatabaseConfig::default()
+            });
+            let entry = crate::db::entry_with_revisions();
+            db.root.entries.push(entry.clone());
+
+            let db_key = DatabaseKey::new().with_password("testing");
+            let mut encrypted_db = Vec::new();
+            dump_kdbx4(&db, &db_key, &mut encrypted_db).unwrap();
+            let decrypted_db = parse_kdbx4(&encrypted_db, &db_key).unwrap();
+
+            let decrypted = &decrypted_db.root.entries[0];
+            assert_eq!(decrypted.get_password(), Some("secret-4"));
+            crate::db::assert_same_revisions(decrypted, &entry);
+        }
+    }
+
+    #[test]
     pub fn test_config_matrix() {
         let outer_cipher_configs = [
             OuterCipherConfig::AES256,
