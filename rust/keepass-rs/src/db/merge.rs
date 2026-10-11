@@ -591,12 +591,24 @@ impl Database {
                     continue;
                 }
 
-                let (merged_entry, entry_merge_log) = existing_entry.merge(other_entry)?;
+                let (mut merged_entry, entry_merge_log) = existing_entry.merge(other_entry)?;
                 // A same-timestamp conflict keeps the destination as it is,
                 // but is still worth reporting.
                 log.append(&entry_merge_log);
 
-                if existing_entry == merged_entry {
+                // Like KeePassXC, hold the merged history to the destination's
+                // HistoryMaxItems / HistoryMaxSize, but leave the entry alone
+                // (even if it is over the limits) when nothing within them
+                // changed.
+                let trim = |entry: &mut Entry| {
+                    if let Some(history) = entry.history.as_mut() {
+                        history.trim(self.meta.history_max_items, self.meta.history_max_size);
+                    }
+                };
+                trim(&mut merged_entry);
+                let mut trimmed_existing_entry = existing_entry.clone();
+                trim(&mut trimmed_existing_entry);
+                if trimmed_existing_entry == merged_entry {
                     continue;
                 }
 
@@ -2470,6 +2482,44 @@ mod merge_tests {
             ]
         );
 
+        let merged_once = destination_db.clone();
+        let merge_result = destination_db.merge(&source_db).unwrap();
+        assert_eq!(merge_result.events.len(), 0);
+        assert_eq!(destination_db, merged_once);
+    }
+
+    #[test]
+    fn test_merge_holds_history_to_destination_limits() {
+        let mut destination_db = create_unedited_test_database();
+        let t0 = destination_db.root.entries[0].times.last_modification.unwrap();
+        let at = |seconds: i64| t0 + chrono::Duration::seconds(seconds);
+        let mut source_db = destination_db.clone();
+        destination_db.meta.history_max_items = Some(3);
+
+        for n in 1..=3 {
+            keepass_edit(&mut destination_db.root.entries[0], &format!("d{n}"), at(n));
+            keepass_edit(&mut source_db.root.entries[0], &format!("s{n}"), at(10 + n));
+        }
+        // Already at the limit: entry1 plus the d1 and d2 versions.
+        assert_eq!(titles_in_history(&destination_db.root.entries[0]).len(), 3);
+
+        destination_db.merge(&source_db).unwrap();
+
+        let merged = &destination_db.root.entries[0];
+        assert_eq!(merged.get_title(), Some("s3"));
+        // The three newest earlier versions out of s2, s1, d3 (the losing
+        // destination version), d2, d1 and entry1.
+        assert_eq!(
+            titles_in_history(merged),
+            vec![
+                (Some("s2"), Some(at(12))),
+                (Some("s1"), Some(at(11))),
+                (Some("d3"), Some(at(3)))
+            ]
+        );
+
+        // Lowering the limit does not make an unchanged entry "change".
+        destination_db.meta.history_max_items = Some(1);
         let merged_once = destination_db.clone();
         let merge_result = destination_db.merge(&source_db).unwrap();
         assert_eq!(merge_result.events.len(), 0);
