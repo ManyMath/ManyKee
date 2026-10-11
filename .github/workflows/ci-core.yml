@@ -94,6 +94,8 @@ jobs:
           packages/keepass/lib packages/keepass/test
           packages/keepass_cli/lib packages/keepass_cli/test
           packages/keepass_web/lib packages/keepass_web/test
+          packages/keepass_web/example/lib
+          apps/web/lib apps/native/lib apps/native/test
       - name: Analyze packages
         working-directory: ManyKee
         run: |
