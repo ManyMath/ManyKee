@@ -12,14 +12,15 @@ use std::thread;
 use std::time::Duration;
 
 use chrono::NaiveDateTime;
+use common::keepassxc_export;
 use common::official_tools::{
     discover_keepassxc, mode_from_env, run_keepassxc_with_stdin_lines, OfficialTool,
     RedactedOutput, REQUIRED_KEEPASSXC_VERSION,
 };
-use keepass::config::DatabaseConfig;
+use keepass::config::{DatabaseConfig, DatabaseVersion, KdfConfig};
 use keepass::db::{fields, Database, Entry, Group, Times};
 use keepass::DatabaseKey;
-use keepassxc::merge::{merge, ConflictResolution, MergeWarning};
+use keepassxc::merge::{merge, ConflictResolution, MergeResult, MergeWarning};
 use keepassxc::EntryExt;
 use keepassxc::GroupExt;
 use uuid::Uuid;
@@ -1048,4 +1049,244 @@ fn keepassxc_cli_ls(tool: &OfficialTool, db_path: &Path, password: &str) -> Reda
     ];
     run_keepassxc_with_stdin_lines(tool, &args, &[password], &[password])
         .unwrap_or_else(|err| panic!("{err}"))
+}
+
+/// Builds databases with keepassxc-cli, merges each pair both with
+/// keepassxc-cli and with ManyKee, and checks that KeePassXC reads the same
+/// entries, times and history back from both results. The rules this pins,
+/// as KeePassXC 2.7.12 applies them:
+///
+/// - the side modified last wins and keeps its own LastModificationTime;
+/// - the losing version is filed in history at its own LastModificationTime,
+///   and the winning version is never copied into history;
+/// - history items are matched by LastModificationTime, so the version both
+///   sides started from is kept once;
+/// - history is stored oldest-first;
+/// - merging the same pair again changes nothing.
+///
+/// Entry and group order within a group is not compared: KeePassXC appends
+/// an entry it replaces with a newer source version, ManyKee updates it in
+/// place.
+#[test]
+fn test_merge_matches_keepassxc_cli() {
+    let Some(tool) = keepassxc_tool_or_skip() else {
+        return;
+    };
+    let cli = Cli::new(tool);
+
+    cli.run(&["db-create", "-q", "-p", "-t", "100", "base.kdbx"]);
+    cli.run(&["add", "-q", "-u", "user", "base.kdbx", "edited on both"]);
+    cli.run(&["add", "-q", "-u", "user", "base.kdbx", "edited on B"]);
+    cli.run(&["add", "-q", "-u", "user", "base.kdbx", "untouched"]);
+    for group in ["G1", "G2", "G3"] {
+        cli.run(&["mkdir", "-q", "base.kdbx", group]);
+    }
+    cli.run(&["add", "-q", "-u", "user", "base.kdbx", "G1/moved on A"]);
+    // A KDF tuned to 100 ms of optimized C++ takes seconds per open in a
+    // debug build; keepassxc-cli keeps whatever KDF a database has.
+    let mut base = open_cli_database(&cli.path("base.kdbx"));
+    base.config.kdf_config = KdfConfig::Aes { rounds: 10 };
+    save_cli_database(base, &cli.path("base.kdbx"));
+    cli.copy("base.kdbx", "base-copy.kdbx");
+
+    // KDBX times have one-second resolution.
+    thread::sleep(Duration::from_millis(1100));
+    cli.copy("base.kdbx", "a.kdbx");
+    cli.run(&[
+        "edit",
+        "-q",
+        "-u",
+        "edited on A",
+        "a.kdbx",
+        "edited on both",
+    ]);
+    cli.run(&["mv", "-q", "a.kdbx", "G1/moved on A", "G2"]);
+    // keepassxc-cli cannot rename groups.
+    rename_group_with_manykee(&cli.path("a.kdbx"), "G3", "G3 renamed on A");
+
+    thread::sleep(Duration::from_millis(1100));
+    cli.copy("base.kdbx", "b.kdbx");
+    cli.run(&[
+        "edit",
+        "-q",
+        "--notes",
+        "edited on B",
+        "b.kdbx",
+        "edited on both",
+    ]);
+    cli.run(&["edit", "-q", "-u", "edited on B", "b.kdbx", "edited on B"]);
+
+    for (destination, source) in [
+        ("b.kdbx", "a.kdbx"),
+        ("a.kdbx", "b.kdbx"),
+        ("base.kdbx", "base-copy.kdbx"),
+    ] {
+        let context = format!("merging {source} into {destination}");
+
+        let keepassxc_merged = format!("keepassxc-{destination}");
+        cli.copy(destination, &keepassxc_merged);
+        cli.run(&["merge", "-q", "-s", &keepassxc_merged, source]);
+
+        let manykee_merged = format!("manykee-{destination}");
+        let result = manykee_merge(&cli, destination, source, &manykee_merged);
+        let merged_view = keepassxc_view(&cli, &manykee_merged);
+        assert_eq!(
+            merged_view,
+            keepassxc_view(&cli, &keepassxc_merged),
+            "{context}: KeePassXC reads a different result from ManyKee's merge than from its own"
+        );
+        if source == "base-copy.kdbx" {
+            assert_eq!(result.total_changes(), 0, "{context}: {result:?}");
+        }
+
+        let merged_again = format!("manykee-again-{destination}");
+        let result = manykee_merge(&cli, &manykee_merged, source, &merged_again);
+        assert_eq!(result.total_changes(), 0, "{context} again: {result:?}");
+        assert_eq!(
+            keepassxc_view(&cli, &merged_again),
+            merged_view,
+            "{context} again changed the result"
+        );
+    }
+}
+
+/// Password of the databases built with keepassxc-cli. Tool output is
+/// redacted for it, so it must not occur in anything the tests read back.
+const CLI_PASSWORD: &str = "merge-parity-password";
+
+/// keepassxc-cli run against databases in a temporary directory.
+struct Cli {
+    tool: OfficialTool,
+    dir: tempfile::TempDir,
+}
+
+impl Cli {
+    fn new(tool: OfficialTool) -> Self {
+        let dir = tempfile::tempdir().expect("tempdir failed");
+        Self { tool, dir }
+    }
+
+    fn path(&self, file_name: &str) -> std::path::PathBuf {
+        self.dir.path().join(file_name)
+    }
+
+    fn copy(&self, from: &str, to: &str) {
+        std::fs::copy(self.path(from), self.path(to)).expect("copy failed");
+    }
+
+    /// Runs keepassxc-cli with `args`, any `*.kdbx` argument naming a file
+    /// in the temporary directory, and returns its standard output.
+    fn run(&self, args: &[&str]) -> String {
+        let args: Vec<OsString> = args
+            .iter()
+            .map(|arg| match arg.ends_with(".kdbx") {
+                true => self.path(arg).into_os_string(),
+                false => OsString::from(arg),
+            })
+            .collect();
+        // db-create asks for the password twice, everything else once.
+        let output = run_keepassxc_with_stdin_lines(
+            &self.tool,
+            &args,
+            &[CLI_PASSWORD, CLI_PASSWORD],
+            &[CLI_PASSWORD],
+        )
+        .unwrap_or_else(|err| panic!("{err}"));
+        assert!(
+            output.status.success(),
+            "keepassxc-cli {args:?} failed:\n{}",
+            output.stderr
+        );
+        output.stdout
+    }
+}
+
+fn open_cli_database(path: &Path) -> Database {
+    let mut file = std::fs::File::open(path).expect("open failed");
+    Database::open(&mut file, DatabaseKey::new().with_password(CLI_PASSWORD)).expect("open failed")
+}
+
+/// keepassxc-cli creates KDBX 3.1 databases, which ManyKee writes back as
+/// KDBX 4.
+fn save_cli_database(mut db: Database, path: &Path) {
+    if matches!(db.config.version, DatabaseVersion::KDB3(_)) {
+        db.config.version = DatabaseVersion::KDB4(0);
+    }
+    keepassxc::save_atomic(&db, path, DatabaseKey::new().with_password(CLI_PASSWORD))
+        .expect("save failed");
+}
+
+fn rename_group_with_manykee(path: &Path, name: &str, new_name: &str) {
+    let mut db = open_cli_database(path);
+    let uuid = db
+        .root
+        .groups
+        .iter()
+        .find(|group| group.name == name)
+        .expect("group exists")
+        .uuid;
+    keepassxc::rename_group(&mut db.root, uuid, new_name).expect("rename failed");
+    save_cli_database(db, path);
+}
+
+fn manykee_merge(cli: &Cli, destination: &str, source: &str, merged: &str) -> MergeResult {
+    let mut db = open_cli_database(&cli.path(destination));
+    let result = merge(&mut db, &open_cli_database(&cli.path(source))).expect("merge failed");
+    save_cli_database(db, &cli.path(merged));
+    result
+}
+
+/// What KeePassXC reads from `database`: a line per group (by path) and per
+/// entry (by title) with their modification and location times, followed by
+/// the entry's history items in the order they are stored.
+fn keepassxc_view(cli: &Cli, database: &str) -> Vec<String> {
+    let xml = cli.run(&["export", "-q", "-f", "xml", database]);
+    let document = keepassxc_export::parse(&xml);
+    let root = document
+        .child("Root")
+        .and_then(|root| root.child("Group"))
+        .expect("export has a root group");
+    let mut lines = Vec::new();
+    view_group(root, "", &mut lines);
+    lines
+}
+
+fn view_group(group: &keepassxc_export::Element, parent: &str, lines: &mut Vec<String>) {
+    let path = format!("{parent}/{}", group.child_text("Name").unwrap_or_default());
+    lines.push(format!(
+        "group {path} modified={:?} moved={:?}",
+        group.time("LastModificationTime"),
+        group.time("LocationChanged"),
+    ));
+
+    let mut entries: Vec<_> = group.children_named("Entry").collect();
+    entries.sort_by_key(|entry| entry.entry_string(fields::TITLE).map(str::to_string));
+    for entry in entries {
+        lines.push(format!(
+            "  entry {:?} user={:?} notes={:?} modified={:?} moved={:?}",
+            entry.entry_string(fields::TITLE),
+            entry.entry_string(fields::USERNAME),
+            entry.entry_string(fields::NOTES),
+            entry.time("LastModificationTime"),
+            entry.time("LocationChanged"),
+        ));
+        for item in entry
+            .child("History")
+            .into_iter()
+            .flat_map(|history| history.children_named("Entry"))
+        {
+            lines.push(format!(
+                "    history user={:?} notes={:?} modified={:?}",
+                item.entry_string(fields::USERNAME),
+                item.entry_string(fields::NOTES),
+                item.time("LastModificationTime"),
+            ));
+        }
+    }
+
+    let mut children: Vec<_> = group.children_named("Group").collect();
+    children.sort_by_key(|child| child.child_text("Name").map(str::to_string));
+    for child in children {
+        view_group(child, &path, lines);
+    }
 }
