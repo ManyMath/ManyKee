@@ -67,6 +67,8 @@ fn decompress_with_limit(in_buffer: &[u8], limit: u64) -> Result<Vec<u8>, std::i
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Already in scope through `super::*` when a save feature is enabled.
+    #[allow(unused_imports)]
     use std::io::Write as _;
 
     fn gzip(data: &[u8]) -> Vec<u8> {
