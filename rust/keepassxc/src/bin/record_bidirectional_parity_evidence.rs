@@ -561,9 +561,9 @@ fn snapshot_json(db: &Database, fixture_id: &str, evidence_lane: &str) -> Result
     let mut json = semantic_snapshot::snapshot_json_pretty(db)?;
     let source_fixture_id = serde_json::to_string(fixture_id)?;
     let evidence_lane = serde_json::to_string(evidence_lane)?;
-    let prefix = "{\n \"schema_version\": 1,";
+    let prefix = "{\n  \"schema_version\": 1,";
     let provenance = format!(
-        "{{\n \"schema_version\": 1,\n \"source_fixture_id\": {source_fixture_id},\n \"evidence_lane\": {evidence_lane},"
+        "{{\n  \"schema_version\": 1,\n  \"source_fixture_id\": {source_fixture_id},\n  \"evidence_lane\": {evidence_lane},"
     );
 
     if !json.starts_with(prefix) {
