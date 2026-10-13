@@ -90,7 +90,21 @@ Scope boundaries:
 
 ## Fidelity and merge
 
-Save-version headers for databases opened from KDBX 3 files, TOTP recognition, and DeletedObject export gaps are closed against the KeePassXC CLI fixture corpus (such databases are written back as KDBX 4; KDBX 3 output stays out of scope). Deterministic merge-semantics coverage lives at the Rust core layer. Closed gaps are represented by supported ManyKee-write evidence and matching semantic snapshots.
+Save-version headers for databases opened from KDBX 3 files, TOTP recognition, and DeletedObject export gaps are closed against the KeePassXC CLI fixture corpus (such databases are written back as KDBX 4; KDBX 3 output stays out of scope). Closed gaps are represented by supported ManyKee-write evidence and matching semantic snapshots.
+
+Merging (`keepassxc::merge`, behind the FFI's `kpxc_database_merge`) treats entries the way `keepassxc-cli` 2.7.12 does:
+
+- The side modified last wins (the destination on a tie) and keeps its own fields and LastModificationTime.
+- The losing version goes into history at its own LastModificationTime. The winning version is never copied into history.
+- History items are matched by LastModificationTime, and the winner's item is kept when both sides have one. History is stored oldest-first and trimmed to the destination's HistoryMaxItems and HistoryMaxSize.
+- On a timestamp tie, the source's diverged version is dropped with a warning.
+- Merging the same pair again changes nothing.
+
+Deliberate differences from `keepassxc-cli merge`:
+
+- DeletedObjects are applied and carried over. `keepassxc-cli merge` neither deletes the objects nor copies the tombstones.
+- The root group's own name, notes and times merge like any other group's. KeePassXC never merges the root group.
+- An entry that moved on one side and was edited on the other keeps the LocationChanged time of the move. KeePassXC takes the edited side's LocationChanged.
 
 Merge semantics suite:
 
@@ -99,7 +113,7 @@ cargo test --manifest-path rust/Cargo.toml -p keepassxc --test merge_tests -- --
 MANYKEE_REQUIRE_OFFICIAL_TOOLS=1 cargo test --manifest-path rust/Cargo.toml -p keepassxc --test merge_tests -- --test-threads=1
 ```
 
-Required-mode exercises `test_merge_output_opens_in_keepassxc` against the real `keepassxc-cli` 2.7.12 binary.
+Required-mode runs `test_merge_output_opens_in_keepassxc` and `test_merge_matches_keepassxc_cli` against the real `keepassxc-cli` 2.7.12 binary. The second builds databases with `keepassxc-cli`, merges them with both tools, and compares what `keepassxc-cli export` reads back.
 
 Full maintainer gate:
 
