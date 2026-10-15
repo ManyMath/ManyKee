@@ -3,7 +3,7 @@
   "source_fixture_id": "keepassxc-keyfile-basic",
   "evidence_lane": "manykee_write",
   "metadata": {
-    "generator": "ManyKee synthetic KeePassXC XML import source",
+    "generator": "ManyKee Phase 41 synthetic KeePassXC XML import source",
     "database_name": "keepassxc-keyfile-basic",
     "database_name_changed": "2026-04-16 02:11:10",
     "database_description": "Synthetic keyfile-basic source imported by KeePassXC CLI 2.7.12.",

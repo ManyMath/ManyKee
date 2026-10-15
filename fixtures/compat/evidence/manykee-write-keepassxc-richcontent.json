@@ -7,7 +7,7 @@
   "tool_version": "0.1.0",
   "status": "supported",
   "snapshot_path": "fixtures/compat/snapshots/keepassxc-richcontent-manykee-write.semantic.json",
-  "snapshot_sha256": "20b14364194af076f9c5986ebd83f81e17182eef9eacb4001bc04991c22f6b8f",
+  "snapshot_sha256": "7ce8974a895c64d7ebfe8e8887a9223d61cef8951d8765e0c02766569d42b323",
   "evidence_path": "fixtures/compat/evidence/manykee-write-keepassxc-richcontent.json",
   "claims": [
     {

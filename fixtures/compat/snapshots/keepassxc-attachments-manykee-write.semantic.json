@@ -3,7 +3,7 @@
   "source_fixture_id": "keepassxc-attachments",
   "evidence_lane": "manykee_write",
   "metadata": {
-    "generator": "ManyKee synthetic KeePassXC XML import source",
+    "generator": "ManyKee Phase 41 synthetic KeePassXC XML import source",
     "database_name": "keepassxc-attachments",
     "database_name_changed": "2026-04-16 02:30:06",
     "database_description": "Synthetic attachment source imported by KeePassXC CLI 2.7.12.",
@@ -352,15 +352,22 @@
           "tags": [],
           "times": {
             "creation": "2026-04-16 00:00:00",
-            "last_modification": "2026-04-16 00:00:00",
-            "last_access": "2026-04-16 00:00:00",
+            "last_modification": "2026-04-16 02:30:06",
+            "last_access": "2026-04-16 02:30:06",
             "expiry": "2026-04-16 00:00:00",
             "location_changed": "2026-04-16 00:00:00",
             "expires": false,
             "usage_count": 0
           },
           "custom_data": {},
-          "attachments": [],
+          "attachments": [
+            {
+              "name": "sample.txt",
+              "protected": true,
+              "size": 81,
+              "sha256": "7339c5e4f739a34176b613641d84a6b550aae291524b0eab2677550040d8f165"
+            }
+          ],
           "autotype": {
             "enabled": true,
             "default_sequence": null,
@@ -398,22 +405,15 @@
           "tags": [],
           "times": {
             "creation": "2026-04-16 00:00:00",
-            "last_modification": "2026-04-16 02:30:06",
-            "last_access": "2026-04-16 02:30:06",
+            "last_modification": "2026-04-16 00:00:00",
+            "last_access": "2026-04-16 00:00:00",
             "expiry": "2026-04-16 00:00:00",
             "location_changed": "2026-04-16 00:00:00",
             "expires": false,
             "usage_count": 0
           },
           "custom_data": {},
-          "attachments": [
-            {
-              "name": "sample.txt",
-              "protected": true,
-              "size": 81,
-              "sha256": "7339c5e4f739a34176b613641d84a6b550aae291524b0eab2677550040d8f165"
-            }
-          ],
+          "attachments": [],
           "autotype": {
             "enabled": true,
             "default_sequence": null,

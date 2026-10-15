@@ -3,7 +3,7 @@
   "source_fixture_id": "keepassxc-richcontent",
   "evidence_lane": "manykee_write",
   "metadata": {
-    "generator": "ManyKee synthetic KeePassXC XML import source",
+    "generator": "ManyKee Phase 39 synthetic KeePassXC XML import source",
     "database_name": "ManyKee Official Rich Content Fixture",
     "database_name_changed": "2026-04-15 21:28:27",
     "database_description": "Synthetic rich-content source imported by KeePassXC CLI 2.7.12.",
@@ -572,8 +572,7 @@
         }
       },
       "tags": [
-        "custom",
-        "fields"
+        "custom,fields"
       ],
       "times": {
         "creation": "2026-04-15 00:00:00",
@@ -706,8 +705,7 @@
         }
       },
       "tags": [
-        "official",
-        "standard"
+        "official,standard"
       ],
       "times": {
         "creation": "2026-04-15 00:00:00",
@@ -760,8 +758,7 @@
         }
       },
       "tags": [
-        "customdata",
-        "totp"
+        "customdata,totp"
       ],
       "times": {
         "creation": "2026-04-15 00:00:00",
