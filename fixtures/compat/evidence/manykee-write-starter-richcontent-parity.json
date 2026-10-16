@@ -7,7 +7,7 @@
   "tool_version": "0.1.0",
   "status": "supported",
   "snapshot_path": "fixtures/compat/snapshots/starter-richcontent-bidirectional-write.semantic.json",
-  "snapshot_sha256": "e71212c128fca554221e35fab500fdbc815888e7f36a788b885babc65069ada1",
+  "snapshot_sha256": "32f4629f1d9716da55554010171c33ba466b2c9a99fabed36f427544d1e0529a",
   "evidence_path": "fixtures/compat/evidence/manykee-write-starter-richcontent-parity.json",
   "claims": [
     {

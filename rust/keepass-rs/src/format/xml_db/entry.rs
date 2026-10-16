@@ -111,10 +111,7 @@ impl Entry {
         target.override_url = self.override_url;
         target.quality_check = self.quality_check;
         target.previous_parent_group = self.previous_parent_group.map(|u| u.0);
-        target.tags = self
-            .tags
-            .map(|t| t.split(';').map(|s| s.to_string()).collect())
-            .unwrap_or_default();
+        target.tags = self.tags.as_deref().map(split_tags).unwrap_or_default();
 
         target.times = self.times.map(|t| t.into()).unwrap_or_default();
 
@@ -423,6 +420,20 @@ pub struct History {
     pub entries: Vec<Entry>,
 }
 
+/// Splits a KDBX `<Tags>` value into tags.
+///
+/// KeePass writes tags joined with `;`, while KeePassXC 2.7 reads both `,` and
+/// `;` as delimiters and writes them back joined with `,`. Earlier versions of
+/// this crate also wrote `,`. Accept both so tags survive any of those
+/// writers, trimming whitespace around each tag and dropping empty pieces.
+fn split_tags(tags: &str) -> Vec<String> {
+    tags.split([',', ';'])
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -709,6 +720,24 @@ mod tests {
         assert!(target.fields.get(fields::OTP).is_none());
         assert_eq!(target.get_raw_otp_value(), Some(otp));
         assert!(target.custom_data.contains_key(fields::OTP));
+    }
+
+    #[test]
+    fn test_xml_to_db_handle_splits_tags_on_commas_like_keepassxc() {
+        let xml = "<Entry><UUID>AAAAAAAAAAAAAAAAAAAAAA==</UUID><Tags>delta, gamma;eps:zeta;;</Tags></Entry>";
+        let xml_entry: Test<Entry> = quick_xml::de::from_str(xml).unwrap();
+
+        let mut target = crate::db::Entry::new();
+        let mut cipher = crate::crypt::ciphers::PlainCipher;
+        xml_entry
+            .0
+            .xml_to_db_handle(&mut target, &[], &HashMap::new(), &mut cipher)
+            .unwrap();
+
+        assert_eq!(
+            target.tags,
+            vec!["delta".to_string(), "gamma".to_string(), "eps:zeta".to_string()]
+        );
     }
 
     #[test]

@@ -572,7 +572,8 @@
         }
       },
       "tags": [
-        "custom,fields"
+        "custom",
+        "fields"
       ],
       "times": {
         "creation": "2026-04-15 00:00:00",
@@ -705,7 +706,8 @@
         }
       },
       "tags": [
-        "official,standard"
+        "official",
+        "standard"
       ],
       "times": {
         "creation": "2026-04-15 00:00:00",
@@ -758,7 +760,8 @@
         }
       },
       "tags": [
-        "customdata,totp"
+        "customdata",
+        "totp"
       ],
       "times": {
         "creation": "2026-04-15 00:00:00",

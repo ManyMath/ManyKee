@@ -7,7 +7,7 @@
   "tool_version": "0.1.0",
   "status": "partial",
   "snapshot_path": "fixtures/compat/snapshots/manykee-richcontent-read.semantic.json",
-  "snapshot_sha256": "3c6a26c5555a5c08afcc3d055206449d17e453696c29d347643d352c4dd41938",
+  "snapshot_sha256": "94efc40c7c741f36dc66b502329b75c62f94138eb4200bd8b74a29784d606574",
   "evidence_path": "fixtures/compat/evidence/manykee-richcontent-read.json",
   "claims": [
     {

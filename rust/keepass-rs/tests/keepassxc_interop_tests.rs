@@ -240,6 +240,53 @@ fn keepassxc_keeps_the_newest_history_items_of_a_database_written_by_this_crate(
     );
 }
 
+#[test]
+fn tags_survive_a_save_by_keepassxc() {
+    // KeePassXC rewrites an entry's tags joined with ',' whenever it saves
+    // the database, so a reader that only splits on ';' sees one tag.
+    let mut db = Database::new(DatabaseConfig {
+        kdf_config: KdfConfig::Aes { rounds: 10 },
+        ..DatabaseConfig::default()
+    });
+    let mut entry = Entry::new();
+    entry.set_unprotected("Title", ENTRY_TITLE);
+    entry.tags = vec!["gamma".to_string(), "delta".to_string()];
+    let mut root = Group::new("Root");
+    root.entries.push(entry);
+    db.root = root;
+
+    let temp = TempFile::new("tags");
+    db.save(
+        &mut File::create(&temp.0).expect("create temp database"),
+        DatabaseKey::new().with_password(PASSWORD),
+    )
+    .expect("save database");
+
+    let Some(edit) = keepassxc_cli(&["edit", "-q", "-u", "resaved", temp.path(), ENTRY_TITLE]) else {
+        return;
+    };
+    assert!(
+        edit.status.success(),
+        "keepassxc-cli edit failed: {}",
+        String::from_utf8_lossy(&edit.stderr)
+    );
+    let export =
+        keepassxc_cli(&["export", "-q", "-f", "xml", temp.path()]).expect("keepassxc-cli is installed");
+    assert!(
+        String::from_utf8_lossy(&export.stdout).contains("<Tags>delta,gamma</Tags>"),
+        "expected KeePassXC to write comma-joined tags"
+    );
+
+    let reopened = Database::open(
+        &mut File::open(&temp.0).expect("open resaved database"),
+        DatabaseKey::new().with_password(PASSWORD),
+    )
+    .expect("open database saved by KeePassXC");
+    let mut tags = reopened.root.entries[0].tags.clone();
+    tags.sort();
+    assert_eq!(tags, ["delta", "gamma"]);
+}
+
 #[cfg(feature = "save_kdbx3")]
 #[test]
 fn new_kdbx3_database_is_readable_by_keepassxc() {
