@@ -1,4 +1,3 @@
-.planning/
 rust/target/
 packages/keepass_flutter/rust/target/
 packages/keepass_flutter/rust/Cargo.lock
@@ -21,3 +20,28 @@ packages/**/keepassxc_ffi.dll*
 
 # wasm-pack output; wasm-pack rewrites its own .gitignore here on every build
 packages/keepass_web/web/pkg/
+
+# Tooling artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+.env
+.env.*
+!.env.example
+.next/
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+target/
+vendor/
+*.log
+coverage/
+.cache/
+tmp/

@@ -56,6 +56,12 @@ scripts:
         - integration_test
       ignore:
         - keepass_web_example
+  verify:compat:fixtures:
+    run: bash $MELOS_ROOT_PATH/scripts/verify_official_compat.sh
+    description: Run required-mode KeePassXC official fixture corpus checks
+  verify:compat:matrix:
+    run: bash $MELOS_ROOT_PATH/scripts/generate_compat_matrix.sh --check
+    description: Check generated compatibility matrix freshness
   ffigen:
     run: dart run ffigen --config ffigen.yaml
     packageFilters:
