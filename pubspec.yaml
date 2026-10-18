@@ -15,9 +15,26 @@ workspace:
   - apps/native
   - apps/ManyKee
 
-# The ManyKee app (apps/ManyKee) builds on the manyui library, developed in
-# lockstep from a sibling checkout (../ManyUI). manyui is not yet published,
-# so its packages' hosted self-references are overridden to the sibling paths.
+# The ManyKee app (apps/ManyKee) builds on the manyui library, pinned to a
+# commit of its public git mirror. manyui is not yet published, so the hosted
+# `manyui` constraint declared by manyui_hooks and manyui_riverpod is
+# overridden to the same pinned revision. Bump every `ref:` here and in
+# apps/ManyKee/pubspec.yaml together.
+#
+# To develop against a local ManyUI checkout beside this repository, create an
+# untracked pubspec_overrides.yaml at the workspace root. It replaces this
+# whole block, so restate every override:
+#
+#   dependency_overrides:
+#     manyui:
+#       path: ../ManyUI/manyui
+#     manyui_hooks:
+#       path: ../ManyUI/manyui_hooks
+#     manyui_riverpod:
+#       path: ../ManyUI/manyui_riverpod
 dependency_overrides:
   manyui:
-    path: ../ManyUI/manyui
+    git:
+      url: https://github.com/ManyMath/ManyUI.git
+      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      path: manyui

@@ -3,6 +3,7 @@ packages/keepass_flutter/rust/target/
 packages/keepass_flutter/rust/Cargo.lock
 .dart_tool/
 pubspec.lock
+pubspec_overrides.yaml
 
 apps/native/.flutter-plugins-dependencies
 build/

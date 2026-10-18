@@ -11,18 +11,10 @@ GitHub serving as a mirror only.
 | `ci-native.yml` | Linux desktop integration tests for the legacy native host |
 | `ci-web.yml` | Chrome extension build and Puppeteer end-to-end tests |
 
-## Dependency checkout
+## ManyUI dependency
 
-ManyKee's Dart workspace contains the canonical app, whose path dependencies
-resolve a sibling `ManyUI` checkout. Every workflow that bootstraps the Dart
-workspace therefore checks out ManyKee as `ManyKee/` and the compatible
-ManyUI revision beside it as `ManyUI/`.
-
-Configure the repository Actions secret `DEPENDENCY_CHECKOUT_TOKEN` with a
-read-only personal access token that can clone the private
-`sneurlax/manyui` repository. The workflows fail closed when that secret is
-absent; they never fall back to the current repository's job token.
-
-ManyUI is pinned in each workflow to the full commit SHA of the ManyUI `main`
-revision the app is developed against. When ManyUI moves, update the `ref:`
-in every workflow in the same commit so the pins cannot drift apart.
+The canonical app depends on ManyUI through git dependencies on its public
+mirror (https://github.com/ManyMath/ManyUI.git), pinned to a full commit SHA in
+the root `pubspec.yaml` and `apps/ManyKee/pubspec.yaml`. `flutter pub get`
+fetches it, so the workflows need no extra checkout or token. When ManyUI
+moves, update every `ref:` in the same commit so the pins cannot drift apart.

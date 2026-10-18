@@ -49,5 +49,5 @@ verification script checks those conditions using a local static server.
 - `tool/verify_web_dist.sh` validates files, paths, content types, and live
   static-server responses.
 
-Building requires Flutter, `wasm-pack`, and the ManyUI repository checked out
-beside this repository at `../ManyUI`.
+Building requires Flutter and `wasm-pack`. ManyUI is fetched by `flutter pub
+get` from its pinned git revision (see the root `pubspec.yaml`).

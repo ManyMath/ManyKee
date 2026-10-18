@@ -28,23 +28,6 @@ jobs:
         with:
           path: ManyKee
 
-      - name: Require dependency checkout token
-        env:
-          DEPENDENCY_CHECKOUT_TOKEN: ${{ secrets.DEPENDENCY_CHECKOUT_TOKEN }}
-        run: |
-          if [ -z "${DEPENDENCY_CHECKOUT_TOKEN:-}" ]; then
-            echo "DEPENDENCY_CHECKOUT_TOKEN must be a read-only PAT that can clone sneurlax/manyui" >&2
-            exit 1
-          fi
-
-      - name: Checkout pinned ManyUI
-        uses: actions/checkout@v4
-        with:
-          repository: sneurlax/manyui
-          ref: e1dd57073d9fef27e2166d399e9b929b4f72da8b
-          path: ManyUI
-          token: ${{ secrets.DEPENDENCY_CHECKOUT_TOKEN }}
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
