@@ -1,6 +1,6 @@
 name: keepass_flutter
 description: Flutter plugin for KeePass KDBX databases; bundles a Rust core via cargokit and re-exports package:keepass.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/ManyMath/ManyKee
 homepage: https://github.com/ManyMath/ManyKee/tree/main/packages/keepass_flutter
 issue_tracker: https://github.com/ManyMath/ManyKee/issues

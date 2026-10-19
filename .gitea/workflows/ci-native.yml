@@ -1,0 +1,67 @@
+name: CI -- Native Integration Tests
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  integration-test-linux:
+    runs-on: manymath-maintenance-linux-x64
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      run: 'test "$PRIMARY_SERVER" = ''https://git.manymath.com''
+
+        rustc --version
+
+        cargo --version
+
+        flutter --version
+
+        '
+    - name: Checkout ManyKee
+      uses: actions/checkout@v4
+      with:
+        path: ManyKee
+    - name: Verify provisioned desktop tools
+      run: 'command -v clang
+
+        command -v cmake
+
+        command -v ninja
+
+        command -v xvfb-run
+
+        pkg-config --exists gtk+-3.0'
+    - name: Install app dependencies
+      working-directory: ManyKee/apps/native
+      run: flutter pub get
+    - name: Pre-build Linux debug bundle
+      working-directory: ManyKee/apps/native
+      run: timeout --signal=TERM --kill-after=30s 20m flutter build linux --debug
+    - name: Run native integration tests
+      working-directory: ManyKee/apps/native
+      run: timeout --signal=TERM --kill-after=30s 20m xvfb-run --auto-servernum flutter
+        test integration_test -d linux -r github
+'on':
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+    - dev
+  workflow_dispatch: {}
+env:
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  CI: 'true'
+  CARGO_HOME: ${{ runner.temp }}/manykee-cargo-${{ github.run_id }}-${{ github.job
+    }}
+  RUSTUP_TOOLCHAIN: 1.94.0
+  CARGO_BUILD_JOBS: '3'

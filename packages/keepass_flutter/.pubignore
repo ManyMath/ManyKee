@@ -1,0 +1,8 @@
+# Keep the staged native lock and source closure even though Git ignores
+# development Cargo.lock/target outputs at the workspace root.
+**/target/
+**/.dart_tool/
+**/build/
+**/.flutter-plugins-dependencies
+**/pubspec.lock
+!rust/Cargo.lock

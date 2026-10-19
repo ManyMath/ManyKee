@@ -1,3 +1,8 @@
+## 0.1.1
+
+- Verify source-closed native publication payloads and fresh consumers.
+- Bundle the complete Rust dependency source closure in Flutter candidates.
+
 ## 0.1.0
 
 - First publishable release of the Dart SDK for KeePass KDBX databases.

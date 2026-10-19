@@ -1,0 +1,112 @@
+name: CI -- Core Libraries
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  rust:
+    name: Rust workspace tests
+    runs-on: manymath-maintenance-linux-x64
+    timeout-minutes: 45
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      run: 'test "$PRIMARY_SERVER" = ''https://git.manymath.com''
+
+        rustc --version
+
+        cargo --version
+
+        flutter --version
+
+        '
+    - name: Checkout ManyKee
+      uses: actions/checkout@v4
+      with:
+        path: ManyKee
+    - name: Check formatting
+      working-directory: ManyKee/rust
+      run: cargo fmt --all -- --check
+    - name: Test workspace
+      working-directory: ManyKee/rust
+      run: timeout --signal=TERM --kill-after=30s 30m cargo test --locked --workspace
+    - name: Test keepass-rs with default and single save features
+      working-directory: ManyKee/rust
+      run: 'cargo test --locked -p keepass --lib
+
+        cargo test --locked -p keepass --lib --features save_kdbx3
+
+        '
+    - name: Check wasm target compiles
+      working-directory: ManyKee/rust
+      run: cargo check --locked -p keepassxc-wasm --target wasm32-unknown-unknown
+    - name: Verify compatibility matrix is current
+      working-directory: ManyKee/rust
+      run: cargo run --locked -q -p keepassxc --bin generate_compat_matrix -- --check
+  dart-packages:
+    name: Dart package tests
+    runs-on: manymath-maintenance-linux-x64
+    timeout-minutes: 45
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      run: 'test "$PRIMARY_SERVER" = ''https://git.manymath.com''
+
+        rustc --version
+
+        cargo --version
+
+        flutter --version
+
+        '
+    - name: Checkout ManyKee
+      uses: actions/checkout@v4
+      with:
+        path: ManyKee
+    - name: Build native library
+      working-directory: ManyKee/rust
+      run: cargo build --locked -p keepassxc-ffi
+    - name: Resolve workspace dependencies
+      working-directory: ManyKee/packages/keepass
+      run: flutter pub get
+    - name: Check package formatting
+      working-directory: ManyKee
+      run: dart format --output none --set-exit-if-changed packages/keepass/lib packages/keepass/test
+        packages/keepass_cli/lib packages/keepass_cli/test packages/keepass_web/lib
+        packages/keepass_web/test packages/keepass_web/example/lib apps/web/lib apps/native/lib
+        apps/native/test
+    - name: Analyze packages
+      working-directory: ManyKee
+      run: "for package in packages/keepass packages/keepass_cli packages/keepass_web\
+        \ packages/keepass_flutter; do\n  (cd \"$package\" && dart analyze --fatal-infos)\n\
+        done\n"
+    - name: Test keepass
+      working-directory: ManyKee/packages/keepass
+      run: timeout --signal=TERM --kill-after=30s 10m dart test
+    - name: Test keepass_cli
+      working-directory: ManyKee/packages/keepass_cli
+      run: timeout --signal=TERM --kill-after=30s 10m dart test
+    - name: Test keepass_web
+      working-directory: ManyKee/packages/keepass_web
+      run: timeout --signal=TERM --kill-after=30s 10m flutter test
+'on':
+  push:
+    branches:
+    - main
+    - maintenance/**
+  pull_request:
+    branches:
+    - main
+    - dev
+  workflow_dispatch: {}
+env:
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  CI: 'true'
+  CARGO_HOME: ${{ runner.temp }}/manykee-cargo-${{ github.run_id }}-${{ github.job
+    }}
+  RUSTUP_TOOLCHAIN: 1.94.0
+  CARGO_BUILD_JOBS: '3'

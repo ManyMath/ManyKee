@@ -1,0 +1,51 @@
+{
+  "dart_sdk": "3.13.2",
+  "prepare": [
+    "python3",
+    "tool/stage_native.py"
+  ],
+  "packages": [
+    {
+      "name": "keepass",
+      "path": "packages/keepass",
+      "required": [
+        "LICENSE",
+        "lib/keepass.dart"
+      ]
+    },
+    {
+      "name": "keepass_flutter",
+      "path": "packages/keepass_flutter",
+      "required": [
+        "rust/Cargo.toml",
+        "rust/SOURCE_PROVENANCE.json",
+        "rust/sources/keepass-rs/LICENSE",
+        "rust/sources/keepassxc/LICENSE",
+        "rust/sources/keepassxc-ffi/LICENSE",
+        "rust/sources/keepass-rs/tests/resources/test_db_kdbx4_with_password_argon2id.kdbx",
+        "rust/Cargo.lock",
+        "rust/NATIVE_DEPENDENCIES.json"
+      ],
+      "provenance": [
+        "rust/SOURCE_PROVENANCE.json"
+      ]
+    }
+  ],
+  "flutter_package": "keepass_flutter",
+  "dart_package": "keepass",
+  "hosted_dart_constraint": "^0.1.0",
+  "library_name": "libkeepass_flutter_native.so",
+  "library_environment": "PAYLOAD_NATIVE_LIBRARY",
+  "copy_library_to_cli": true,
+  "smoke_files": {
+    "rust/sources/keepass-rs/tests/resources/test_db_kdbx4_with_password_argon2id.kdbx": "fixture.kdbx"
+  },
+  "flutter_main": "import 'package:flutter/material.dart';\nimport 'package:keepass_flutter/keepass_flutter.dart';\nvoid main() { final Type databaseType = Database; runApp(MaterialApp(home: Text(databaseType.toString()))); }\n",
+  "dart_main": "import 'package:keepass/keepass.dart';\nimport 'dart:io';\nvoid main() { final db = Database.open('fixture.kdbx', password: 'demopass'); final expected = File(Platform.environment['PAYLOAD_NATIVE_LIBRARY']!).resolveSymbolicLinksSync(); final mappings = File('/proc/self/maps').readAsLinesSync().where((line) => line.contains('libkeepass_flutter_native.so') || line.contains('libkeepassxc_ffi.so')).toList(); if (mappings.isEmpty || mappings.any((line) => !line.endsWith(' $expected'))) throw StateError('Smoke loaded an unexpected native library: $mappings'); final id = db.rootGroup.uuid; if (id.isEmpty) throw StateError('empty root'); db.save('roundtrip.kdbx', password: 'payload-password'); db.close(); final reopened = Database.open('roundtrip.kdbx', password: 'payload-password'); if (reopened.rootGroup.uuid != id) throw StateError('roundtrip mismatch'); reopened.close(); print('Native database load, decrypt, save, reopen, and close passed'); }\n",
+  "rust_toolchain": "stable",
+  "rust_targets": {
+    "linux": [
+      "x86_64-unknown-linux-gnu"
+    ]
+  }
+}

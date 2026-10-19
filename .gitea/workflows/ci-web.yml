@@ -1,0 +1,76 @@
+name: CI -- Web E2E Tests
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  puppeteer-e2e:
+    runs-on: manymath-maintenance-linux-x64
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Require private primary forge
+      env:
+        PRIMARY_SERVER: ${{ github.server_url }}
+      run: 'test "$PRIMARY_SERVER" = ''https://git.manymath.com''
+
+        rustc --version
+
+        cargo --version
+
+        flutter --version
+
+        '
+    - name: Checkout ManyKee
+      uses: actions/checkout@v4
+      with:
+        path: ManyKee
+    - name: Verify provisioned desktop tools
+      run: 'command -v clang
+
+        command -v cmake
+
+        command -v ninja
+
+        command -v xvfb-run
+
+        pkg-config --exists gtk+-3.0'
+    - name: Verify provisioned wasm-pack
+      run: 'command -v wasm-pack
+
+        wasm-pack --version'
+    - name: Install Puppeteer dependencies
+      working-directory: ManyKee/packages/keepass_web/example/test/e2e
+      run: npm ci
+    - name: Build Chrome extension
+      working-directory: ManyKee
+      env:
+        MANYKEE_E2E_SEMANTICS: '1'
+      run: timeout --signal=TERM --kill-after=30s 20m bash scripts/build_extension.sh
+    - name: Run Puppeteer E2E tests
+      working-directory: ManyKee/packages/keepass_web/example/test/e2e
+      env:
+        CI: 'true'
+        HEADFUL: '1'
+      run: timeout --signal=TERM --kill-after=30s 30m xvfb-run --auto-servernum npm
+        run test:only
+'on':
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+    - dev
+  workflow_dispatch: {}
+env:
+  DASH__SUPPRESS_ANALYTICS: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  CI: 'true'
+  CARGO_HOME: ${{ runner.temp }}/manykee-cargo-${{ github.run_id }}-${{ github.job
+    }}
+  RUSTUP_TOOLCHAIN: 1.94.0
+  CARGO_BUILD_JOBS: '3'
