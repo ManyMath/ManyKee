@@ -52,6 +52,13 @@ jobs:
   push:
     branches:
     - main
+    - maintenance/**
+    paths:
+    - apps/native/**
+    - packages/**
+    - rust/**
+    - pubspec*
+    - .gitea/workflows/ci-native.yml
   pull_request:
     branches:
     - main

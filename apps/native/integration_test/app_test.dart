@@ -171,11 +171,23 @@ Future<_WritableFixture> _copyFixtureToTemp(String fixtureName) async {
   return _WritableFixture(path: targetPath, name: fixtureName);
 }
 
-Future<void> _saveVaultAndReload(
+Future<void> _saveVault(
   WidgetTester tester, {
   required String password,
 }) async {
   await _tapControl(tester, find.byTooltip('Save Vault'));
+  expect(
+    await pumpUntilFound(tester, find.text('Confirm master password')),
+    isTrue,
+    reason: 'Saving must request the master password again',
+  );
+  final dialog = find.byType(AlertDialog);
+  await tester.enterText(
+    find.descendant(of: dialog, matching: find.byType(TextFormField)),
+    password,
+  );
+  await _tapControl(
+      tester, find.descendant(of: dialog, matching: find.text('Confirm')));
 
   final saved = await pumpUntilFound(
     tester,
@@ -183,6 +195,13 @@ Future<void> _saveVaultAndReload(
     timeout: const Duration(seconds: 30),
   );
   expect(saved, isTrue, reason: 'Save action should complete successfully');
+}
+
+Future<void> _saveVaultAndReload(
+  WidgetTester tester, {
+  required String password,
+}) async {
+  await _saveVault(tester, password: password);
 
   await _tapControl(tester, find.byTooltip('Lock Vault'));
   await tester.pumpAndSettle();
@@ -963,7 +982,13 @@ void main() {
       final persistedFields = await vaultScreen.vaultState.readEntryFields(
         reopenedEntry.uuid,
       );
-      expect(persistedFields['Password'], 'UpdatedPass!23');
+      expect(persistedFields['Password'], '',
+          reason: 'Bulk field reads must keep protected passwords redacted');
+      final persistedPassword = await vaultScreen.vaultState.readEntryField(
+        reopenedEntry.uuid,
+        'Password',
+      );
+      expect(persistedPassword, 'UpdatedPass!23');
     });
 
     testWidgets('ITEST-03: deletes an entry after save', (tester) async {
@@ -988,13 +1013,7 @@ void main() {
 
       expect(find.text('CustomFieldsEntry'), findsNothing);
 
-      await _tapControl(tester, find.byTooltip('Save Vault'));
-      final saved = await pumpUntilFound(
-        tester,
-        find.text('Vault saved'),
-        timeout: const Duration(seconds: 30),
-      );
-      expect(saved, isTrue);
+      await _saveVault(tester, password: 'testpass123');
       expect(find.text('CustomFieldsEntry'), findsNothing);
     });
 
