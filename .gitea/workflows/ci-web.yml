@@ -61,6 +61,14 @@ jobs:
   push:
     branches:
     - main
+    - maintenance/**
+    paths:
+    - packages/**
+    - rust/**
+    - pubspec*
+    - apps/native/integration_test/fixtures/**
+    - scripts/build_extension.sh
+    - .gitea/workflows/ci-web.yml
   pull_request:
     branches:
     - main

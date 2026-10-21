@@ -391,6 +391,12 @@ async function saveAndReopenCurrentVault(
 ) {
   clearDownloadDirectory();
   await clickNamedNode(page, client, 'Save Vault', { roles: ['button'] });
+  await waitForAccessibility(
+    page,
+    ({ text }) => text.includes('Confirm master password'),
+  );
+  await typeIntoTextbox(page, client, 'Master password', password);
+  await clickNamedNode(page, client, 'Confirm', { roles: ['button'] });
   const saveState = await waitForAccessibility(
     page,
     ({ text }) =>
@@ -767,11 +773,11 @@ describe('ManyKee Standalone Web Vault', () => {
     const copyState = await waitForAccessibility(
       page,
       ({ text }) =>
-        text.includes('Copied to clipboard (10s clear or next resume)'),
+        text.includes('Copied. Clears in 10s or when you return to the app.'),
       { timeout: 10000 },
     );
     expect(copyState.text).toContain(
-      'Copied to clipboard (10s clear or next resume)',
+      'Copied. Clears in 10s or when you return to the app.',
     );
   });
 
