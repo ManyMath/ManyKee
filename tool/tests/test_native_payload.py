@@ -12,6 +12,16 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class PayloadTests(unittest.TestCase):
+    def test_debug_macos_preflights_only_selected_host_architecture(self):
+        config = {"rust_targets": {"macos": ["{host_arch}-apple-darwin"], "windows": ["{host_arch}-pc-windows-msvc"]}}
+        self.assertEqual(gate.required_rust_targets(config, "macos", "arm64"), ["aarch64-apple-darwin"])
+        self.assertEqual(gate.required_rust_targets(config, "macos", "x86_64"), ["x86_64-apple-darwin"])
+        self.assertEqual(gate.required_rust_targets(config, "windows", "AMD64"), ["x86_64-pc-windows-msvc"])
+        with self.assertRaises(RuntimeError):
+            gate.required_rust_targets(config, "macos", "unknown")
+        with self.assertRaises(RuntimeError):
+            gate.required_rust_targets(config, "ios", "arm64")
+
     def test_resolves_sdk_batch_entrypoint(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(gate.shutil, "which", return_value="C:/SDK/bin/dart.bat"), patch.object(gate.subprocess, "run", return_value=CompletedProcess([], 0, "ok")) as invoke:

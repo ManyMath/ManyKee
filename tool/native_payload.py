@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -134,6 +135,17 @@ void main(List<String> args) {
     run(["dart", "run", "check.dart"] + [str(output / "packages" / item["name"] / "pubspec.yaml") for item in packages], check, output / "candidate-constraints.log")
 
 
+def required_rust_targets(config, target, machine=None):
+    """Debug macOS builds select the host arch in the pinned Flutter SDK."""
+    configured = config["rust_targets"].get(target)
+    if not configured:
+        raise RuntimeError(f"No provisioned Rust target contract for {target}")
+    arch = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64", "amd64": "x86_64"}.get((machine or platform.machine()).lower())
+    if any("{host_arch}" in value for value in configured) and arch is None:
+        raise RuntimeError("Unsupported host architecture for native payload")
+    return [value.replace("{host_arch}", arch or "") for value in configured]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
@@ -156,7 +168,7 @@ def main():
         if not any(line.split()[0] == channel or line.split()[0].startswith(channel + "-") for line in installed.splitlines()):
             raise RuntimeError(f"Provision Rust toolchain {channel} before verification; no installer fallback")
         targets = run(["rustup", "target", "list", "--installed", "--toolchain", channel], repo, output / "rust-targets.log").splitlines()
-        required = config["rust_targets"].get(args.target)
+        required = required_rust_targets(config, args.target)
         if not required or not set(required).issubset(targets):
             raise RuntimeError(f"Provision Rust targets for {args.target} before verification; no installer fallback")
         run(["rustup", "run", channel, "rustc", "--version", "--verbose"], repo, output / "native-rust-version.log")

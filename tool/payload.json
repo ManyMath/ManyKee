@@ -46,6 +46,12 @@
   "rust_targets": {
     "linux": [
       "x86_64-unknown-linux-gnu"
+    ],
+    "macos": [
+      "{host_arch}-apple-darwin"
+    ],
+    "windows": [
+      "{host_arch}-pc-windows-msvc"
     ]
   }
 }
