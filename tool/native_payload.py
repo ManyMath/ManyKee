@@ -201,6 +201,10 @@ def main():
     flutter_spec = config["flutter_package"]
     consumer = output / "flutter-consumer"
     run(["flutter", "create", "--no-pub", "--platforms=" + ("android" if args.target in {"apk", "appbundle"} else args.target), "--project-name=payload_consumer", str(consumer)], output, output / "flutter-create.log")
+    # Consumer-local options override any ancestor user configuration. The gate
+    # verifies source builds, never downloaded binaries or a matching local cache.
+    (consumer / "cargokit_options.yaml").write_text(
+        "use_precompiled_binaries: false\nuse_local_precompiled_binaries: false\ncache_local_builds: false\n")
     manifest = consumer / "pubspec.yaml"
     text = manifest.read_text().replace("dependencies:\n", f"dependencies:\n  {flutter_spec}:\n    path: ../packages/{flutter_spec}\n", 1)
     if args.mode == "candidate":
