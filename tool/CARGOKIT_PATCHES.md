@@ -1,10 +1,4 @@
-# Vendored Cargokit local patch
+# Local Cargokit patches
 
-`cargokit/build_pod.sh`: remove the unconditional `env` dump so native Apple
-builds cannot print caller credentials into CI logs. Keep this patch when
-synchronizing the pinned vendored Cargokit source. No build invocation, target
-selection or public API changes.
-
-The payload gate preflights only the host architecture for Flutter debug macOS
-consumers, matching the pinned SDK's build_macos.dart behavior. Release or
-universal builds need a separate explicit target contract and evidence.
+See [the pinned export recipe](cargokit/README.md) and its manifest for the complete
+upstream revision, omitted paths, ordered local patches, and file hashes.

@@ -24,10 +24,12 @@
         "rust/sources/keepassxc-ffi/LICENSE",
         "rust/sources/keepass-rs/tests/resources/test_db_kdbx4_with_password_argon2id.kdbx",
         "rust/Cargo.lock",
-        "rust/NATIVE_DEPENDENCIES.json"
+        "rust/NATIVE_DEPENDENCIES.json",
+        "cargokit/VENDOR_PROVENANCE.json"
       ],
       "provenance": [
-        "rust/SOURCE_PROVENANCE.json"
+        "rust/SOURCE_PROVENANCE.json",
+        "cargokit/VENDOR_PROVENANCE.json"
       ]
     }
   ],
