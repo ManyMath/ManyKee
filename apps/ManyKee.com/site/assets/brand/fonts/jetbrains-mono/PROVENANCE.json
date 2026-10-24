@@ -1,0 +1,31 @@
+{
+  "family": "jetbrains-mono",
+  "historical_fetch": {
+    "italic": "https://cdn.jsdelivr.net/fontsource/fonts/jetbrains-mono:vf@latest/latin-wght-italic.woff2",
+    "limitation": "Historical Fontsource @latest revision and TTF conversion invocation were not recorded. Existing bytes are preserved, identified by hashes and embedded metadata; no byte-identical upstream archive or original transformation claim is made.",
+    "normal": "https://cdn.jsdelivr.net/fontsource/fonts/jetbrains-mono:vf@latest/latin-wght-normal.woff2",
+    "recorded_by": "tool/fetch_fonts.sh at brand258cc30"
+  },
+  "license": {
+    "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
+    "spdx": "OFL-1.1",
+    "url": "https://raw.githubusercontent.com/google/fonts/6e4b84c976cadb3c49a40fd9a1c203e4f7fcf2da/ofl/jetbrainsmono/OFL.txt"
+  },
+  "matching_upstream_version_evidence": {
+    "font_sha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda",
+    "font_url": "https://raw.githubusercontent.com/google/fonts/6e4b84c976cadb3c49a40fd9a1c203e4f7fcf2da/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+    "repository": "https://github.com/google/fonts",
+    "revision": "6e4b84c976cadb3c49a40fd9a1c203e4f7fcf2da"
+  },
+  "metadata_verified_from_every_bundled_ttf_and_woff2": {
+    "copyright": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)",
+    "version": "Version 2.211"
+  },
+  "schema": 1,
+  "source_font_files_sha256": {
+    "jetbrains-mono-var-italic.ttf": "8044b6550147da534e1f2a62a614e55d1a33a28a3c81a0473f7f45205d12f29c",
+    "jetbrains-mono-var-italic.woff2": "a8afa085e9ca5e53434e2ee918ba6b65c7dd4dda56509976b36591478c99d62e",
+    "jetbrains-mono-var.ttf": "c2f86063c380b57590f490634f9f24cfc219a936d9f9d6a46c146fbe190bff1d",
+    "jetbrains-mono-var.woff2": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e"
+  }
+}

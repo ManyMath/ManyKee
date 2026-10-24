@@ -1,0 +1,31 @@
+{
+  "family": "inter",
+  "historical_fetch": {
+    "italic": "https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@latest/latin-wght-italic.woff2",
+    "limitation": "Historical Fontsource @latest revision and TTF conversion invocation were not recorded. Existing bytes are preserved, identified by hashes and embedded metadata; no byte-identical upstream archive or original transformation claim is made.",
+    "normal": "https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@latest/latin-wght-normal.woff2",
+    "recorded_by": "tool/fetch_fonts.sh at brand258cc30"
+  },
+  "license": {
+    "sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+    "spdx": "OFL-1.1",
+    "url": "https://raw.githubusercontent.com/rsms/inter/66647c0bbbe41a850d79d9c76fb13add3378940f/LICENSE.txt"
+  },
+  "matching_upstream_version_evidence": {
+    "font_sha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+    "font_url": "https://raw.githubusercontent.com/google/fonts/0b58fb370093f9a9f4ff785d94405710b79de67c/ofl/inter/Inter%5Bopsz,wght%5D.ttf",
+    "repository": "https://github.com/google/fonts",
+    "revision": "0b58fb370093f9a9f4ff785d94405710b79de67c"
+  },
+  "metadata_verified_from_every_bundled_ttf_and_woff2": {
+    "copyright": "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)",
+    "version": "Version 4.001;git-66647c0bb"
+  },
+  "schema": 1,
+  "source_font_files_sha256": {
+    "inter-var-italic.ttf": "a022ee0016beeb4527d6710545fadfc9222c03c70acdbf7dbfd22f1d7e0dc0b9",
+    "inter-var-italic.woff2": "7291b5970da2237441273c03b424a504b70b18f09791473fab99687dcc314720",
+    "inter-var.ttf": "6d333db13e048bdd1321f7320fe01960012e10e2320979fe9e0b29e61f195a24",
+    "inter-var.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+  }
+}

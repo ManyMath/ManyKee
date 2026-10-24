@@ -36,6 +36,10 @@ required_files=(
   index.html
   404.html
   assets/site.css
+  assets/brand/fonts/inter/OFL.txt
+  assets/brand/fonts/inter/PROVENANCE.json
+  assets/brand/fonts/jetbrains-mono/OFL.txt
+  assets/brand/fonts/jetbrains-mono/PROVENANCE.json
   assets/brand/marks/manykee.svg
   assets/brand/og.png
   assets/hero.png
@@ -52,6 +56,27 @@ for relative_path in "${required_files[@]}"; do
     exit 1
   }
 done
+
+# Verify the distributed license and existing font bytes against provenance.
+python3 - "$dist_dir/assets/brand/fonts" <<'PYFONT'
+from pathlib import Path
+import hashlib
+import json
+import sys
+root = Path(sys.argv[1])
+for family in ('inter', 'jetbrains-mono'):
+    directory = root / family
+    provenance = json.loads((directory / 'PROVENANCE.json').read_text())
+    if hashlib.sha256((directory / 'OFL.txt').read_bytes()).hexdigest() != provenance['license']['sha256']:
+        raise SystemExit(f'{family} license drift')
+    fonts = {name: digest for name, digest in provenance['source_font_files_sha256'].items() if name.endswith('.woff2')}
+    if len(fonts) != 2:
+        raise SystemExit(f'{family} must declare both installed WOFF2 fonts')
+    for name, digest in fonts.items():
+        if hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
+            raise SystemExit(f'{family}/{name} font drift')
+print('Verified font license digests and all four installed WOFF2 files')
+PYFONT
 
 grep -Fq '<meta name="robots" content="noindex">' "$dist_dir/404.html" || {
   echo "distribution 404 page must be excluded from indexing" >&2
