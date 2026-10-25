@@ -2,6 +2,8 @@
 
 - Verify source-closed native publication payloads and fresh consumers.
 - Bundle the complete Rust dependency source closure in Flutter candidates.
+- Build the macOS challenge-response backend with vendored libusb and required
+  Apple frameworks; include dependency notices and redistribution provenance.
 
 ## 0.1.0
 

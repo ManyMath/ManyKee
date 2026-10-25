@@ -26,7 +26,7 @@ serialization = ["serde_json", "chrono/serde"]
 totp = ["totp-lite", "url", "base32"]
 save_kdbx4 = []
 save_kdbx3 = []
-challenge_response = ["sha1", "dep:challenge_response"]
+challenge_response = ["sha1", "dep:challenge_response", "dep:rusb"]
 _merge = []
 
 default = []
@@ -61,8 +61,6 @@ chacha20 = { version = "0.9", features = ["zeroize"] }
 cipher = { version = "0.4.4", features = ["std", "block-padding"] }
 twofish = "0.7"
 cbc = "0.1"
-
-challenge_response = { version = ">=0.5, <0.5.40", optional = true, default-features = false, features = ["nusb"] }
 
 uuid = { version = "1.8", features = ["v4", "serde"] }
 hex = { version = "0.4" }
@@ -146,3 +144,13 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 [[example]]
 name = "save_database"
 required-features = ["save_kdbx4"]
+
+# challenge_response 0.5.x's nusb backend calls busnum(), which nusb only
+# exposes on Linux. Keep macOS on the crate's supported libusb backend.
+[target.'cfg(target_os = "macos")'.dependencies]
+challenge_response = { version = ">=0.5, <0.5.40", optional = true, default-features = false, features = ["rusb"] }
+# Include libusb in the Rust static library consumed by CocoaPods.
+rusb = { version = "0.9", optional = true, features = ["vendored"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+challenge_response = { version = ">=0.5, <0.5.40", optional = true, default-features = false, features = ["nusb"] }

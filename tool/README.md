@@ -72,3 +72,11 @@ use provisioned tools and isolated Cargo caches, with no toolchain installers
 or global cache cleanup. Native UI, product web and browser E2E tiers retain
 main/manual triggers; their Xvfb, wasm-pack, browser and WASM target requirements
 remain explicit. A configured workflow is not a passing validation result.
+
+The macOS challenge-response backend selects vendored `rusb`/libusb because the
+existing `nusb` adapter does not compile there. Other targets retain `nusb`.
+The staged native source includes exact wrapper MIT notices, libusb LGPL text
+and authors, and locked source archive checksums under
+`rust/sources/keepass-rs/third_party/usb/`; the payload gate verifies those hashes.
+See the canonical `rust/keepass-rs/third_party/usb/README.md` for static binary
+redistribution limits. Passing build/runtime checks is not release clearance.

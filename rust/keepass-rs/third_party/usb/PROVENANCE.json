@@ -1,0 +1,33 @@
+{
+  "crates": [
+    {
+      "name": "rusb",
+      "registry_checksum_sha256": "ab9f9ff05b63a786553a4c02943b74b34a988448671001e9a27e2f0565cc05a4",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_archive": "https://static.crates.io/crates/rusb/rusb-0.9.4.crate",
+      "version": "0.9.4"
+    },
+    {
+      "name": "libusb1-sys",
+      "registry_checksum_sha256": "da050ade7ac4ff1ba5379af847a10a10a8e284181e060105bf8d86960ce9ce0f",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_archive": "https://static.crates.io/crates/libusb1-sys/libusb1-sys-0.7.0.crate",
+      "version": "0.7.0"
+    }
+  ],
+  "embedded_libusb": {
+    "license": "LGPL-2.1-or-later",
+    "release_limitation": "Notices alone do not satisfy redistribution of statically linked binaries; retain corresponding sources and relinkable application/object material for the selected LGPL distribution path.",
+    "source_archive": "https://static.crates.io/crates/libusb1-sys/libusb1-sys-0.7.0.crate",
+    "source_location": "libusb1-sys-0.7.0/libusb",
+    "version": "1.0.27"
+  },
+  "files_sha256": {
+    "libusb-AUTHORS": "1c0aa75d6b849856bc6124d6e0775d17ed6a0629a98b550a3ab29a9afc5d6362",
+    "libusb-COPYING": "5df07007198989c622f5d41de8d703e7bef3d0e79d62e24332ee739a452af62a",
+    "libusb1-sys-LICENSE": "d6b63b280f7998e4a5e9e21c7b0d2dbe79426e1b28a75e39e41bb8feae0f8b03",
+    "rusb-LICENSE": "d6b63b280f7998e4a5e9e21c7b0d2dbe79426e1b28a75e39e41bb8feae0f8b03"
+  },
+  "schema": 1,
+  "scope": "macOS vendored USB backend; other targets retain nusb"
+}

@@ -25,11 +25,17 @@
         "rust/sources/keepass-rs/tests/resources/test_db_kdbx4_with_password_argon2id.kdbx",
         "rust/Cargo.lock",
         "rust/NATIVE_DEPENDENCIES.json",
-        "cargokit/VENDOR_PROVENANCE.json"
+        "cargokit/VENDOR_PROVENANCE.json",
+        "rust/sources/keepass-rs/third_party/usb/rusb-LICENSE",
+        "rust/sources/keepass-rs/third_party/usb/libusb1-sys-LICENSE",
+        "rust/sources/keepass-rs/third_party/usb/libusb-COPYING",
+        "rust/sources/keepass-rs/third_party/usb/PROVENANCE.json",
+        "rust/sources/keepass-rs/third_party/usb/libusb-AUTHORS"
       ],
       "provenance": [
         "rust/SOURCE_PROVENANCE.json",
-        "cargokit/VENDOR_PROVENANCE.json"
+        "cargokit/VENDOR_PROVENANCE.json",
+        "rust/sources/keepass-rs/third_party/usb/PROVENANCE.json"
       ]
     }
   ],

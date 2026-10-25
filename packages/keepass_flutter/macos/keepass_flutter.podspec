@@ -8,6 +8,8 @@ Pod::Spec.new do |s|
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.dependency 'FlutterMacOS'
+  # Native dependencies of the vendored macOS libusb backend.
+  s.frameworks = 'CoreFoundation', 'IOKit', 'Security'
 
   # Build the keepass_flutter_native Rust crate (static lib) via cargokit
   # and force-link it into the plugin framework. Mirrors the proven pattern

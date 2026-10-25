@@ -743,6 +743,7 @@ dependencies = [
  "js-sys",
  "quick-xml",
  "rpassword",
+ "rusb",
  "rust-argon2 3.0.0",
  "salsa20",
  "secrecy",
