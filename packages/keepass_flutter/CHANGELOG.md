@@ -1,5 +1,6 @@
 ## 0.1.1
 
+- Configure Android native crate builds for Gradle 9 and select the vendored libusb backend for Android compilation; USB token operations return an explicit unsupported error until the permission/file-descriptor bridge exists.
 - Verify source-closed native publication payloads and fresh consumers.
 - Bundle the complete Rust dependency source closure in Flutter candidates.
 - Build the macOS challenge-response backend with vendored libusb and required

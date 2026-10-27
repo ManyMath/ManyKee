@@ -24,10 +24,17 @@ apply plugin: 'com.android.library'
 apply from: '../cargokit/gradle/plugin.gradle'
 
 android {
-    compileSdkVersion 33
+    // AndroidX dependencies used by current Flutter require API 34.
+    compileSdkVersion 34
     namespace 'com.manykee.keepass_flutter'
 
     defaultConfig {
         minSdkVersion 21
     }
+}
+
+// The staged package carries this complete native crate and its source closure.
+cargokit {
+    manifestDir = "../rust"
+    libname = "keepass_flutter_native"
 }

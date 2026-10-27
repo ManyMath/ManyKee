@@ -27,6 +27,18 @@ pub struct Yubikey {
     pub name: Option<String>,
 }
 
+// Android needs a permission-granted Java USB descriptor bridge before raw
+// USB token access is usable. Core database and local HMAC APIs remain usable.
+fn require_usb_token_support() -> Result<(), ChallengeResponseKeyError> {
+    if cfg!(target_os = "android") {
+        return Err(challenge_response::error::ChallengeResponseError::IOError(
+            std::io::Error::new(std::io::ErrorKind::Unsupported,
+                "USB challenge-response is unavailable on Android: the USB permission/file-descriptor bridge is not implemented."),
+        ).into());
+    }
+    Ok(())
+}
+
 impl ChallengeResponseKey {
     pub(crate) fn perform_challenge(&self, challenge: &[u8]) -> Result<KeyElement, ChallengeResponseKeyError> {
         match self {
@@ -36,6 +48,7 @@ impl ChallengeResponseKey {
                 Ok(response)
             }
             ChallengeResponseKey::YubikeyChallenge(yubikey, slot_number) => {
+                require_usb_token_support()?;
                 let slot = Slot::from_str(slot_number)
                     .ok_or(ChallengeResponseKeyError::InvalidSlot(slot_number.to_string()))?;
                 let serial_number = yubikey.serial_number;
@@ -71,6 +84,7 @@ impl ChallengeResponseKey {
     }
 
     pub fn get_available_yubikeys() -> Result<Vec<Yubikey>, ChallengeResponseKeyError> {
+        require_usb_token_support()?;
         let mut challenge_response_client = ChallengeResponse::new()?;
 
         let devices = challenge_response_client
@@ -137,4 +151,37 @@ pub enum ChallengeResponseKeyError {
 
     #[error("Timed out waiting for the YubiKey (did you forget to touch it?)")]
     Timeout,
+}
+
+#[cfg(test)]
+mod platform_tests {
+    use super::*;
+
+    #[test]
+    fn local_challenge_requires_no_usb_access() {
+        // RFC 2202 HMAC-SHA1 test case 1 remains available on every target.
+        let key = ChallengeResponseKey::LocalChallenge("0b".repeat(20));
+        let response = key.perform_challenge(b"Hi There").unwrap();
+        assert_eq!(hex::encode(response), "b617318655057264e28bc0b6fb378c8ef146be00");
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_usb_enumeration_and_direct_challenges_fail_explicitly() {
+        assert!(matches!(
+            ChallengeResponseKey::get_available_yubikeys(),
+            Err(ChallengeResponseKeyError::Api(challenge_response::error::ChallengeResponseError::IOError(error))) if error.kind() == std::io::ErrorKind::Unsupported
+        ));
+        let key = ChallengeResponseKey::YubikeyChallenge(
+            Yubikey {
+                serial_number: 1,
+                name: None,
+            },
+            "2".into(),
+        );
+        assert!(matches!(
+            key.perform_challenge(b"challenge"),
+            Err(ChallengeResponseKeyError::Api(challenge_response::error::ChallengeResponseError::IOError(error))) if error.kind() == std::io::ErrorKind::Unsupported
+        ));
+    }
 }

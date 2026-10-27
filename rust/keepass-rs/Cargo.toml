@@ -146,11 +146,12 @@ name = "save_database"
 required-features = ["save_kdbx4"]
 
 # challenge_response 0.5.x's nusb backend calls busnum(), which nusb only
-# exposes on Linux. Keep macOS on the crate's supported libusb backend.
-[target.'cfg(target_os = "macos")'.dependencies]
+# exposes on Linux; its list_devices() API is unavailable on Android.
+# Use the supported libusb backend for these build targets.
+[target.'cfg(any(target_os = "macos", target_os = "android"))'.dependencies]
 challenge_response = { version = ">=0.5, <0.5.40", optional = true, default-features = false, features = ["rusb"] }
-# Include libusb in the Rust static library consumed by CocoaPods.
+# Include the pinned libusb source in Apple/Android native builds.
 rusb = { version = "0.9", optional = true, features = ["vendored"] }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+[target.'cfg(not(any(target_os = "macos", target_os = "android")))'.dependencies]
 challenge_response = { version = ">=0.5, <0.5.40", optional = true, default-features = false, features = ["nusb"] }

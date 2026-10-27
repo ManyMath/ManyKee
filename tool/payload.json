@@ -36,7 +36,10 @@
         "rust/SOURCE_PROVENANCE.json",
         "cargokit/VENDOR_PROVENANCE.json",
         "rust/sources/keepass-rs/third_party/usb/PROVENANCE.json"
-      ]
+      ],
+      "contracts": {
+        "android/build.gradle": "cargokit {\n    manifestDir = \"../rust\"\n    libname = \"keepass_flutter_native\"\n}"
+      }
     }
   ],
   "flutter_package": "keepass_flutter",

@@ -41,3 +41,6 @@ upstream update makes it fail to apply.
 This initial rollout preserves existing build-tool source bytes. Declared local patches:
 
 - Suppress the complete caller environment during Apple builds.
+
+The Android follow-up adds the declared Gradle 9 ExecOperations patch alongside
+the wrapper manifest/library configuration required for an actual APK build.
