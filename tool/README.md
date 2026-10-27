@@ -51,7 +51,12 @@ constraints, then builds a fresh Flutter Linux consumer outside the repository.
 A separate Dart consumer verifies Linux `/proc/self/maps` contains only its
 expected native library copy, then decrypts the upstream
 Argon2id test database, saves with a new password and reopens it. The public
-fixture password is `demopass`; no real vaults are used.
+fixture password is `demopass`; no real vaults are used. On Windows,
+`GetModuleFileNameW` must name the copied `keepass_flutter_native.dll`, and the
+smoke also adds a generated `example.invalid` entry, saves it under a random
+password, verifies its fields after reopening and rejects a wrong password.
+It uses only API present since keepass 0.1.0, so hosted mode runs it too.
+`--to-archive` still reads the hosted version listing during validation.
 
 `candidate` uses coordinated extracted packages after checking original ranges
 with pub_semver. `hosted` uses already hosted keepass ^0.1.0 without overrides.
@@ -80,3 +85,5 @@ and authors, and locked source archive checksums under
 `rust/sources/keepass-rs/third_party/usb/`; the payload gate verifies those hashes.
 See the canonical `rust/keepass-rs/third_party/usb/README.md` for static binary
 redistribution limits. Passing build/runtime checks is not release clearance.
+
+On iOS, the upstream USB dependency has no supported backend and is excluded from the build. USB token enumeration and challenge operations return the target-specific Rust `UnsupportedUsb` error; local HMAC and core database APIs remain available. This does not add an iOS USB bridge or change C ABI symbols. The iOS-only error variant replaces the unavailable dependency error type only on that previously unbuildable target.

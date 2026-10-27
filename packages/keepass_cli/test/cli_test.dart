@@ -562,7 +562,10 @@ void main() {
     final missingPath = p.join(tempVault.parent.path, 'missing.kdbx');
     final result = await runCli(['info', missingPath, '--password', password]);
     expect(result.exitCode, isNot(0));
-    expect(result.stderr, contains('No such file or directory'));
+    // The OS wording differs ("No such file or directory" vs "The system
+    // cannot find the file specified"); Rust appends the same error code.
+    expect(result.stderr, contains('Failed to open file'));
+    expect(result.stderr, contains('(os error 2)'));
   });
 }
 

@@ -65,11 +65,72 @@ class PayloadTests(unittest.TestCase):
                 gate.verify_candidate_constraints(root, [{"name": "payload_core"}, {"name": "payload_shim"}])
             self.assertIn("does not satisfy declared constraint", (root / "candidate-constraints.log").read_text())
 
+    def test_windows_children_use_real_toolchain_binaries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(gate, "os", __import__("types").SimpleNamespace(name="nt", environ=gate.os.environ)), patch.object(gate.shutil, "which", return_value="C:/SDK/bin/dart.bat"), patch.object(gate.subprocess, "run", return_value=CompletedProcess([], 0, "ok")) as invoke:
+                gate.run(["dart", "--version"], tmp, Path(tmp) / "version.log", {"PATH": "C:/SDK/bin"})
+            self.assertEqual(invoke.call_args.kwargs["env"]["RUSTUP_WINDOWS_PATH_ADD_BIN"], "1")
+
+    def test_library_path_guard_finds_non_executable_dll(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dll = Path(tmp) / 'demo.dll'
+            dll.write_bytes(b'fixture')
+            dll.chmod(0o644)
+            self.assertEqual(Path(gate.library_on_path('demo.dll', tmp)), dll)
+
+    def test_explicit_empty_child_environment_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(gate.shutil, 'which', return_value='/fixture/dart'), patch.object(gate.subprocess, 'run', return_value=CompletedProcess([], 0, 'ok')) as invoke:
+                gate.run(['dart', '--version'], tmp, Path(tmp) / 'version.log', {})
+            expected = {'RUSTUP_WINDOWS_PATH_ADD_BIN': '1'} if gate.os.name == 'nt' else {}
+            self.assertEqual(invoke.call_args.kwargs['env'], expected)
+
+    def test_prepare_uses_the_gate_interpreter(self):
+        import sys
+        self.assertEqual(gate.prepare_command(["python3", "tool/stage_native.py"]), [sys.executable, "tool/stage_native.py"])
+        self.assertEqual(gate.prepare_command(["tool/prepare.sh"]), ["tool/prepare.sh"])
+
+    def test_real_toolchain_binaries_lead_child_path(self):
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            cargo = str(Path(tmp) / "toolchains" / "stable" / "bin" / "cargo.exe")
+            with patch.dict(os.environ, {"PATH": "C:/proxies"}, clear=False), patch.object(gate, "run", return_value=cargo + "\n") as which:
+                os.environ.pop("RUSTUP_WINDOWS_PATH_ADD_BIN", None)
+                gate.prefer_real_toolchain("stable", tmp, Path(tmp) / "which.log")
+                self.assertEqual(os.environ["PATH"].split(os.pathsep)[0], str(Path(cargo).parent))
+                self.assertEqual(os.environ["RUSTUP_WINDOWS_PATH_ADD_BIN"], "1")
+            self.assertEqual(which.call_args.args[0], ["rustup", "which", "cargo", "--toolchain", "stable"])
+
+    def test_runtime_library_keeps_legacy_linux_config(self):
+        self.assertEqual(gate.runtime_library({"library_name": "libdemo.so"}, "linux"),
+                         {"name": "libdemo.so", "bundle_dir": "bundle/lib"})
+        self.assertIsNone(gate.runtime_library({"library_name": "libdemo.so"}, "windows"))
+
+    def test_windows_runtime_library_has_its_own_smoke(self):
+        import json
+        config = json.loads((Path(__file__).parents[1] / "payload.json").read_text())
+        windows = gate.runtime_library(config, "windows")
+        self.assertEqual((windows["name"], windows["bundle_dir"]), ("keepass_flutter_native.dll", "runner/Debug"))
+        self.assertNotIn("/proc/self/maps", windows["dart_main"])
+        self.assertIn("GetModuleFileNameW", windows["dart_main"])
+        # Only the published test fixture and a generated database; no real vault.
+        self.assertIn("'fixture.kdbx', password: 'demopass'", windows["dart_main"])
+        # Hosted mode resolves keepass 0.1.0, which has no Database.create().
+        self.assertNotIn("Database.create()", windows["dart_main"])
+        self.assertIn("createEntry()", windows["dart_main"])
+        self.assertIn("example.invalid", windows["dart_main"])
+
     def test_pubignore_can_include_gitignored_generated_source(self):
+        import json
         import subprocess
         import tarfile
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            # --to-archive is hidden: only exercise it on the SDK the gate pins.
+            pin = json.loads((Path(__file__).parents[1] / "payload.json").read_text())["dart_sdk"]
+            version = gate.run(["dart", "--version"], tmp, root / "version.log")
+            if f"Dart SDK version: {pin} " not in version:
+                self.skipTest(f"requires pinned Dart {pin}: {version.strip()}")
             repo = root / "repo"
             repo.mkdir()
             subprocess.run(["git", "init", "-q", str(repo)], check=True)

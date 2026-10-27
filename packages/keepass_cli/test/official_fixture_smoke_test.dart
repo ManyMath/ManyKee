@@ -188,7 +188,7 @@ Future<void> _runSmoke({
   final required = Platform.environment[_requireEnvVar] == '1';
 
   if (!nativeLibrary.available) {
-    const reason = 'skipped: libkeepassxc_ffi.so not built: run '
+    final reason = 'skipped: $_nativeLibraryFileName not built: run '
         '`cargo build --manifest-path rust/Cargo.toml -p keepassxc-ffi`';
     if (required) {
       fail('$_requireEnvVar=1 but $reason');
@@ -255,14 +255,19 @@ String? _findOfficialFixture(String name) {
   return null;
 }
 
-const String _nativeLibraryFileName = 'libkeepassxc_ffi.so';
+/// The library `cargo build -p keepassxc-ffi` produces on this host.
+final String _nativeLibraryFileName = Platform.isWindows
+    ? 'keepassxc_ffi.dll'
+    : Platform.isMacOS
+        ? 'libkeepassxc_ffi.dylib'
+        : 'libkeepassxc_ffi.so';
 
 /// Where `cargo build -p keepassxc-ffi` drops its output, relative to this
 /// package directory (`dart test`'s CWD, inherited by the CLI subprocess)
 /// and to the monorepo root. `native_library.dart` probes these same
 /// locations itself, so when one of them exists the library needs no
 /// staging at all.
-const List<String> _cargoOutputCandidates = <String>[
+final List<String> _cargoOutputCandidates = <String>[
   '../../rust/target/debug/$_nativeLibraryFileName',
   '../../rust/target/release/$_nativeLibraryFileName',
   'rust/target/debug/$_nativeLibraryFileName',
@@ -271,7 +276,7 @@ const List<String> _cargoOutputCandidates = <String>[
 
 /// Last-resort sources: a copy another package's test run staged into its
 /// own directory. Only consulted when no cargo output exists.
-const List<String> _siblingStagedCandidates = <String>[
+final List<String> _siblingStagedCandidates = <String>[
   '../keepass/$_nativeLibraryFileName',
   '../../packages/keepass/$_nativeLibraryFileName',
 ];

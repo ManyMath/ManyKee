@@ -42,14 +42,17 @@ class StagingTests(unittest.TestCase):
             tool = Path(__file__).parents[2] / 'packages/keepass_flutter/cargokit/build_tool'
             runner = root / 'build_tool'
             shutil.copytree(tool, runner, ignore=shutil.ignore_patterns('.dart_tool', 'build'))
-            subprocess.run(['dart', 'pub', 'get'], cwd=runner, check=True, capture_output=True)
+            # CreateProcess does not apply PATHEXT; Flutter's SDK ships dart.bat.
+            dart = shutil.which('dart')
+            self.assertIsNotNone(dart, 'dart must be on PATH')
+            subprocess.run([dart, 'pub', 'get'], cwd=runner, check=True, capture_output=True)
             (runner / 'hash_probe.dart').write_text("import 'lib/src/crate_hash.dart';\nvoid main(List<String> args) { print(CrateHash.compute(args.single)); }\n")
             for index in range(2):
                 source = root / str(index)
                 self.make_source(source)
                 (source / 'rust/keepassxc/source.rs').write_text(f'// changed native implementation {index}\n')
                 staging.stage(source, 'a' * 40)
-                hashes.append(subprocess.check_output(['dart', 'run', 'hash_probe.dart', str(source / 'packages/keepass_flutter/rust')], cwd=runner, text=True).strip())
+                hashes.append(subprocess.check_output([dart, 'run', 'hash_probe.dart', str(source / 'packages/keepass_flutter/rust')], cwd=runner, text=True).strip())
             self.assertNotEqual(*hashes)
 
     def test_staging_refuses_a_developer_checkout(self):

@@ -1,6 +1,9 @@
+#[cfg(not(target_os = "ios"))]
 use std::sync::mpsc;
+#[cfg(not(target_os = "ios"))]
 use std::time::Duration;
 
+#[cfg(not(target_os = "ios"))]
 use challenge_response::{
     config::{Config, Mode, Slot},
     ChallengeResponse,
@@ -13,6 +16,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 use crate::key::KeyElement;
 
 /// KeePassXC's own default wait for a YubiKey touch response.
+#[cfg(not(target_os = "ios"))]
 const CHALLENGE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
@@ -29,6 +33,7 @@ pub struct Yubikey {
 
 // Android needs a permission-granted Java USB descriptor bridge before raw
 // USB token access is usable. Core database and local HMAC APIs remain usable.
+#[cfg(not(target_os = "ios"))]
 fn require_usb_token_support() -> Result<(), ChallengeResponseKeyError> {
     if cfg!(target_os = "android") {
         return Err(challenge_response::error::ChallengeResponseError::IOError(
@@ -47,6 +52,11 @@ impl ChallengeResponseKey {
                 let response = crate::crypt::calculate_hmac_sha1(&[challenge], &secret_bytes)?.to_vec();
                 Ok(response)
             }
+            #[cfg(target_os = "ios")]
+            ChallengeResponseKey::YubikeyChallenge(_, _) => {
+                Err(ChallengeResponseKeyError::UnsupportedUsb)
+            }
+            #[cfg(not(target_os = "ios"))]
             ChallengeResponseKey::YubikeyChallenge(yubikey, slot_number) => {
                 require_usb_token_support()?;
                 let slot = Slot::from_str(slot_number)
@@ -83,6 +93,12 @@ impl ChallengeResponseKey {
         }
     }
 
+    #[cfg(target_os = "ios")]
+    pub fn get_available_yubikeys() -> Result<Vec<Yubikey>, ChallengeResponseKeyError> {
+        Err(ChallengeResponseKeyError::UnsupportedUsb)
+    }
+
+    #[cfg(not(target_os = "ios"))]
     pub fn get_available_yubikeys() -> Result<Vec<Yubikey>, ChallengeResponseKeyError> {
         require_usb_token_support()?;
         let mut challenge_response_client = ChallengeResponse::new()?;
@@ -137,8 +153,13 @@ pub enum ChallengeResponseKeyError {
     #[error("Invalid key slot: {0}")]
     InvalidSlot(String),
 
+    #[cfg(not(target_os = "ios"))]
     #[error(transparent)]
     Api(#[from] challenge_response::error::ChallengeResponseError),
+
+    #[cfg(target_os = "ios")]
+    #[error("USB challenge-response is unavailable on iOS: no supported USB token backend is implemented.")]
+    UnsupportedUsb,
 
     #[error("Error decoding local challenge secret: {0}")]
     Hex(#[from] FromHexError),
@@ -163,6 +184,30 @@ mod platform_tests {
         let key = ChallengeResponseKey::LocalChallenge("0b".repeat(20));
         let response = key.perform_challenge(b"Hi There").unwrap();
         assert_eq!(hex::encode(response), "b617318655057264e28bc0b6fb378c8ef146be00");
+    }
+
+    #[cfg(target_os = "ios")]
+    #[test]
+    fn ios_usb_enumeration_and_direct_challenges_fail_explicitly() {
+        assert!(matches!(
+            ChallengeResponseKey::get_available_yubikeys(),
+            Err(ChallengeResponseKeyError::UnsupportedUsb)
+        ));
+        assert!(matches!(
+            ChallengeResponseKey::get_yubikey(None),
+            Err(ChallengeResponseKeyError::UnsupportedUsb)
+        ));
+        let key = ChallengeResponseKey::YubikeyChallenge(
+            Yubikey {
+                serial_number: 1,
+                name: None,
+            },
+            "2".into(),
+        );
+        assert!(matches!(
+            key.perform_challenge(b"challenge"),
+            Err(ChallengeResponseKeyError::UnsupportedUsb)
+        ));
     }
 
     #[cfg(target_os = "android")]

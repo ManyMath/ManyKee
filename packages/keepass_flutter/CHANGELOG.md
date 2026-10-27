@@ -1,5 +1,7 @@
 ## 0.1.1
 
+- Exclude unsupported iOS USB backend; token operations fail explicitly while local HMAC and database APIs remain available.
+
 - Configure Android native crate builds for Gradle 9 and select the vendored libusb backend for Android compilation; USB token operations return an explicit unsupported error until the permission/file-descriptor bridge exists.
 - Verify source-closed native publication payloads and fresh consumers.
 - Bundle the complete Rust dependency source closure in Flutter candidates.

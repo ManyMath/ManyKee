@@ -1,0 +1,4 @@
+# Compatibility evidence is hashed and the matrix is compared byte-for-byte;
+# keep committed bytes on checkouts that convert line endings (Windows autocrlf).
+fixtures/compat/** -text
+docs/compatibility-matrix.md text eol=lf

@@ -13,15 +13,22 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import tomllib
 
 
 def run(args, cwd, log, env=None):
+    env = dict(os.environ if env is None else env)
+    if os.name == "nt":
+        # rustup proxies may be user-created symlinks, which processes that
+        # enforce redirection trust refuse to start (os error 448). Cargokit's
+        # `rustup run` then puts the toolchain's real rustc first on PATH.
+        env.setdefault("RUSTUP_WINDOWS_PATH_ADD_BIN", "1")
     # CreateProcess does not apply PATHEXT like a Windows shell. Resolve the
     # SDK's dart.bat/flutter.bat without relying on shell executable search.
-    executable = shutil.which(args[0], path=(env or os.environ).get("PATH"))
+    executable = shutil.which(args[0], path=env.get("PATH"))
     if executable is None:
         raise RuntimeError(f"Required executable not found: {args[0]}")
     result = subprocess.run([executable, *args[1:]], cwd=cwd, env=env,
@@ -146,6 +153,46 @@ def required_rust_targets(config, target, machine=None):
     return [value.replace("{host_arch}", arch or "") for value in configured]
 
 
+def prepare_command(command):
+    """Run Python prepare scripts with this gate's own interpreter.
+
+    Standard Windows Python installs provide `python`/`py`, not `python3`; there
+    `python3` is usually the Microsoft Store stub, which exits 9009.
+    """
+    if command and command[0] in ("python3", "python"):
+        return [sys.executable, *command[1:]]
+    return list(command)
+
+
+def prefer_real_toolchain(channel, cwd, log):
+    """Put the pinned toolchain's real binaries first for this gate's children.
+
+    Windows rustup proxies may be user-created symlinks, which processes that
+    enforce redirection trust refuse to start (os error 448). Native staging
+    runs a bare `cargo metadata`, so the proxy must not be first on PATH.
+    """
+    cargo = Path(run(["rustup", "which", "cargo", "--toolchain", channel], cwd, log).strip())
+    os.environ["PATH"] = str(cargo.parent) + os.pathsep + os.environ.get("PATH", "")
+    os.environ.setdefault("RUSTUP_WINDOWS_PATH_ADD_BIN", "1")
+
+
+def library_on_path(name, path):
+    """Find DLL files even when they are absent from Windows PATHEXT."""
+    return shutil.which(name, mode=os.F_OK, path=path)
+
+
+def runtime_library(config, target):
+    """Bundled native library smoke for a Flutter build target, or None.
+
+    `bundle_dir` is the library's directory suffix under build/<target>; an
+    entry may override `dart_main` and add `smoke_dependencies`. Older configs
+    name only the Linux library.
+    """
+    libraries = config.get("runtime_libraries") or {
+        "linux": {"name": config["library_name"], "bundle_dir": "bundle/lib"}}
+    return libraries.get(target)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
@@ -172,6 +219,8 @@ def main():
         if not required or not set(required).issubset(targets):
             raise RuntimeError(f"Provision Rust targets for {args.target} before verification; no installer fallback")
         run(["rustup", "run", channel, "rustc", "--version", "--verbose"], repo, output / "native-rust-version.log")
+        if os.name == "nt":
+            prefer_real_toolchain(channel, repo, output / "rust-which-cargo.log")
     report = {"mode": args.mode, "target": args.target, "dart": version.strip(),
               "source_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo).decode().strip(),
               "source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=repo)),
@@ -181,7 +230,7 @@ def main():
         stage = Path(temp) / "source"
         snapshot(repo, stage)
         if config.get("prepare"):
-            run(config["prepare"] + ["--staged-root", str(stage), "--revision", report["source_revision"]], stage, output / "prepare.log")
+            run(prepare_command(config["prepare"]) + ["--staged-root", str(stage), "--revision", report["source_revision"]], stage, output / "prepare.log")
         run(["flutter", "pub", "get"], stage, output / "workspace-get.log")
         for spec in config["packages"]:
             name = spec["name"]
@@ -222,11 +271,20 @@ def main():
     report["flutter_build"] = "passed"
     # Per-repository smoke program explicitly loads the native library and
     # tests minimal behavior without requiring a physical capture device.
-    if args.target == "linux":
-        matches = list((consumer / "build/linux").rglob(config["library_name"]))
-        bundled = [p for p in matches if "/bundle/lib/" in str(p)]
+    library = runtime_library(config, args.target)
+    if library is not None:
+        # Compare path parts, not strings: Windows paths use backslashes.
+        bundle_dir = tuple(library["bundle_dir"].split("/"))
+        matches = list((consumer / "build" / args.target).rglob(library["name"]))
+        bundled = [p for p in matches if p.parent.parts[-len(bundle_dir):] == bundle_dir]
         if len(bundled) != 1:
             raise RuntimeError(f"Expected exactly one bundled native library, found {bundled}")
+        # The loader falls back to the bare library name; a copy on PATH could
+        # then pass the smoke without loading the bundled file.
+        if os.name == "nt" and library_on_path(library["name"], os.environ.get("PATH")):
+            raise RuntimeError(f"{library['name']} is on PATH; the smoke could load it instead of the bundle")
+        report["native_library"] = {"path": bundled[0].relative_to(consumer).as_posix(),
+                                    "sha256": hashlib.sha256(bundled[0].read_bytes()).hexdigest()}
         cli = output / "dart-consumer"
         cli.mkdir()
         dart_package = config["dart_package"]
@@ -235,12 +293,14 @@ def main():
         # Scalar hosted constraints use the normal dependency form.
         dependency = (f"  {dart_package}:\n{dep}" if args.mode == "candidate"
                       else f"  {dart_package}: {config['hosted_dart_constraint']}\n")
+        for name, constraint in library.get("smoke_dependencies", {}).items():
+            dependency += f"  {name}: {constraint}\n"
         (cli / "pubspec.yaml").write_text("name: payload_dart_consumer\nenvironment:\n  sdk: ^3.10.0\ndependencies:\n" + dependency)
-        (cli / "main.dart").write_text(config["dart_main"])
+        (cli / "main.dart").write_text(library.get("dart_main", config["dart_main"]))
         run(["dart", "pub", "get"], cli, output / "dart-get.log")
         env = dict(os.environ, **{config["library_environment"]: str(bundled[0])})
         if config.get("copy_library_to_cli", False):
-            copied = cli / config["library_name"]
+            copied = cli / library["name"]
             shutil.copy2(bundled[0], copied)
             env[config["library_environment"]] = str(copied)
         for source, destination in config.get("smoke_files", {}).items():

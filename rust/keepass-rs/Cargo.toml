@@ -153,5 +153,7 @@ challenge_response = { version = ">=0.5, <0.5.40", optional = true, default-feat
 # Include the pinned libusb source in Apple/Android native builds.
 rusb = { version = "0.9", optional = true, features = ["vendored"] }
 
-[target.'cfg(not(any(target_os = "macos", target_os = "android")))'.dependencies]
+# iOS has no supported raw USB backend. Keep local HMAC/database support while
+# excluding the USB dependency; token operations return an explicit error.
+[target.'cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))'.dependencies]
 challenge_response = { version = ">=0.5, <0.5.40", optional = true, default-features = false, features = ["nusb"] }
