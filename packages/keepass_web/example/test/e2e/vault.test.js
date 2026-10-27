@@ -157,10 +157,12 @@ async function waitForAccessibility(page, predicate, options = {}) {
   const timeout = options.timeout ?? 15000;
   const interval = options.interval ?? 250;
   const deadline = Date.now() + timeout;
+  let lastNodes = [];
 
   while (Date.now() < deadline) {
     const snapshot = await page.accessibility.snapshot({ interestingOnly: false });
     const nodes = flattenAccessibility(snapshot);
+    lastNodes = nodes;
     const text = JSON.stringify(snapshot);
     if (predicate({ snapshot, nodes, text })) {
       return { snapshot, nodes, text };
@@ -168,7 +170,9 @@ async function waitForAccessibility(page, predicate, options = {}) {
     await sleep(interval);
   }
 
-  throw new Error('Timed out waiting for accessibility state');
+  const diagnostic = lastNodes.map(({ role, name, disabled, expanded, focused }) =>
+    ({ role, name, disabled, expanded, focused }));
+  throw new Error(`Timed out waiting for accessibility state. Last roles/names: ${JSON.stringify(diagnostic)}`);
 }
 
 async function getNodeCenter(client, backendNodeId) {
@@ -197,10 +201,12 @@ async function clickAccessibilityNode(page, client, matcher, options = {}) {
   const timeout = options.timeout ?? 15000;
   const { nodes } = await waitForAccessibility(
     page,
-    ({ nodes: current }) => !!findAccessibilityNode(current, matcher, role),
+    ({ nodes: current }) => !!findAccessibilityNode(
+      current.filter((node) => !node.disabled), matcher, role,
+    ),
     { timeout },
   );
-  const node = findAccessibilityNode(nodes, matcher, role);
+  const node = findAccessibilityNode(nodes.filter((node) => !node.disabled), matcher, role);
   const center = await getNodeCenter(client, node.backendNodeId);
   await page.mouse.click(center.x, center.y);
   return node;
@@ -215,6 +221,7 @@ async function clickNamedNode(page, client, matcher, options = {}) {
     ({ nodes: current }) => {
       const candidates = current.filter(
         (node) =>
+          !node.disabled &&
           (!roles || roles.includes(node.role)) &&
           matchesName(node.name, matcher),
       );
@@ -224,6 +231,7 @@ async function clickNamedNode(page, client, matcher, options = {}) {
   );
   const candidates = nodes.filter(
     (node) =>
+      !node.disabled &&
       (!roles || roles.includes(node.role)) &&
       matchesName(node.name, matcher),
   );
@@ -847,20 +855,32 @@ describe('ManyKee Standalone Web Vault', () => {
       role: 'group',
     });
     await clickNamedNode(page, client, 'Move Entry', { roles: ['button'] });
-    await sleep(500);
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Space');
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
-    await clickNamedNode(page, client, 'Move Entry', {
-      roles: ['button', 'text'],
+    // The embedded Material dropdown is currently absent from Flutter's AX
+    // tree and focus traversal. Its visible field is at the dialog center.
+    // Anchor the pointer to the actual dialog bounds, then require the exact
+    // destination option before selecting or submitting anything.
+    const dialogState = await waitForAccessibility(page, ({ nodes }) =>
+      nodes.some((node) => node.role === 'dialog' && node.modal));
+    const dialog = dialogState.nodes.find((node) => node.role === 'dialog' && node.modal);
+    const dropdownCenter = await getNodeCenter(client, dialog.backendNodeId);
+    await page.mouse.click(dropdownCenter.x, dropdownCenter.y);
+    await clickNamedNode(page, client, /Internet$/, {
+      roles: ['menuitem', 'option', 'button', 'group', 'StaticText'],
     });
+    await clickNamedNode(page, client, 'Move Entry', { roles: ['button'] });
+    await waitForAccessibility(
+      page,
+      ({ nodes }) =>
+        !nodes.some((node) => node.role === 'dialog' && node.modal) &&
+        !!findAccessibilityNode(nodes, 'Search entries...', 'textbox'),
+    );
 
-    await typeIntoTextbox(page, client, 'Search entries...', 'Sample Entry #2');
+    await clickAccessibilityNode(page, client, 'Internet', { role: 'group' });
     const movedState = await waitForAccessibility(
       page,
-      ({ text }) =>
-        text.includes('Sample Entry #2') && text.includes('Internet'),
+      ({ nodes }) =>
+        !!findAccessibilityNode(nodes, /Sample Entry #2/, 'group') &&
+        nodes.some((node) => node.role === 'group' && node.name === 'Internet' && node.focused),
       { timeout: 10000 },
     );
     expect(movedState.text).toContain('Sample Entry #2');
@@ -883,7 +903,10 @@ describe('ManyKee Standalone Web Vault', () => {
 
     const createdState = await waitForAccessibility(
       page,
-      ({ text }) => text.includes('Projects'),
+      ({ nodes }) =>
+        !findAccessibilityNode(nodes, 'Group name', 'textbox') &&
+        !!findAccessibilityNode(nodes, 'Projects') &&
+        !!findAccessibilityNode(nodes, 'Search entries...', 'textbox'),
       { timeout: 10000 },
     );
     expect(createdState.text).toContain('Projects');
