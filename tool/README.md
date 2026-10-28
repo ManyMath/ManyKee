@@ -78,8 +78,10 @@ or global cache cleanup. Native UI, product web and browser E2E tiers retain
 main/manual triggers; their Xvfb, wasm-pack, browser and WASM target requirements
 remain explicit. A configured workflow is not a passing validation result.
 
-The macOS challenge-response backend selects vendored `rusb`/libusb because the
-existing `nusb` adapter does not compile there. Other targets retain `nusb`.
+The macOS and Android builds select vendored `rusb`/libusb because the existing
+`nusb` adapter does not compile there. Android token operations explicitly fail
+until a permission/descriptor bridge exists; iOS excludes the USB dependency.
+Other targets retain `nusb`.
 The staged native source includes exact wrapper MIT notices, libusb LGPL text
 and authors, and locked source archive checksums under
 `rust/sources/keepass-rs/third_party/usb/`; the payload gate verifies those hashes.
@@ -87,3 +89,16 @@ See the canonical `rust/keepass-rs/third_party/usb/README.md` for static binary
 redistribution limits. Passing build/runtime checks is not release clearance.
 
 On iOS, the upstream USB dependency has no supported backend and is excluded from the build. USB token enumeration and challenge operations return the target-specific Rust `UnsupportedUsb` error; local HMAC and core database APIs remain available. This does not add an iOS USB bridge or change C ABI symbols. The iOS-only error variant replaces the unavailable dependency error type only on that previously unbuildable target.
+
+Android APK consumers use the checked-in target map and the installed stable
+Rust toolchain; its actual compiler identity is recorded. Set ANDROID_SDK_ROOT
+to an SDK with platform36, build-tools36.0.0 and NDK28.2.13676358 already installed
+(Glow also needs CMake3.22.1). Run the usual gate with --target apk. The gate
+fails before building when tools/targets are absent, disables SDK/JDK downloads
+in the fresh consumer, and checks Gradle's actual selected NDK. Child builds
+receive the selected Rust toolchain without changing user settings. Gradle and
+Android homes default to task-local output directories; explicitly supplied
+task-owned homes may be reused. Evidence binds the APK and every expected
+native ABI to SHA256. This is build/packaging validation, not device behavior.
+
+The private `android-payload.yml` lane runs on the dedicated maintenance branch or manual dispatch. It uses isolated temporary dependency/build homes and retains archive evidence and the APK, then removes its own intermediate build/cache directories. Linux CI remains the required default lane; Android is an additional build qualification, not a device test.

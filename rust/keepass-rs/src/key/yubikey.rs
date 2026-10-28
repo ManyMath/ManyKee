@@ -53,9 +53,7 @@ impl ChallengeResponseKey {
                 Ok(response)
             }
             #[cfg(target_os = "ios")]
-            ChallengeResponseKey::YubikeyChallenge(_, _) => {
-                Err(ChallengeResponseKeyError::UnsupportedUsb)
-            }
+            ChallengeResponseKey::YubikeyChallenge(_, _) => Err(ChallengeResponseKeyError::UnsupportedUsb),
             #[cfg(not(target_os = "ios"))]
             ChallengeResponseKey::YubikeyChallenge(yubikey, slot_number) => {
                 require_usb_token_support()?;

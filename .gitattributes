@@ -2,3 +2,7 @@
 # keep committed bytes on checkouts that convert line endings (Windows autocrlf).
 fixtures/compat/** -text
 docs/compatibility-matrix.md text eol=lf
+
+# Vendored tooling and recipe identities are byte-exact across platforms.
+packages/keepass_flutter/cargokit/** -text
+tool/cargokit/** -text
