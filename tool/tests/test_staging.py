@@ -55,6 +55,32 @@ class StagingTests(unittest.TestCase):
                 hashes.append(subprocess.check_output([dart, 'run', 'hash_probe.dart', str(source / 'packages/keepass_flutter/rust')], cwd=runner, text=True).strip())
             self.assertNotEqual(*hashes)
 
+    def test_pinned_notices_survive_autocrlf_checkout(self):
+        import hashlib
+        import json
+        import os
+        repo = Path(__file__).parents[2]
+        relative = Path('rust/keepass-rs/third_party/usb')
+        expected = json.loads((repo / relative / 'PROVENANCE.json').read_text())['files_sha256']
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Use committed notice blobs, then reproduce a CRLF-converting
+            # checkout. No user Git configuration or existing checkout changes.
+            git = ['git', '-c', 'core.autocrlf=true', '-c', 'core.eol=crlf',
+                   '-c', 'core.safecrlf=false', '-c', 'core.attributesFile=' + os.devnull]
+            subprocess.run([*git, 'init', '-q', str(root)], check=True)
+            (root / '.gitattributes').write_bytes((repo / '.gitattributes').read_bytes())
+            (root / relative).mkdir(parents=True)
+            for name in expected:
+                data = subprocess.check_output(['git', 'show', 'HEAD:' + (relative / name).as_posix()], cwd=repo)
+                (root / relative / name).write_bytes(data)
+            subprocess.run([*git, 'add', '.'], cwd=root, check=True, capture_output=True)
+            for name in expected:
+                (root / relative / name).unlink()
+            subprocess.run([*git, 'checkout-index', '--force', '--all'], cwd=root, check=True, capture_output=True)
+            for name, digest in expected.items():
+                self.assertEqual(hashlib.sha256((root / relative / name).read_bytes()).hexdigest(), digest, name)
+
     def test_staging_refuses_a_developer_checkout(self):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as tmp:

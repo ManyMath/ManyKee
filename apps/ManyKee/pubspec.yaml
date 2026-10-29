@@ -26,17 +26,17 @@ dependencies:
   manyui:
     git:
       url: https://github.com/ManyMath/ManyUI.git
-      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
       path: manyui
   manyui_hooks:
     git:
       url: https://github.com/ManyMath/ManyUI.git
-      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
       path: manyui_hooks
   manyui_riverpod:
     git:
       url: https://github.com/ManyMath/ManyUI.git
-      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
       path: manyui_riverpod
   shared_preferences: ^2.4.0
   web: ^1.1.0

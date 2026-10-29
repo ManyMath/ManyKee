@@ -6,3 +6,7 @@ docs/compatibility-matrix.md text eol=lf
 # Vendored tooling and recipe identities are byte-exact across platforms.
 packages/keepass_flutter/cargokit/** -text
 tool/cargokit/** -text
+
+# Third-party notices are SHA256-pinned in their PROVENANCE.json and staged
+# into the Flutter archive, whose gate verifies those hashes.
+rust/keepass-rs/third_party/** -text

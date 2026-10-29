@@ -36,5 +36,5 @@ dependency_overrides:
   manyui:
     git:
       url: https://github.com/ManyMath/ManyUI.git
-      ref: 88ad8614877b8fd51f79b84376117b37882df11f
+      ref: d5b8881a8a582ef0f6f5989addd6ab1fd4ef144c
       path: manyui
